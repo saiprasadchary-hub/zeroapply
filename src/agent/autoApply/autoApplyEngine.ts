@@ -383,23 +383,37 @@ export class AutoApplyEngine {
         liveTelemetry.emit({
           type: 'validate',
           title: `Checking submitted or not`,
-          detail: `Submission confirmed for ${job.title} at ${job.company}!`,
+          detail: `Submission confirmed for ${job.title} at ${job.company}! Finalizing submission...`,
           status: 'completed',
         });
 
         // Aggressively dismiss post-submission prompt (e.g. "Not now", "Update profile", "Done")
-        if (await this.wait(800)) {
-          const cleanup = await webview.executeJavaScript(POST_SUBMISSION_CLEANUP_SCRIPT).catch(() => ({ closed: false, action: 'none' }));
-          if (cleanup.closed) this.updateStatus(`[Job ${i + 1}] Dismissed post-submission prompt.`);
+        if (await this.wait(600)) {
+          for (let cleanupAttempt = 0; cleanupAttempt < 3; cleanupAttempt++) {
+            const cleanup = await webview.executeJavaScript(POST_SUBMISSION_CLEANUP_SCRIPT).catch(() => ({ closed: false, action: 'none' }));
+            if (cleanup.closed) {
+              this.updateStatus(`[Job ${i + 1}] Dismissed post-submission prompt.`);
+              break;
+            }
+            await this.wait(400);
+          }
         }
-        // Additional settling delay to ensure modal is completely gone before scrolling to next job
-        await this.wait(1500);
+        
+        // Strict verification: ensure no modal backdrop is blocking the next job listing
+        const modalStillPresent = await webview.executeJavaScript('Boolean(document.querySelector(\'[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal\'))').catch(() => false);
+        if (modalStillPresent) {
+          await webview.executeJavaScript(DISCARD_APPLICATION_SCRIPT).catch(() => {});
+          await this.wait(800);
+        }
+
+        // Settling delay so LinkedIn registers submission and unfreezes the search list
+        await this.wait(2000);
       }
 
       if ((workflow.outcome === 'paused' || workflow.outcome === 'max_steps')) {
         this.updateStatus(`[Job ${i + 1}] Skipping incomplete application... discarding draft to continue batch.`, 'warning');
         await webview.executeJavaScript(DISCARD_APPLICATION_SCRIPT).catch(() => {});
-        await this.wait(1200); // Give the modal time to close cleanly
+        await this.wait(1500); // Give the modal time to close cleanly
       }
       
       if (!await this.wait(1500)) break; // Brief pause before advancing to next job listing

@@ -5,7 +5,13 @@ export const SUBMISSION_CONFIRMED_SCRIPT = `
   const text = (dialogs.length ? dialogs : [document.body])
     .map((element) => String(element?.innerText || '').toLowerCase())
     .join('\n');
-  return /application (?:has been )?submitted|application was sent|application sent|thanks for applying|thank you for applying|your application was sent|your application was submitted|we received your application/.test(text);
+  
+  const hasModalConfirmation = /application (?:has been )?submitted|application was sent|application sent|thanks for applying|thank you for applying|your application was sent|your application was submitted|we received your application|turn your resume into a profile|keep track of your application in the|applied [0-9]+|applied on linkedin/i.test(text);
+  if (hasModalConfirmation) return true;
+
+  // Also check top-card job header for "Applied" status badge
+  const topCardBtns = Array.from(document.querySelectorAll('.jobs-apply-button, .jobs-unified-top-card, .jobs-details-top-card, .artdeco-inline-feedback'));
+  return topCardBtns.some(b => /applied/i.test(String(b.innerText || '')));
 })();
 `;
 
