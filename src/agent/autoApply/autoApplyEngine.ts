@@ -444,7 +444,7 @@ export class AutoApplyEngine {
     const completedNormally = this.isRunning;
     this.isRunning = false;
     if (completedNormally) {
-      this.updateStatus('Batch Apply Complete! Successfully applied to ' + appliedCount + ' jobs.', 'success');
+      this.updateStatus(`Batch Apply Complete! Successfully applied to ${appliedCount} / ${runLimit} jobs (Application Limit: ${runLimit}).`, 'success');
     }
   }
 }
