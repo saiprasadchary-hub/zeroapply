@@ -41,6 +41,11 @@ const JOB_EXTRACTOR_SCRIPT = `
     const cardText = (card.innerText || '').toLowerCase();
     const isEasyApply = cardText.includes('easy apply') || Boolean(card.querySelector('.job-card-container__apply-method, [aria-label*="Easy Apply"], .job-card-list__easy-apply-label'));
 
+    // Check if card explicitly marks that the user already applied
+    const isAlreadyApplied = 
+      Boolean(card.querySelector('.job-card-container__footer-item--highlighted, .jobs-search-results__list-item--applied, [class*="applied-badge"]')) ||
+      /(?:^|\\b)applied(?:\\s+(?:\\d+|on|yesterday|today|days?|months?|weeks?|ago))?/i.test(cardText);
+
     if (!card.id) card.id = 'za_job_card_' + idx;
 
     links.push({
@@ -50,6 +55,7 @@ const JOB_EXTRACTOR_SCRIPT = `
       selector: '#' + CSS.escape(card.id),
       href: linkEl ? linkEl.href : '',
       isEasyApply: isEasyApply,
+      isAlreadyApplied: isAlreadyApplied,
     });
   });
 
@@ -256,10 +262,12 @@ export class AutoApplyEngine {
 
       const pendingJobs = jobs.filter(j => {
         const key = platformName + '|' + j.title + '|' + j.company;
-        return !appliedCompositeKeys.has(key);
+        if (appliedCompositeKeys.has(key)) return false;
+        if (j.isAlreadyApplied) return false;
+        return true;
       });
 
-      this.updateStatus(`[Page ${pageNum}] Found ${jobs.length} jobs (${pendingJobs.length} new). Progress: ${appliedCount}/${runLimit} applied.`);
+      this.updateStatus(`[Page ${pageNum}] Found ${jobs.length} jobs (${pendingJobs.length} new unapplied). Progress: ${appliedCount}/${runLimit} applied.`);
 
       for (let i = 0; i < pendingJobs.length; i++) {
         if (!this.isRunning) break;
@@ -349,23 +357,31 @@ export class AutoApplyEngine {
 
         if (!await this.wait(2500)) break; // Wait for job details pane to load
 
-        // Inspect apply button type (Easy Apply vs Normal Apply)
+        // Inspect apply button type (Easy Apply vs Normal Apply vs Already Applied)
         const inspectApplyScript = `
           (function() {
+            // Check for Already Applied badges / text in details pane
+            const appliedStatus = document.querySelector('.jobs-details-top-card__apply-status, .jobs-applied-badge, .jobs-s-apply__applied-badge, [class*="applied-badge"], [class*="apply-status"]');
+            if (appliedStatus && appliedStatus.offsetParent !== null) {
+              return { type: 'applied', text: appliedStatus.innerText.trim() };
+            }
+
             if (window.location.href.includes('linkedin.com')) {
               const linkedinBtn = document.querySelector('.jobs-apply-button, [data-job-id] .jobs-apply-button');
               if (linkedinBtn && linkedinBtn.offsetParent !== null) {
                 const text = (linkedinBtn.innerText || linkedinBtn.textContent || '').toLowerCase().trim();
+                if (text.includes('applied') || text.includes('view application')) return { type: 'applied', text: linkedinBtn.innerText.trim() };
                 if (text.includes('easy apply')) return { type: 'easy', text: linkedinBtn.innerText.trim() };
                 return { type: 'normal', text: linkedinBtn.innerText.trim() };
               }
             }
 
-            const allButtons = Array.from(document.querySelectorAll('.jobs-details-top-card button, .jobs-details-top-card a, .jobs-search__job-details button, .jobs-search__job-details a'));
+            const allButtons = Array.from(document.querySelectorAll('.jobs-details-top-card button, .jobs-details-top-card a, .jobs-search__job-details button, .jobs-search__job-details a, .jobs-details-top-card span'));
             for (const b of allButtons) {
               if (b.offsetParent === null) continue;
               const t = (b.innerText || b.textContent || '').toLowerCase().trim();
               const aria = String(b.getAttribute('aria-label') || '').toLowerCase();
+              if (t.includes('applied on') || t.includes('you applied') || t === 'applied' || aria.includes('applied')) return { type: 'applied', text: t };
               if (t.includes('easy apply') || aria.includes('easy apply')) return { type: 'easy', text: t };
               if (t === 'apply' || t.includes('apply on company website') || t.includes('apply on employer') || t.startsWith('apply')) {
                 return { type: 'normal', text: t };
@@ -379,6 +395,18 @@ export class AutoApplyEngine {
         try {
           applyInspection = await webview.executeJavaScript(inspectApplyScript);
         } catch {}
+
+        // If job is already applied, skip immediately
+        if (applyInspection.type === 'applied') {
+          this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Skipped: Already applied to "${job.title}" at ${job.company}. Skipping down...`, 'info');
+          liveTelemetry.emit({
+            type: 'status',
+            title: 'Skipping Already Applied role',
+            detail: `Already applied to "${job.title}" at ${job.company}. Skipping down to next unapplied role...`,
+            status: 'completed',
+          });
+          continue;
+        }
 
         // If Apply Mode is Easy Apply and this job is Normal / External Apply, skip immediately
         if (persona.applyMode === 'easy' && applyInspection.type === 'normal') {
