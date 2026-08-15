@@ -337,43 +337,108 @@ export const SubmissionCheck: React.FC = () => {
                   </div>
                   
                   {isExpanded && (
-                    <div className="border-t border-zinc-100 bg-zinc-50/60 p-4 space-y-2.5 animate-fadeIn">
+                    <div className="border-t border-zinc-100 bg-zinc-50/50 p-4 sm:p-5 space-y-3.5 animate-fadeIn">
                       {log.qaPairs.length === 0 ? (
                         <p className="text-xs font-medium text-zinc-500 italic px-2">
                           No fields auto-filled for this application yet.
                         </p>
                       ) : (
-                        log.qaPairs.map((qa, index) => (
-                          <div 
-                            key={index} 
-                            className="bg-white border border-zinc-200/90 rounded-xl p-3.5 shadow-2xs flex flex-col gap-2 transition-all hover:border-zinc-300"
-                          >
-                            <div className="flex items-center justify-between gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-zinc-800 font-mono bg-zinc-100/90 px-2.5 py-1 rounded-md border border-zinc-200/70">
-                                Q: {qa.question}
-                              </span>
+                        log.qaPairs.map((qa, index) => {
+                          const isCopied = copiedId === `${log.id}-${index}`;
+                          const isNumeric = /^\d+(\.\d+)?$/.test(qa.answer.trim());
+                          const isYesNo = /^(yes|no)$/i.test(qa.answer.trim());
 
-                              {/* Source Badge */}
-                              <div className="flex items-center gap-1 text-[10px] font-mono font-bold">
-                                {qa.source === 'ollama' ? (
-                                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-50 text-cyan-800 border border-cyan-200">
-                                    <BrainCircuit size={10} className="text-cyan-600" />
-                                    <span>Qwen 2.5 Local {qa.confidence ? `(${Math.round(qa.confidence * 100)}%)` : ''}</span>
+                          return (
+                            <div 
+                              key={index} 
+                              className="bg-white border border-zinc-200/90 hover:border-zinc-300 rounded-2xl p-4 shadow-xs transition-all flex flex-col gap-3 group"
+                            >
+                              {/* Question Block */}
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-extrabold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/70 flex items-center gap-1">
+                                      <span>Question #{index + 1}</span>
+                                    </span>
+                                    {qa.category && (
+                                      <span className="text-[10px] font-mono text-zinc-400 font-semibold">
+                                        [{qa.category}]
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* AI / Persona Source Badge */}
+                                  <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold">
+                                    {qa.source === 'ollama' ? (
+                                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-50 text-cyan-800 border border-cyan-200 shadow-2xs">
+                                        <BrainCircuit size={11} className="text-cyan-600" />
+                                        <span>Qwen 2.5 Local {qa.confidence ? `(${Math.round(qa.confidence * 100)}%)` : ''}</span>
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-zinc-100 text-zinc-700 border border-zinc-200 shadow-2xs">
+                                        <UserCheck size={11} className="text-zinc-500" />
+                                        <span>Candidate Profile</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="text-xs sm:text-sm font-bold text-zinc-900 leading-snug pl-0.5">
+                                  {qa.question}
+                                </div>
+                              </div>
+
+                              {/* Divider */}
+                              <div className="h-px bg-zinc-100 w-full" />
+
+                              {/* Answer Block */}
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/70 flex items-center gap-1">
+                                    <Check size={10} className="text-emerald-600" />
+                                    <span>Answer</span>
                                   </span>
-                                ) : (
-                                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200">
-                                    <UserCheck size={10} className="text-zinc-500" />
-                                    <span>Persona: {qa.category || 'Standard'}</span>
-                                  </span>
-                                )}
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(qa.answer);
+                                      setCopiedId(`${log.id}-${index}`);
+                                      setTimeout(() => setCopiedId(null), 2000);
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-mono text-zinc-400 hover:text-zinc-700 flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-zinc-100"
+                                    title="Copy answer"
+                                  >
+                                    {isCopied ? (
+                                      <>
+                                        <Check size={12} className="text-emerald-600" />
+                                        <span className="text-emerald-600 font-bold">Copied!</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy size={12} />
+                                        <span>Copy</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+
+                                <div className={`text-xs sm:text-sm font-medium rounded-xl p-3 border transition-all ${
+                                  isYesNo
+                                    ? qa.answer.toLowerCase() === 'yes'
+                                      ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950 font-bold'
+                                      : 'bg-zinc-100/80 border-zinc-200 text-zinc-800 font-bold'
+                                    : isNumeric
+                                    ? 'bg-cyan-50/50 border-cyan-200/80 text-cyan-950 font-mono font-bold text-base'
+                                    : 'bg-zinc-50 border-zinc-200/70 text-zinc-800 leading-relaxed font-sans'
+                                }`}>
+                                  {qa.answer}
+                                </div>
                               </div>
                             </div>
-
-                            <div className="text-xs font-semibold text-cyan-900 pl-3 py-1 border-l-2 border-cyan-500 bg-cyan-50/30 rounded-r-md font-sans">
-                              {qa.answer}
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   )}
