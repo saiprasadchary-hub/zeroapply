@@ -21,7 +21,7 @@ export interface QuestionSolveResult {
 }
 
 const OLLAMA_BASE_URL = 'http://localhost:11434';
-let cachedActiveModel: string = 'qwen2.5:0.5b';
+let cachedActiveModel: string = 'qwen2.5:1.5b';
 
 export function getActiveModelName(): string {
   return cachedActiveModel;

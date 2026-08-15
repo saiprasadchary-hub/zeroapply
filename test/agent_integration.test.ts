@@ -62,16 +62,16 @@ async function runSuite() {
   let passed = 0;
   let failed = 0;
 
-  // TEST 1: Ollama & Qwen 2.5 (0.5B) Engine Verification
-  console.log('▶ TEST 1: Checking Ollama Engine & qwen2.5:0.5b health...');
+  // TEST 1: Ollama & Qwen 2.5 (1.5B) Engine Verification
+  console.log('▶ TEST 1: Checking Ollama Engine & qwen2.5:1.5b health...');
   try {
-    const status = await checkOllamaStatus('qwen2.5:0.5b');
+    const status = await checkOllamaStatus('qwen2.5:1.5b');
     console.log('   Status Response:', status);
     if (status.online && status.modelAvailable) {
-      console.log('   ✅ TEST 1 PASSED: qwen2.5:0.5b is online (Latency: ' + status.latencyMs + 'ms)');
+      console.log('   ✅ TEST 1 PASSED: qwen2.5:1.5b is online (Latency: ' + status.latencyMs + 'ms)');
       passed++;
     } else {
-      console.log('   ⚠️ TEST 1 WARNING: Ollama server or qwen2.5:0.5b not immediately responding online. Fallback heuristic available.');
+      console.log('   ⚠️ TEST 1 WARNING: Ollama server or qwen2.5:1.5b not immediately responding online. Fallback heuristic available.');
       passed++;
     }
   } catch (e) {

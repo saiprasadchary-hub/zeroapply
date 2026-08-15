@@ -6,7 +6,7 @@ export const OllamaStatusIndicator: React.FC = () => {
   const [status, setStatus] = useState<OllamaStatus>({
     online: false,
     modelAvailable: false,
-    modelName: 'qwen2.5:0.5b',
+    modelName: 'qwen2.5:1.5b',
   });
   const [loading, setLoading] = useState(true);
 
