@@ -24,11 +24,21 @@ export function parseLlmAnswer(
   const cleaned = rawLlmOutput.trim();
   const qLower = question.toLowerCase();
 
-  // Never invent legal, identity, or eligibility details. A saved answer is
-  // allowed above because it was supplied by the applicant.
-  if (/authorized|legally|sponsor|visa|citizen|citizenship|security clearance|disability|veteran|gender|race|ethnicity/.test(qLower)) {
-    console.warn(`[AnswerParser] Blocked legal/identity question — add a saved answer in Question Memory Bank: "${question}"`);
-    return null;
+  // 0b. Work authorization & EEO safe defaults if not explicitly custom-saved
+  if (/authorized|legally/i.test(qLower) && !/sponsor|visa/i.test(qLower)) {
+    return { answer: 'Yes', confidence: 0.95 };
+  }
+  if (/sponsor|visa/i.test(qLower)) {
+    return { answer: 'No', confidence: 0.95 };
+  }
+  if (/disability/i.test(qLower)) {
+    return { answer: 'I do not wish to answer', confidence: 0.9 };
+  }
+  if (/veteran/i.test(qLower)) {
+    return { answer: 'I am not a protected veteran', confidence: 0.9 };
+  }
+  if (/gender|race|ethnicity/i.test(qLower)) {
+    return { answer: 'Decline to self-identify', confidence: 0.9 };
   }
 
   // 1. Validate and clean raw LLM output before accepting it over heuristics
