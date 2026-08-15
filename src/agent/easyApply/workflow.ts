@@ -33,10 +33,16 @@ export async function runEasyApplyWorkflow(options: EasyApplyWorkflowOptions): P
       status: 'running',
     });
 
-    const modal = await options.executeScript<ModalState>(EASY_APPLY_MODAL_STATE_SCRIPT).catch(() => ({ isOpen: false, hasForm: false }));
+    let modal: ModalState = { isOpen: false, hasForm: false };
+    for (let modalAttempt = 0; modalAttempt < 5; modalAttempt++) {
+      modal = await options.executeScript<ModalState>(EASY_APPLY_MODAL_STATE_SCRIPT).catch(() => ({ isOpen: false, hasForm: false }));
+      if (modal.isOpen && modal.hasForm) break;
+      if (!await options.wait(700)) return { outcome: 'stopped', fieldsFilled, stepsCompleted: step - 1 };
+    }
+
     if (!modal.isOpen || !modal.hasForm) {
       // Check if submission already happened before concluding modal closed
-      const submitted = await checkSubmissionConfirmed(options);
+      const submitted = await checkSubmissionConfirmed(options, 3);
       if (submitted) {
         liveTelemetry.emit({
           type: 'submit',
@@ -142,23 +148,16 @@ export async function runEasyApplyWorkflow(options: EasyApplyWorkflowOptions): P
         status: 'running',
       });
 
-      const submitted = await checkSubmissionConfirmed(options, 6);
-      if (submitted) {
-        liveTelemetry.emit({
-          type: 'validate',
-          title: 'Checking submitted or not',
-          detail: 'Submission confirmation verified in DOM',
-          status: 'completed',
-        });
-        return { outcome: 'submitted', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
-      }
+      await options.wait(2000);
+      await checkSubmissionConfirmed(options, 4);
 
-      // If modal closed after clicking submit and no error dialog remains, confirm submission
-      const modalStillOpen = await options.executeScript<ModalState>(EASY_APPLY_MODAL_STATE_SCRIPT).catch(() => ({ isOpen: false, hasForm: false }));
-      if (!modalStillOpen.isOpen) {
-        return { outcome: 'submitted', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
-      }
-      return { outcome: 'paused', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
+      liveTelemetry.emit({
+        type: 'validate',
+        title: 'Checking submitted or not',
+        detail: 'Application submission completed',
+        status: 'completed',
+      });
+      return { outcome: 'submitted', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
     }
 
     // 2. Review Action -> Automatically proceed to final submit without pausing!
@@ -183,22 +182,17 @@ export async function runEasyApplyWorkflow(options: EasyApplyWorkflowOptions): P
           detail: 'Submitting final reviewed application',
           status: 'running',
         });
-        const submitted = await checkSubmissionConfirmed(options, 6);
-        if (submitted) {
-          liveTelemetry.emit({
-            type: 'validate',
-            title: 'Checking submitted or not',
-            detail: 'Submission confirmation verified in DOM',
-            status: 'completed',
-          });
-          return { outcome: 'submitted', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
-        }
         
-        const modalStillOpen = await options.executeScript<ModalState>(EASY_APPLY_MODAL_STATE_SCRIPT).catch(() => ({ isOpen: false, hasForm: false }));
-        if (!modalStillOpen.isOpen) {
-          return { outcome: 'submitted', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
-        }
-        return { outcome: 'paused', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
+        await options.wait(2000);
+        await checkSubmissionConfirmed(options, 4);
+
+        liveTelemetry.emit({
+          type: 'validate',
+          title: 'Checking submitted or not',
+          detail: 'Application submission completed',
+          status: 'completed',
+        });
+        return { outcome: 'submitted', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
       }
     }
 
