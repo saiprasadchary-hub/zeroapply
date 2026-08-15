@@ -274,7 +274,26 @@ export function generateHumanBypassScript(instructionsJson: string): string {
           inst.value === '1' ||
           /agree|acknowledge|certify|terms|privacy|confirm|above 18|authorized/i.test(labelLower);
 
-        if (shouldCheck && !el.checked) {
+        const isFollowCompany = /follow\\s+.*to stay up to date|follow company|follow this employer/i.test(labelLower);
+
+        if (isFollowCompany && el.checked) {
+          simulateMouse(el);
+          await sleep(randomDelay(80, 200));
+          el.click();
+          if (el.id) {
+            const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+            if (l) l.click();
+          } else if (el.closest('label')) {
+            el.closest('label').click();
+          }
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          emitTelemetry({
+            type: 'click',
+            title: 'Unchecked Follow Company box',
+            target: fieldLabel,
+            status: 'completed'
+          });
+        } else if (shouldCheck && !el.checked) {
           simulateMouse(el);
           await sleep(randomDelay(80, 200));
           el.click();

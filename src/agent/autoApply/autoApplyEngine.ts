@@ -6,6 +6,7 @@ import { runEasyApplyWorkflow } from '../easyApply';
 import { POST_SUBMISSION_CLEANUP_SCRIPT, DISCARD_APPLICATION_SCRIPT } from '../easyApply/scripts';
 import { getSavedResumeFileFromStorage } from '../autofill/resumeInjector';
 import { liveTelemetry } from '../telemetry/liveTelemetry';
+import { ChimeNotifier } from '../audio/chimeNotifier';
 
 export interface AutoApplyConfig {
   maxJobsPerRun: number;
@@ -224,226 +225,292 @@ export class AutoApplyEngine {
     liveTelemetry.clear();
 
     let appliedCount = 0;
+    let pageNum = 1;
+    const maxPages = 15;
 
-    for (let i = 0; i < pendingJobs.length; i++) {
-      if (!this.isRunning) break;
-      if (appliedCount >= runLimit) {
-        this.updateStatus('Reached batch limit of ' + runLimit + ' jobs.');
+    while (this.isRunning && appliedCount < runLimit && pageNum <= maxPages) {
+      let jobs: any[] = [];
+      try {
+        jobs = await webview.executeJavaScript(JOB_EXTRACTOR_SCRIPT);
+      } catch {
+        this.updateStatus('Failed to extract job listings from page.', 'error');
         break;
       }
 
-      const job = pendingJobs[i];
-      this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Opening: ${job.title} at ${job.company}`);
-      
-      // Plain English telemetry: Scrolling
-      liveTelemetry.emit({
-        type: 'scroll',
-        title: `Scrolling to job ${i + 1}/${pendingJobs.length}: ${job.title}`,
-        detail: `${job.company} | Aligning listing card in viewport`,
-        target: job.title,
-        status: 'running',
-      });
-
-      // Click the job in the list to load it in the right pane
-      const escapedTitle = job.title.replace(/'/g, "\\'").replace(/"/g, '\\"');
-      
-      const clickScript = `
-        (function() {
-          // 1. Try selector first
-          let el = document.querySelector('` + job.selector + `');
-          
-          // 2. If selector lost or ID changed due to re-render, search all cards by title
-          if (!el) {
-            const allCards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item, [data-oc-id], .jobTuple'));
-            el = allCards.find(c => {
-              const t = c.querySelector('.job-card-list__title, .job-title, h3, a');
-              const cardTitle = t ? t.innerText.trim().toLowerCase() : '';
-              return cardTitle.includes('` + escapedTitle.toLowerCase() + `') || (c.innerText || '').toLowerCase().includes('` + escapedTitle.toLowerCase() + `');
-            });
-          }
-          
-          // 3. Fallback: match by index
-          if (!el) {
-            const allCards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item'));
-            if (allCards[` + i + `]) el = allCards[` + i + `];
-          }
-
-          if (el) {
-            const container = el.closest('.jobs-search-results-list, .scaffold-layout__list') || window;
-            if (container !== window) {
-               const elTop = el.offsetTop;
-               container.scrollTo({ top: Math.max(0, elTop - 100), behavior: 'smooth' });
-            } else {
-               el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-            
-            const rightPane = document.querySelector('.jobs-search__job-details--container, .jobs-details-top-card');
-            if (rightPane) rightPane.scrollTo({ top: 0, behavior: 'smooth' });
-            
-            const clickable = el.querySelector('.job-card-list__title, a[href*="/jobs/"], a') || el;
-            clickable.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-            clickable.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-            clickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-            clickable.click();
-            return true;
-          }
-          return false;
-        })();
-      `;
-      let opened = false;
-      try {
-        opened = await webview.executeJavaScript(clickScript);
-      } catch (error) {
-        this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Could not open this listing: ${error instanceof Error ? error.message : 'page interaction failed'}.`, 'warning');
-        continue;
-      }
-      if (!opened) {
-        this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Skipped because the listing is no longer available.`, 'warning');
-        continue;
-      }
-
-      // Plain English telemetry: Clicking job
-      liveTelemetry.emit({
-        type: 'click',
-        title: `Opening job: ${job.title}`,
-        detail: `${job.company} | Loading details pane`,
-        target: job.title,
-        status: 'running',
-      });
-
-      if (!await this.wait(2500)) break; // Wait for job details pane to load
-
-      // Look for Easy Apply button
-      const modeLabel = 'Easy Apply';
-      this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Searching for ${modeLabel} button...`);
-      
-      // Plain English telemetry: Clicking Easy Apply
-      liveTelemetry.emit({
-        type: 'click',
-        title: `Easy Apply button`,
-        detail: `Starting application for ${job.title} at ${job.company}`,
-        target: modeLabel,
-        status: 'running',
-      });
-      
-      const applyBtnScript = `
-        (function() {
-          const elements = Array.from(document.querySelectorAll('button, a'));
-          const visible = elements.filter(e => e.offsetParent !== null && (e.innerText || e.textContent || '').trim().length > 0);
-          
-          let targetBtn = null;
-          
-          if (window.location.href.includes('linkedin.com')) {
-             const linkedinBtn = document.querySelector('.jobs-apply-button');
-             if (linkedinBtn && linkedinBtn.offsetParent !== null) {
-                const text = (linkedinBtn.innerText || linkedinBtn.textContent || '').toLowerCase();
-                if (text.includes('easy apply')) targetBtn = linkedinBtn;
-             }
-          }
-          
-          if (!targetBtn) {
-            targetBtn = visible.find(b => {
-              const text = (b.innerText || b.textContent || '').toLowerCase().trim();
-              const aria = String(b.getAttribute('aria-label') || '').toLowerCase();
-              return text === 'easy apply' || text.includes('easy apply') || aria.includes('easy apply');
-            });
-          }
-          
-          if (targetBtn) {
-            targetBtn.click();
-            return true;
-          }
-          return false;
-        })();
-      `;
-
-      let clickedApply = false;
-      for (let attempt = 0; attempt < this.config.actionRetryCount; attempt++) {
-        try {
-          clickedApply = await webview.executeJavaScript(applyBtnScript);
-        } catch {
-          clickedApply = false;
+      if (!jobs || jobs.length === 0) {
+        if (pageNum === 1) {
+          this.updateStatus('No job listings found on current page.', 'warning');
         }
-        if (clickedApply) break;
-        if (!await this.wait(1200)) break;
-      }
-      
-      if (!clickedApply) {
-        this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Skipped (No ${modeLabel} button found)`);
-        continue;
+        break;
       }
 
-      if (!this.isRunning || !await this.wait(1500)) break; // Wait for modal to pop up
+      const logs = ApplicationLogger.getLogs();
+      const appliedCompositeKeys = new Set(logs
+        .filter((log) => log.status === 'SUCCESS')
+        .map((log) => log.portal + '|' + log.jobTitle + '|' + log.companyName));
 
-      const workflow = await runEasyApplyWorkflow({
-        maxSteps: this.config.maxStepsPerApplication,
-        isActive: () => this.isRunning,
-        wait: (milliseconds) => this.wait(milliseconds),
-        fillCurrentStep: () => this.agentEngine.autoFillCurrentPage(webview, persona, platformName, false),
-        advanceStep: () => this.agentEngine.advanceApplicationStep(webview),
-        executeScript: <T>(script: string) => webview.executeJavaScript(script) as Promise<T>,
-        onStatus: (message, type = 'info') => this.updateStatus(`[Job ${i + 1}] ${message}`, type),
+      const pendingJobs = jobs.filter(j => {
+        const key = platformName + '|' + j.title + '|' + j.company;
+        return !appliedCompositeKeys.has(key);
       });
 
-      if (workflow.outcome === 'submitted') {
-        this.updateStatus(`[Job ${i + 1}] Application submitted successfully to ${job.company}! (${appliedCount + 1}/${runLimit})`, 'success');
-        const currentUrl = await webview.executeJavaScript('window.location.href').catch(() => webview.src || '');
-        this.recordOutcome(platformName, job, workflow.fieldsFilled, 'SUCCESS', currentUrl);
-        
-        if (workflow.qaPairs && workflow.qaPairs.length > 0) {
-          QALogger.addLog({
-            portal: platformName,
-            jobTitle: job.title,
-            companyName: job.company,
-            qaPairs: workflow.qaPairs,
-          });
-        }
-        
-        appliedCount++;
+      this.updateStatus(`[Page ${pageNum}] Found ${jobs.length} jobs (${pendingJobs.length} new). Progress: ${appliedCount}/${runLimit} applied.`);
 
-        // Plain English telemetry: Checking submitted & Dismissing prompt
+      for (let i = 0; i < pendingJobs.length; i++) {
+        if (!this.isRunning) break;
+        if (appliedCount >= runLimit) {
+          this.updateStatus('Reached batch limit of ' + runLimit + ' jobs.');
+          break;
+        }
+
+        const job = pendingJobs[i];
+        this.updateStatus(`[Job ${appliedCount + 1}/${runLimit}] Opening: ${job.title} at ${job.company}`);
+        
+        // Plain English telemetry: Scrolling
         liveTelemetry.emit({
-          type: 'validate',
-          title: `Checking submitted or not`,
-          detail: `Submission confirmed for ${job.title} at ${job.company}! Finalizing submission...`,
-          status: 'completed',
+          type: 'scroll',
+          title: `Scrolling to job ${i + 1}/${pendingJobs.length}: ${job.title}`,
+          detail: `${job.company} | Aligning listing card in viewport`,
+          target: job.title,
+          status: 'running',
         });
 
-        // Aggressively dismiss post-submission prompt (e.g. "Not now", "Update profile", "Done")
-        if (await this.wait(600)) {
-          for (let cleanupAttempt = 0; cleanupAttempt < 3; cleanupAttempt++) {
-            const cleanup = await webview.executeJavaScript(POST_SUBMISSION_CLEANUP_SCRIPT).catch(() => ({ closed: false, action: 'none' }));
-            if (cleanup.closed) {
-              this.updateStatus(`[Job ${i + 1}] Dismissed post-submission prompt.`);
-              break;
+        // Click the job in the list to load it in the right pane
+        const escapedTitle = job.title.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        
+        const clickScript = `
+          (function() {
+            // 1. Try selector first
+            let el = document.querySelector('` + job.selector + `');
+            
+            // 2. If selector lost or ID changed due to re-render, search all cards by title
+            if (!el) {
+              const allCards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item, [data-oc-id], .jobTuple'));
+              el = allCards.find(c => {
+                const t = c.querySelector('.job-card-list__title, .job-title, h3, a');
+                const cardTitle = t ? t.innerText.trim().toLowerCase() : '';
+                return cardTitle.includes('` + escapedTitle.toLowerCase() + `') || (c.innerText || '').toLowerCase().includes('` + escapedTitle.toLowerCase() + `');
+              });
             }
-            await this.wait(400);
+            
+            // 3. Fallback: match by index
+            if (!el) {
+              const allCards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item'));
+              if (allCards[` + i + `]) el = allCards[` + i + `];
+            }
+
+            if (el) {
+              const container = el.closest('.jobs-search-results-list, .scaffold-layout__list') || window;
+              if (container !== window) {
+                 const elTop = el.offsetTop;
+                 container.scrollTo({ top: Math.max(0, elTop - 100), behavior: 'smooth' });
+              } else {
+                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+              
+              const rightPane = document.querySelector('.jobs-search__job-details--container, .jobs-details-top-card');
+              if (rightPane) rightPane.scrollTo({ top: 0, behavior: 'smooth' });
+              
+              const clickable = el.querySelector('.job-card-list__title, a[href*="/jobs/"], a') || el;
+              clickable.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+              clickable.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+              clickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+              clickable.click();
+              return true;
+            }
+            return false;
+          })();
+        `;
+        let opened = false;
+        try {
+          opened = await webview.executeJavaScript(clickScript);
+        } catch (error) {
+          this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Could not open this listing: ${error instanceof Error ? error.message : 'page interaction failed'}.`, 'warning');
+          continue;
+        }
+        if (!opened) {
+          this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Skipped because the listing is no longer available.`, 'warning');
+          continue;
+        }
+
+        // Plain English telemetry: Clicking job
+        liveTelemetry.emit({
+          type: 'click',
+          title: `Opening job: ${job.title}`,
+          detail: `${job.company} | Loading details pane`,
+          target: job.title,
+          status: 'running',
+        });
+
+        if (!await this.wait(2500)) break; // Wait for job details pane to load
+
+        // Look for Easy Apply button
+        const modeLabel = 'Easy Apply';
+        this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Searching for ${modeLabel} button...`);
+        
+        // Plain English telemetry: Clicking Easy Apply
+        liveTelemetry.emit({
+          type: 'click',
+          title: `Easy Apply button`,
+          detail: `Starting application for ${job.title} at ${job.company}`,
+          target: modeLabel,
+          status: 'running',
+        });
+        
+        const applyBtnScript = `
+          (function() {
+            const elements = Array.from(document.querySelectorAll('button, a'));
+            const visible = elements.filter(e => e.offsetParent !== null && (e.innerText || e.textContent || '').trim().length > 0);
+            
+            let targetBtn = null;
+            
+            if (window.location.href.includes('linkedin.com')) {
+               const linkedinBtn = document.querySelector('.jobs-apply-button');
+               if (linkedinBtn && linkedinBtn.offsetParent !== null) {
+                  const text = (linkedinBtn.innerText || linkedinBtn.textContent || '').toLowerCase();
+                  if (text.includes('easy apply')) targetBtn = linkedinBtn;
+               }
+            }
+            
+            if (!targetBtn) {
+              targetBtn = visible.find(b => {
+                const text = (b.innerText || b.textContent || '').toLowerCase().trim();
+                const aria = String(b.getAttribute('aria-label') || '').toLowerCase();
+                return text === 'easy apply' || text.includes('easy apply') || aria.includes('easy apply');
+              });
+            }
+            
+            if (targetBtn) {
+              targetBtn.click();
+              return true;
+            }
+            return false;
+          })();
+        `;
+
+        let clickedApply = false;
+        for (let attempt = 0; attempt < this.config.actionRetryCount; attempt++) {
+          try {
+            clickedApply = await webview.executeJavaScript(applyBtnScript);
+          } catch {
+            clickedApply = false;
           }
+          if (clickedApply) break;
+          if (!await this.wait(1200)) break;
         }
         
-        // Strict verification: ensure no modal backdrop is blocking the next job listing
-        const modalStillPresent = await webview.executeJavaScript('Boolean(document.querySelector(\'[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal\'))').catch(() => false);
-        if (modalStillPresent) {
-          await webview.executeJavaScript(DISCARD_APPLICATION_SCRIPT).catch(() => {});
-          await this.wait(800);
+        if (!clickedApply) {
+          this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Skipped (No ${modeLabel} button found)`);
+          continue;
         }
 
-        // Settling delay so LinkedIn registers submission and unfreezes the search list
-        await this.wait(2000);
+        if (!this.isRunning || !await this.wait(1500)) break; // Wait for modal to pop up
+
+        const workflow = await runEasyApplyWorkflow({
+          maxSteps: this.config.maxStepsPerApplication,
+          isActive: () => this.isRunning,
+          wait: (milliseconds) => this.wait(milliseconds),
+          fillCurrentStep: () => this.agentEngine.autoFillCurrentPage(webview, persona, platformName, false),
+          advanceStep: () => this.agentEngine.advanceApplicationStep(webview),
+          executeScript: <T>(script: string) => webview.executeJavaScript(script) as Promise<T>,
+          onStatus: (message, type = 'info') => this.updateStatus(`[Job ${i + 1}] ${message}`, type),
+        });
+
+        if (workflow.outcome === 'submitted') {
+          appliedCount++;
+          this.updateStatus(`[Job ${i + 1}] Application submitted successfully to ${job.company}! (${appliedCount}/${runLimit})`, 'success');
+          const currentUrl = await webview.executeJavaScript('window.location.href').catch(() => webview.src || '');
+          this.recordOutcome(platformName, job, workflow.fieldsFilled, 'SUCCESS', currentUrl);
+          
+          if (workflow.qaPairs && workflow.qaPairs.length > 0) {
+            QALogger.addLog({
+              portal: platformName,
+              jobTitle: job.title,
+              companyName: job.company,
+              qaPairs: workflow.qaPairs,
+            });
+          }
+
+          // Plain English telemetry: Checking submitted & Dismissing prompt
+          liveTelemetry.emit({
+            type: 'validate',
+            title: `Checking submitted or not`,
+            detail: `Submission confirmed for ${job.title} at ${job.company}! Finalizing submission...`,
+            status: 'completed',
+          });
+
+          // Aggressively dismiss post-submission prompt (e.g. "Not now", "Update profile", "Done")
+          if (await this.wait(600)) {
+            for (let cleanupAttempt = 0; cleanupAttempt < 3; cleanupAttempt++) {
+              const cleanup = await webview.executeJavaScript(POST_SUBMISSION_CLEANUP_SCRIPT).catch(() => ({ closed: false, action: 'none' }));
+              if (cleanup.closed) {
+                this.updateStatus(`[Job ${i + 1}] Dismissed post-submission prompt.`);
+                break;
+              }
+              await this.wait(400);
+            }
+          }
+          
+          // Strict verification: ensure no modal backdrop is blocking the next job listing
+          const modalStillPresent = await webview.executeJavaScript('Boolean(document.querySelector(\'[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal\'))').catch(() => false);
+          if (modalStillPresent) {
+            await webview.executeJavaScript(DISCARD_APPLICATION_SCRIPT).catch(() => {});
+            await this.wait(800);
+          }
+
+          // Settling delay so LinkedIn registers submission and unfreezes the search list
+          await this.wait(2000);
+        }
+
+        if ((workflow.outcome === 'paused' || workflow.outcome === 'max_steps')) {
+          this.updateStatus(`[Job ${i + 1}] Skipping incomplete application... discarding draft to continue batch.`, 'warning');
+          await webview.executeJavaScript(DISCARD_APPLICATION_SCRIPT).catch(() => {});
+          await this.wait(1500); // Give the modal time to close cleanly
+        }
+        
+        if (!await this.wait(1500)) break; // Brief pause before advancing to next job listing
       }
 
-      if ((workflow.outcome === 'paused' || workflow.outcome === 'max_steps')) {
-        this.updateStatus(`[Job ${i + 1}] Skipping incomplete application... discarding draft to continue batch.`, 'warning');
-        await webview.executeJavaScript(DISCARD_APPLICATION_SCRIPT).catch(() => {});
-        await this.wait(1500); // Give the modal time to close cleanly
+      if (appliedCount >= runLimit || !this.isRunning) break;
+
+      // Auto-advance to next search results page if more applications needed
+      this.updateStatus(`Finished Page ${pageNum}. Advancing to Page ${pageNum + 1}...`);
+      const paginationScript = `
+        (function() {
+          const container = document.querySelector('.jobs-search-results-list, .scaffold-layout__list') || window;
+          if (container !== window) {
+            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+          } else {
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+          }
+
+          const nextBtn = document.querySelector('.artdeco-pagination__button--next, button[aria-label="View next page"], button[aria-label="Next"], .pagination__next, a[aria-label="Next"], [data-testid="pagination-page-next"]');
+          if (nextBtn && !nextBtn.disabled && nextBtn.getAttribute('aria-disabled') !== 'true') {
+            nextBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            nextBtn.click();
+            return true;
+          }
+          return false;
+        })();
+      `;
+      const hasNextPage = await webview.executeJavaScript(paginationScript).catch(() => false);
+      if (!hasNextPage) {
+        this.updateStatus(`No further search pages available.`, 'info');
+        break;
       }
-      
-      if (!await this.wait(1500)) break; // Brief pause before advancing to next job listing
+
+      pageNum++;
+      await this.wait(3000); // Wait for next page results to render
     }
 
     const completedNormally = this.isRunning;
     this.isRunning = false;
     if (completedNormally) {
+      ChimeNotifier.playSuccessChime();
+      ChimeNotifier.sendDesktopNotification(
+        'ZeroApply Batch Complete',
+        `Successfully applied to ${appliedCount} / ${runLimit} jobs!`
+      );
       this.updateStatus(`Batch Apply Complete! Successfully applied to ${appliedCount} / ${runLimit} jobs (Application Limit: ${runLimit}).`, 'success');
     }
   }
