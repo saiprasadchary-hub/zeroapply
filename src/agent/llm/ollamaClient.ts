@@ -21,12 +21,16 @@ export interface QuestionSolveResult {
 }
 
 const OLLAMA_BASE_URL = 'http://localhost:11434';
-const DEFAULT_MODEL = 'qwen2.5:0.5b';
+let cachedActiveModel: string = 'qwen2.5:0.5b';
+
+export function getActiveModelName(): string {
+  return cachedActiveModel;
+}
 
 /**
  * Checks if local Ollama server is running and accessible at http://localhost:11434
  */
-export async function checkOllamaStatus(modelName: string = DEFAULT_MODEL): Promise<OllamaStatus> {
+export async function checkOllamaStatus(modelName?: string): Promise<OllamaStatus> {
   const startTime = Date.now();
   const endpoints = ['http://localhost:11434', 'http://127.0.0.1:11434'];
 
@@ -44,12 +48,35 @@ export async function checkOllamaStatus(modelName: string = DEFAULT_MODEL): Prom
       if (response.ok) {
         const data = await response.json();
         const models: Array<{ name: string }> = data.models || [];
-        const isModelPresent = models.some(m => m.name.toLowerCase().includes(modelName.toLowerCase()));
+        
+        // Priority order for auto-selecting best lightweight 1GB/sub-3GB models
+        const candidateModels = [
+          modelName,
+          'qwen2.5:1.5b',
+          'llama3.2:1b',
+          'deepseek-r1:1.5b',
+          'qwen2.5:3b',
+          'llama3.2:3b',
+          'qwen2.5:0.5b',
+          'phi3:mini',
+          'phi3.5'
+        ].filter(Boolean) as string[];
+
+        let detected = models.find(m => candidateModels.some(c => m.name.toLowerCase().includes(c.toLowerCase())));
+        if (!detected && models.length > 0) {
+          detected = models[0];
+        }
+
+        if (detected) {
+          cachedActiveModel = detected.name;
+        }
+
+        const effectiveModel = detected ? detected.name : (modelName || cachedActiveModel);
 
         return {
           online: true,
-          modelAvailable: isModelPresent,
-          modelName,
+          modelAvailable: Boolean(detected),
+          modelName: effectiveModel,
           latencyMs: Date.now() - startTime,
         };
       }
@@ -61,7 +88,7 @@ export async function checkOllamaStatus(modelName: string = DEFAULT_MODEL): Prom
   return {
     online: false,
     modelAvailable: false,
-    modelName,
+    modelName: modelName || cachedActiveModel,
     latencyMs: Date.now() - startTime,
     error: 'Ollama server unreachable at http://localhost:11434 or http://127.0.0.1:11434',
   };
@@ -76,7 +103,7 @@ export async function solveScreeningQuestion(
   persona: PersonaData,
   options?: { model?: string; timeoutMs?: number }
 ): Promise<QuestionSolveResult> {
-  const model = options?.model || DEFAULT_MODEL;
+  const model = options?.model || cachedActiveModel;
   const timeoutMs = options?.timeoutMs || 15000;
 
   const thinkingAction = liveTelemetry.startAction({
