@@ -244,11 +244,31 @@ export class AutoApplyEngine {
       });
 
       // Click the job in the list to load it in the right pane
+      const escapedTitle = job.title.replace(/'/g, "\\'").replace(/"/g, '\\"');
+      
       const clickScript = `
         (function() {
-          const el = document.querySelector('` + job.selector + `');
+          // 1. Try selector first
+          let el = document.querySelector('` + job.selector + `');
+          
+          // 2. If selector lost or ID changed due to re-render, search all cards by title
+          if (!el) {
+            const allCards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item, [data-oc-id], .jobTuple'));
+            el = allCards.find(c => {
+              const t = c.querySelector('.job-card-list__title, .job-title, h3, a');
+              const cardTitle = t ? t.innerText.trim().toLowerCase() : '';
+              return cardTitle.includes('` + escapedTitle.toLowerCase() + `') || (c.innerText || '').toLowerCase().includes('` + escapedTitle.toLowerCase() + `');
+            });
+          }
+          
+          // 3. Fallback: match by index
+          if (!el) {
+            const allCards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item'));
+            if (allCards[` + i + `]) el = allCards[` + i + `];
+          }
+
           if (el) {
-            const container = el.closest('.jobs-search-results-list') || window;
+            const container = el.closest('.jobs-search-results-list, .scaffold-layout__list') || window;
             if (container !== window) {
                const elTop = el.offsetTop;
                container.scrollTo({ top: Math.max(0, elTop - 100), behavior: 'smooth' });
@@ -256,13 +276,14 @@ export class AutoApplyEngine {
                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
             
-            const rightPane = document.querySelector('.jobs-search__job-details--container');
+            const rightPane = document.querySelector('.jobs-search__job-details--container, .jobs-details-top-card');
             if (rightPane) rightPane.scrollTo({ top: 0, behavior: 'smooth' });
             
-            el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-            el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-            el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-            el.click();
+            const clickable = el.querySelector('.job-card-list__title, a[href*="/jobs/"], a') || el;
+            clickable.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+            clickable.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+            clickable.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            clickable.click();
             return true;
           }
           return false;

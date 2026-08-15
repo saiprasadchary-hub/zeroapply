@@ -20,9 +20,14 @@ export const DOM_SCANNER_SCRIPT = `
   const radioGroups = {};
   let fieldIdx = 0;
 
+  // 1. Identify active application modal container if open
+  const isVisible = (el) => el && el.offsetParent !== null;
+  const modals = Array.from(document.querySelectorAll('[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal, .jobs-apply-form')).filter(isVisible);
+  const root = modals.find(m => /easy apply|application|contact info|resume/i.test(String(m.innerText || ''))) || modals[0] || document.body;
+
   function getLabelText(el) {
     if (el.id) {
-      const labelEl = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+      const labelEl = root.querySelector('label[for="' + CSS.escape(el.id) + '"]');
       if (labelEl && labelEl.innerText.trim()) return labelEl.innerText.trim();
     }
     const parentLabel = el.closest('label');
@@ -57,10 +62,18 @@ export const DOM_SCANNER_SCRIPT = `
   }
 
   const selector = 'input, textarea, select, [role="combobox"], [role="listbox"]';
-  const elements = document.querySelectorAll(selector);
+  const elements = Array.from(root.querySelectorAll(selector));
 
   elements.forEach((el) => {
     if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button' || el.type === 'image') return;
+    
+    // When scanning document root without modal, ignore global search boxes and result lists
+    if (root === document.body) {
+      if (el.closest('header, nav, .global-nav, .jobs-search-box, .search-basic-typeahead, .jobs-search-results-list, .scaffold-layout__list')) {
+        return;
+      }
+    }
+
     const style = window.getComputedStyle(el);
     if (style.display === 'none' || style.visibility === 'hidden') {
       if (el.type !== 'file' && el.type !== 'radio' && el.type !== 'checkbox') return;

@@ -34,9 +34,10 @@ export const FORM_VALIDATION_SCRIPT = `
     const style = getComputedStyle(element);
     return style.visibility !== 'hidden' && style.display !== 'none' && style.opacity !== '0';
   };
-  const dialog = Array.from(document.querySelectorAll('[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal')).find(isVisible) || document;
+  const modals = Array.from(document.querySelectorAll('[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal')).filter(isVisible);
+  const dialog = modals.find((element) => /easy apply|application|resume|contact info/i.test(String(element.innerText || ''))) || modals[0] || document;
   
-  // Find only truly visible required fields in the active viewport
+  // Find only truly visible required fields inside the active modal dialog
   const nativeFields = Array.from(dialog.querySelectorAll('input[required], select[required], textarea[required], input[aria-required="true"], select[aria-required="true"], textarea[aria-required="true"], [role="combobox"][aria-required="true"], [role="textbox"][aria-required="true"]'))
     .filter(isVisible);
     
@@ -53,7 +54,7 @@ export const FORM_VALIDATION_SCRIPT = `
     return !String(element.value || '').trim();
   });
   
-  const errors = Array.from(dialog.querySelectorAll('[aria-invalid="true"], .artdeco-inline-feedback--error, [role="alert"]'))
+  const errors = Array.from(dialog.querySelectorAll('[aria-invalid="true"], .artdeco-inline-feedback--error'))
     .filter((element) => isVisible(element) && String(element.innerText || '').trim().length > 0);
     
   return { isValid: emptyRequired.length === 0 && errors.length === 0, emptyCount: emptyRequired.length, errorCount: errors.length };
