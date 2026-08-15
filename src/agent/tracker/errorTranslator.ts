@@ -134,6 +134,25 @@ export function diagnoseErrorInPlainEnglish(
     };
   }
 
+  // 6b. Navigation Aborted / In-Flight Redirect (Chromium ERR_ABORTED -3)
+  if (
+    combined.includes('guest_view_manager_call') ||
+    combined.includes('err_aborted') ||
+    combined.includes('(-3)') ||
+    combined.includes('navigation was aborted')
+  ) {
+    return {
+      category: 'JOB_SEARCH',
+      categoryLabel: 'Page Navigation & Search',
+      severityLabel: 'Transient Notice',
+      simpleWhatHappened: 'A search or link click updated the page while a previous request was still loading.',
+      whatIsTheMistakeWithAi:
+        'The browser redirected the search URL or superseded an in-flight page request. This is normal during fast LinkedIn search filtering.',
+      howToFixIt:
+        'No action needed. The browser has already reached the updated search results. Click "Fill & Apply" to proceed.',
+    };
+  }
+
   // 7. General Fallback
   return {
     category: 'SYSTEM',

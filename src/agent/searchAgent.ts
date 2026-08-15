@@ -47,9 +47,6 @@ export function buildSearchUrl(
   }
 }
 
-/**
- * Navigate the given Electron webview to the generated search URL.
- */
 export async function searchAndNavigate(
   view: any,
   platformId: PlatformId,
@@ -58,8 +55,25 @@ export async function searchAndNavigate(
   applyMode: ApplyMode = 'easy'
 ): Promise<void> {
   const url = buildSearchUrl(platformId, roleKeyword, location, applyMode);
-  if (view && typeof view.loadURL === 'function') {
-    view.loadURL(url);
+  if (view) {
+    try {
+      if (typeof view.loadURL === 'function') {
+        await view.loadURL(url).catch((err: any) => {
+          // Ignore net::ERR_ABORTED (-3) as LinkedIn redirecting in-flight navigations is standard
+          if (err && (err.code === 'ERR_ABORTED' || String(err.message || '').includes('-3') || String(err).includes('-3'))) {
+            return;
+          }
+          console.warn('loadURL non-fatal warning:', err);
+        });
+      } else if ('src' in view) {
+        view.src = url;
+      }
+    } catch (err: any) {
+      if (err && (err.code === 'ERR_ABORTED' || String(err.message || '').includes('-3') || String(err).includes('-3'))) {
+        return;
+      }
+      console.warn('searchAndNavigate non-fatal error:', err);
+    }
   } else {
     console.warn('searchAndNavigate: webview instance not available');
   }
