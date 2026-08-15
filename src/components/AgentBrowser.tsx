@@ -1,5 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Globe, Lock, RotateCw, ExternalLink } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  ArrowRight, 
+  Globe, 
+  Lock, 
+  RotateCw, 
+  ExternalLink,
+  ShieldCheck,
+  Sparkles
+} from 'lucide-react';
 import type { PersonaData } from '../types';
 import { AgentEngine } from '../agent/orchestrator/agentEngine';
 import { searchAndNavigate } from '../agent/searchAgent';
@@ -236,30 +245,62 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
 
   actionsRef.current = { handleSearchAndApply, handleAutoFillAndApply };
 
-
+  // Calculate clean hostname
+  let displayHost = 'Portal View';
+  try {
+    const parsed = new URL(url);
+    displayHost = parsed.hostname.replace(/^www\./, '');
+  } catch {}
 
   return (
-    <div className="flex-1 bg-white flex flex-col h-full relative overflow-hidden">
+    <div className="flex-1 bg-white flex flex-col h-full relative overflow-hidden font-sans">
       <div className="flex-1 bg-white flex flex-col overflow-hidden">
-        {/* Browser Navigation Toolbar */}
-        <div className="bg-[#EBF0F5] border-b border-zinc-300 px-3 py-2 flex items-center gap-2 shrink-0">
-          <div className="flex items-center gap-0.5 text-zinc-600">
-            <button type="button" onClick={() => go('goBack')} className="p-1 hover:bg-zinc-200 rounded" title="Back"><ArrowLeft size={15} /></button>
-            <button type="button" onClick={() => go('goForward')} className="p-1 hover:bg-zinc-200 rounded" title="Forward"><ArrowRight size={15} /></button>
-            <button type="button" onClick={() => go('reload')} className="p-1 hover:bg-zinc-200 rounded" title="Reload"><RotateCw size={15} /></button>
+        
+        {/* High-Tech Cockpit Address & Portal Bar */}
+        <div className="bg-[#F1F5F9] border-b border-zinc-200/90 px-3 py-2 flex items-center justify-between gap-2.5 shrink-0 shadow-2xs">
+          
+          {/* Navigation Controls */}
+          <div className="flex items-center gap-1 text-zinc-600">
+            <button type="button" onClick={() => go('goBack')} className="p-1.5 hover:bg-zinc-200 text-zinc-700 rounded-lg transition-colors" title="Back">
+              <ArrowLeft size={14} />
+            </button>
+            <button type="button" onClick={() => go('goForward')} className="p-1.5 hover:bg-zinc-200 text-zinc-700 rounded-lg transition-colors" title="Forward">
+              <ArrowRight size={14} />
+            </button>
+            <button type="button" onClick={() => go('reload')} className="p-1.5 hover:bg-zinc-200 text-zinc-700 rounded-lg transition-colors" title="Reload">
+              <RotateCw size={14} />
+            </button>
           </div>
-          <form onSubmit={navigate} className="flex-1 flex items-center gap-2 bg-white px-3 py-1 rounded-md border border-zinc-300 focus-within:border-cyan-500">
+
+          {/* Unified URL & Security Indicator */}
+          <form onSubmit={navigate} className="flex-1 flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-zinc-200/90 focus-within:border-cyan-500 shadow-2xs max-w-2xl">
             <Lock size={12} className="text-emerald-600 shrink-0" />
-            <input value={url} onChange={(event) => setUrl(event.target.value)} className="font-mono text-[11px] text-zinc-800 bg-transparent w-full outline-none" aria-label="Website address" />
+            <span className="text-[11px] font-bold text-zinc-400 font-mono hidden sm:inline">{displayHost}</span>
+            <input 
+              value={url} 
+              onChange={(event) => setUrl(event.target.value)} 
+              className="font-mono text-xs text-zinc-800 bg-transparent w-full outline-none" 
+              aria-label="Website address" 
+              placeholder="https://..."
+            />
           </form>
-          <select
-            value={selectedPlatform}
-            onChange={(event) => selectPlatform(event.target.value as (typeof PLATFORMS)[number]['id'])}
-            className="bg-white border border-zinc-300 rounded-md px-2 py-1.5 text-xs font-semibold text-zinc-800 outline-none focus:border-cyan-500 cursor-pointer"
-            aria-label="Job platform"
-          >
-            {PLATFORMS.map((platform) => <option key={platform.id} value={platform.id}>{platform.label}</option>)}
-          </select>
+
+          {/* Portal & Security Badge */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden md:flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-xl text-[11px] font-bold shadow-2xs">
+              <ShieldCheck size={13} className="text-emerald-600" />
+              <span>Safe ATS</span>
+            </div>
+
+            <select
+              value={selectedPlatform}
+              onChange={(event) => selectPlatform(event.target.value as (typeof PLATFORMS)[number]['id'])}
+              className="bg-white border border-zinc-200/90 rounded-xl px-2.5 py-1.5 text-xs font-bold text-zinc-800 outline-none focus:border-cyan-500 cursor-pointer shadow-2xs"
+              aria-label="Job platform"
+            >
+              {PLATFORMS.map((platform) => <option key={platform.id} value={platform.id}>{platform.label}</option>)}
+            </select>
+          </div>
         </div>
 
         {/* Webview Content */}
@@ -279,8 +320,9 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
               <div className="w-14 h-14 rounded-2xl bg-cyan-100/60 text-cyan-600 flex items-center justify-center mb-4 ambient-shadow">
                 <Globe size={32} />
               </div>
-              <h2 className="font-bold text-lg text-zinc-900 tracking-tight">
-                {PLATFORMS.find(p => p.id === selectedPlatform)?.label || 'Job Portal'} Live Access
+              <h2 className="font-bold text-lg text-zinc-900 tracking-tight flex items-center gap-2">
+                <Sparkles size={18} className="text-cyan-600" />
+                <span>{PLATFORMS.find(p => p.id === selectedPlatform)?.label || 'Job Portal'} Live Access</span>
               </h2>
               <p className="text-sm text-zinc-500 mt-1 max-w-md">
                 In Web Browser mode. Launch directly or open in Electron desktop container for embedded sign-in persistence.
