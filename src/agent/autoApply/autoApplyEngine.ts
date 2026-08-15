@@ -221,6 +221,7 @@ export class AutoApplyEngine {
     });
 
     this.updateStatus(`${pendingJobs.length} new jobs remaining to process (this run is limited to ${runLimit}).`);
+    liveTelemetry.clear();
 
     let appliedCount = 0;
 

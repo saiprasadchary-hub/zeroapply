@@ -53,7 +53,7 @@ class LiveTelemetryService {
     questionsSolved: 0,
     stepsCompleted: 0,
     jobsProcessed: 0,
-    activeModel: 'qwen2.5:0.5b',
+    activeModel: 'qwen2.5:1.5b',
     lastLatencyMs: 0,
   };
 
@@ -168,16 +168,25 @@ class LiveTelemetryService {
   }
 
   public clear() {
-    this.currentAction = null;
     this.history = [];
     this.stats = {
       fieldsFilled: 0,
       questionsSolved: 0,
       stepsCompleted: 0,
       jobsProcessed: 0,
-      activeModel: 'qwen2.5:0.5b',
+      activeModel: 'qwen2.5:1.5b',
       lastLatencyMs: 0,
     };
+    const readyRecord: LiveActionRecord = {
+      id: Math.random().toString(36).substring(2, 9),
+      timestamp: Date.now(),
+      type: 'status',
+      title: 'Agent Standing By',
+      detail: 'Ready for batch application',
+      status: 'completed',
+    };
+    this.currentAction = readyRecord;
+    this.notify(readyRecord);
   }
 }
 
