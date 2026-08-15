@@ -37,6 +37,10 @@ const JOB_EXTRACTOR_SCRIPT = `
     // Find the main clickable link for the job
     const linkEl = card.querySelector('a[href*="/jobs/"], a[href*="/job/"]') || card.closest('a') || titleEl;
 
+    // Check if card explicitly specifies Easy Apply
+    const cardText = (card.innerText || '').toLowerCase();
+    const isEasyApply = cardText.includes('easy apply') || Boolean(card.querySelector('.job-card-container__apply-method, [aria-label*="Easy Apply"], .job-card-list__easy-apply-label'));
+
     if (!card.id) card.id = 'za_job_card_' + idx;
 
     links.push({
@@ -45,6 +49,7 @@ const JOB_EXTRACTOR_SCRIPT = `
       company: company,
       selector: '#' + CSS.escape(card.id),
       href: linkEl ? linkEl.href : '',
+      isEasyApply: isEasyApply,
     });
   });
 
@@ -344,6 +349,49 @@ export class AutoApplyEngine {
 
         if (!await this.wait(2500)) break; // Wait for job details pane to load
 
+        // Inspect apply button type (Easy Apply vs Normal Apply)
+        const inspectApplyScript = `
+          (function() {
+            if (window.location.href.includes('linkedin.com')) {
+              const linkedinBtn = document.querySelector('.jobs-apply-button, [data-job-id] .jobs-apply-button');
+              if (linkedinBtn && linkedinBtn.offsetParent !== null) {
+                const text = (linkedinBtn.innerText || linkedinBtn.textContent || '').toLowerCase().trim();
+                if (text.includes('easy apply')) return { type: 'easy', text: linkedinBtn.innerText.trim() };
+                return { type: 'normal', text: linkedinBtn.innerText.trim() };
+              }
+            }
+
+            const allButtons = Array.from(document.querySelectorAll('.jobs-details-top-card button, .jobs-details-top-card a, .jobs-search__job-details button, .jobs-search__job-details a'));
+            for (const b of allButtons) {
+              if (b.offsetParent === null) continue;
+              const t = (b.innerText || b.textContent || '').toLowerCase().trim();
+              const aria = String(b.getAttribute('aria-label') || '').toLowerCase();
+              if (t.includes('easy apply') || aria.includes('easy apply')) return { type: 'easy', text: t };
+              if (t === 'apply' || t.includes('apply on company website') || t.includes('apply on employer') || t.startsWith('apply')) {
+                return { type: 'normal', text: t };
+              }
+            }
+            return { type: 'unknown', text: '' };
+          })();
+        `;
+
+        let applyInspection = { type: 'unknown', text: '' };
+        try {
+          applyInspection = await webview.executeJavaScript(inspectApplyScript);
+        } catch {}
+
+        // If Apply Mode is Easy Apply and this job is Normal / External Apply, skip immediately
+        if (persona.applyMode === 'easy' && applyInspection.type === 'normal') {
+          this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Skipped: Normal / External Apply detected for "${job.title}". Skipping to next Easy Apply role...`, 'warning');
+          liveTelemetry.emit({
+            type: 'status',
+            title: 'Skipping Normal Apply role',
+            detail: `"${job.title}" at ${job.company} is Normal Apply. Skipping down to next Easy Apply job...`,
+            status: 'completed',
+          });
+          continue;
+        }
+
         // Look for Easy Apply button
         const modeLabel = 'Easy Apply';
         this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Searching for ${modeLabel} button...`);
@@ -365,7 +413,7 @@ export class AutoApplyEngine {
             let targetBtn = null;
             
             if (window.location.href.includes('linkedin.com')) {
-               const linkedinBtn = document.querySelector('.jobs-apply-button');
+               const linkedinBtn = document.querySelector('.jobs-apply-button, [data-job-id] .jobs-apply-button');
                if (linkedinBtn && linkedinBtn.offsetParent !== null) {
                   const text = (linkedinBtn.innerText || linkedinBtn.textContent || '').toLowerCase();
                   if (text.includes('easy apply')) targetBtn = linkedinBtn;
@@ -400,7 +448,13 @@ export class AutoApplyEngine {
         }
         
         if (!clickedApply) {
-          this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Skipped (No ${modeLabel} button found)`);
+          this.updateStatus(`[Job ${i + 1}/${pendingJobs.length}] Skipped (No ${modeLabel} button found. Skipping down to next role...)`, 'warning');
+          liveTelemetry.emit({
+            type: 'status',
+            title: 'Skipping non-Easy Apply role',
+            detail: `"${job.title}" does not have an Easy Apply button. Skipping to next listing...`,
+            status: 'completed',
+          });
           continue;
         }
 
