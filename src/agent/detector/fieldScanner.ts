@@ -30,9 +30,21 @@ export const DOM_SCANNER_SCRIPT = `
       const labelEl = root.querySelector('label[for="' + CSS.escape(el.id) + '"]');
       if (labelEl && labelEl.innerText.trim()) return labelEl.innerText.trim();
     }
+    const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('title');
+    if (ariaLabel && ariaLabel.trim()) return ariaLabel.trim();
+    const labelledBy = el.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      const lblEl = document.getElementById(labelledBy);
+      if (lblEl && lblEl.innerText.trim()) return lblEl.innerText.trim();
+    }
     const parentLabel = el.closest('label');
     if (parentLabel && parentLabel.innerText.trim()) {
       return parentLabel.innerText.trim();
+    }
+    const parentBlock = el.closest('.display-flex, .form-group, .ember-view, .jobs-easy-apply-form-section__grouping, .fb-dropdown, [class*="form-element"]');
+    if (parentBlock) {
+      const potentialQuestion = parentBlock.querySelector('label span, legend span, label, legend, .artdeco-dropdown__label, .fb-dropdown__label, [class*="label"]');
+      if (potentialQuestion && potentialQuestion.innerText.trim()) return potentialQuestion.innerText.trim();
     }
     return el.placeholder || el.value || el.name || el.id || '';
   }
@@ -61,11 +73,13 @@ export const DOM_SCANNER_SCRIPT = `
     return el.name || '';
   }
 
-  const selector = 'input, textarea, select, [role="combobox"], [role="listbox"]';
+  const selector = 'input, textarea, select, [role="combobox"], [role="listbox"], button[aria-haspopup="listbox"], button[data-test-fb-dropdown-trigger], .artdeco-dropdown__trigger';
   const elements = Array.from(root.querySelectorAll(selector));
 
   elements.forEach((el) => {
-    if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button' || el.type === 'image') return;
+    const isDropdownTrigger = el.getAttribute('role') === 'combobox' || el.getAttribute('aria-haspopup') === 'listbox' || el.classList.contains('artdeco-dropdown__trigger');
+    if ((el.type === 'hidden' || el.type === 'submit' || el.type === 'image') && !isDropdownTrigger) return;
+    if (el.type === 'button' && !isDropdownTrigger) return;
     
     // When scanning document root without modal, ignore global search boxes and result lists
     if (root === document.body) {
@@ -76,7 +90,7 @@ export const DOM_SCANNER_SCRIPT = `
 
     const style = window.getComputedStyle(el);
     if (style.display === 'none' || style.visibility === 'hidden') {
-      if (el.type !== 'file' && el.type !== 'radio' && el.type !== 'checkbox') return;
+      if (el.type !== 'file' && el.type !== 'radio' && el.type !== 'checkbox' && !isDropdownTrigger) return;
     }
 
     fieldIdx++;
@@ -119,7 +133,7 @@ export const DOM_SCANNER_SCRIPT = `
     else if (el.type === 'email') fieldType = 'email';
     else if (el.type === 'tel') fieldType = 'tel';
     else if (el.type === 'number') fieldType = 'number';
-    else if (el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox') {
+    else if (isDropdownTrigger || el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox') {
       fieldType = 'custom_dropdown';
     }
 

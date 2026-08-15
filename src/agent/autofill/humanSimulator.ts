@@ -128,16 +128,53 @@ export function generateHumanBypassScript(instructionsJson: string): string {
     const optText = String(optionText || '').toLowerCase().trim();
     const optVal = String(optionValue || '').toLowerCase().trim();
 
-    if (optText === target || optVal === target) return 100;
-    if (optText.startsWith(target) || optVal.startsWith(target)) return 80;
+    // Ignore generic placeholder options
+    if (/^(?:select|please select|choose|--|select an option|select one)/i.test(optText)) return -1;
 
-    // Handle Yes / No variations specifically
+    if (optText === target || optVal === target) return 100;
+    if (optText.startsWith(target) || optVal.startsWith(target)) return 85;
+
+    // 1. Phone Country Dial Code Matching (e.g. +91, +1, +44)
+    const targetDialMatch = target.match(/\\+(\\d{1,4})/);
+    const optDialMatch = optText.match(/\\+(\\d{1,4})/) || optVal.match(/\\+(\\d{1,4})/);
+    if (targetDialMatch && optDialMatch && targetDialMatch[1] === optDialMatch[1]) {
+      return 100;
+    }
+    // Country name matching in phone dropdown
+    const countries = ['india', 'united states', 'united kingdom', 'canada', 'australia', 'germany', 'singapore', 'uae'];
+    for (const c of countries) {
+      if (target.includes(c) && optText.includes(c)) return 95;
+    }
+
+    // 2. Yes / No / Authorization / Sponsorship Matching
     if (target === 'yes' || target === 'true' || target === '1') {
-      if (/^yes|^true|agree|acknowledge|certify|confirm/i.test(optText) || optVal === 'true' || optVal === '1' || optVal === 'yes') return 95;
+      if (/^yes|^true|authorized|citizen|permanent resident|agree|acknowledge|certify|confirm|eligible/i.test(optText) || optVal === 'true' || optVal === '1' || optVal === 'yes') return 95;
     }
     if (target === 'no' || target === 'false' || target === '0') {
-      if (/^no|^false|do not|will not/i.test(optText) || optVal === 'false' || optVal === '0' || optVal === 'no') return 95;
+      if (/^no|^false|will not|do not|none|disagree|not a veteran|no disability/i.test(optText) || optVal === 'false' || optVal === '0' || optVal === 'no') return 95;
     }
+
+    // 3. Experience & Proficiency Levels
+    const numTarget = parseInt(target, 10);
+    if (!isNaN(numTarget)) {
+      if (optText.includes(String(numTarget)) || optVal === String(numTarget)) return 90;
+      if (numTarget >= 5 && /expert|advanced|senior|lead|5\\+|5 to/i.test(optText)) return 85;
+      if (numTarget >= 2 && numTarget <= 4 && /intermediate|proficient|mid|2 to|2\\+|3\\+/i.test(optText)) return 85;
+      if (numTarget <= 1 && /beginner|entry|fresher|junior|0-1|1\\+/i.test(optText)) return 85;
+    }
+
+    // 4. Degree & Education Levels
+    if (/bachelor/i.test(target) && /bachelor|undergraduate|b\\.?tech|b\\.?e\\.|b\\.?s\\.|b\\.?a\\.|bca/i.test(optText)) return 95;
+    if (/master/i.test(target) && /master|postgraduate|m\\.?tech|m\\.?s\\.|m\\.?e\\.|mba|mca/i.test(optText)) return 95;
+    if (/ph\\.?d|doctor/i.test(target) && /doctor|ph\\.?d/i.test(optText)) return 95;
+
+    // 5. EEO Demographics & Self-Identification
+    if (/decline|not wish|prefer not/i.test(target) && /decline|prefer not|do not wish|choose not|not specified/i.test(optText)) return 95;
+
+    // 6. Work Preference
+    if (/remote/i.test(target) && /remote|work from home|virtual/i.test(optText)) return 90;
+    if (/hybrid/i.test(target) && /hybrid|flexible/i.test(optText)) return 90;
+    if (/on-site/i.test(target) && /on-site|in-office|office/i.test(optText)) return 90;
 
     if (optText.includes(target) || (target.length > 3 && optText.includes(target.slice(0, Math.floor(target.length * 0.7))))) return 65;
 
@@ -191,7 +228,7 @@ export function generateHumanBypassScript(instructionsJson: string): string {
       if (inst.type === 'select') {
         const options = Array.from(el.options);
         let bestMatch = null;
-        let bestScore = 0;
+        let bestScore = -1;
         options.forEach(o => {
           const score = scoreOptionMatch(o.text, o.value, inst.value);
           if (score > bestScore) {
@@ -200,11 +237,14 @@ export function generateHumanBypassScript(instructionsJson: string): string {
           }
         });
         
-        if (bestMatch && bestScore >= 40) {
+        if (bestMatch && bestScore >= 30) {
           el.focus();
-          await sleep(randomDelay(150, 400));
+          await sleep(randomDelay(100, 250));
+          bestMatch.selected = true;
+          el.selectedIndex = options.indexOf(bestMatch);
           el.value = bestMatch.value;
           setNativeValue(el, bestMatch.value);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
           el.dispatchEvent(new Event('blur', { bubbles: true }));
           filledCount++;
@@ -314,42 +354,59 @@ export function generateHumanBypassScript(instructionsJson: string): string {
         } else {
           skippedCount++;
         }
-      } else if (inst.type !== 'file' && inst.value !== '[ATTACH_RESUME]') {
-        await simulateTyping(el, inst.value);
-        if (inst.type === 'custom_dropdown') {
+      } else if (inst.type === 'custom_dropdown') {
+        const isInput = el.tagName.toLowerCase() === 'input' || el.tagName.toLowerCase() === 'textarea';
+        if (isInput) {
+          await simulateTyping(el, inst.value);
           await sleep(350);
-          const dropdownContainers = Array.from(document.querySelectorAll('[role="listbox"], [role="menu"], .dropdown-menu, .typeahead-options, .Select-menu-outer, .MuiAutocomplete-listbox, .ant-select-dropdown'))
-            .concat(el.closest('.search-basic-typeahead, [class*="typeahead"], [class*="dropdown"]') || []);
-            
-          let clickedOption = false;
-          for (const container of dropdownContainers) {
-            if (!container) continue;
-            const options = Array.from(container.querySelectorAll('[role="option"], [role="menuitem"], li, .option, .item'));
-            let bestMatch = null;
-            let bestScore = 0;
-            for (const opt of options) {
-              const text = (opt.innerText || opt.textContent || '').trim();
-              const score = scoreOptionMatch(text, '', inst.value);
-              if (score > bestScore) {
-                bestScore = score;
-                bestMatch = opt;
-              }
-            }
-            if (bestMatch && bestScore >= 30) {
-              simulateMouse(bestMatch);
-              await sleep(80);
-              bestMatch.click();
-              bestMatch.dispatchEvent(new Event('click', { bubbles: true }));
-              clickedOption = true;
-              break;
+        } else {
+          simulateMouse(el);
+          await sleep(80);
+          el.click();
+          await sleep(350);
+        }
+
+        const dropdownContainers = Array.from(document.querySelectorAll('[role="listbox"], [role="menu"], .dropdown-menu, .typeahead-options, .artdeco-dropdown__content, .Select-menu-outer, .MuiAutocomplete-listbox, .ant-select-dropdown'))
+          .concat(el.closest('.search-basic-typeahead, [class*="typeahead"], [class*="dropdown"]') || []);
+          
+        let clickedOption = false;
+        for (const container of dropdownContainers) {
+          if (!container) continue;
+          const options = Array.from(container.querySelectorAll('[role="option"], [role="menuitem"], .artdeco-dropdown__item, li, .option, .item'));
+          let bestMatch = null;
+          let bestScore = -1;
+          for (const opt of options) {
+            const text = (opt.innerText || opt.textContent || '').trim();
+            const score = scoreOptionMatch(text, '', inst.value);
+            if (score > bestScore) {
+              bestScore = score;
+              bestMatch = opt;
             }
           }
-          if (!clickedOption) {
-            el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 }));
+          if (bestMatch && bestScore >= 30) {
+            simulateMouse(bestMatch);
             await sleep(80);
-            el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter', keyCode: 13 }));
+            bestMatch.click();
+            bestMatch.dispatchEvent(new Event('click', { bubbles: true }));
+            clickedOption = true;
+            filledCount++;
+            emitTelemetry({
+              type: 'click',
+              title: 'Selected custom dropdown: ' + (bestMatch.innerText || '').trim(),
+              target: fieldLabel,
+              status: 'completed'
+            });
+            break;
           }
         }
+        if (!clickedOption && isInput) {
+          el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 }));
+          await sleep(80);
+          el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter', keyCode: 13 }));
+          filledCount++;
+        }
+      } else if (inst.type !== 'file' && inst.value !== '[ATTACH_RESUME]') {
+        await simulateTyping(el, inst.value);
         filledCount++;
       }
       
