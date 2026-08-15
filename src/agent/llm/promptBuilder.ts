@@ -18,6 +18,10 @@ export async function buildQuestionPrompt(question: string, persona: PersonaData
     `Education: ${memoryContext.personaFacts.education}`,
   ];
 
+  if (persona.resumeChunks?.projects) {
+    contextLines.push(`Key Projects Built: ${persona.resumeChunks.projects.slice(0, 350).trim()}`);
+  }
+
   if (memoryContext.activeJobContext?.jobTitle) {
     contextLines.push(`Applying For: ${memoryContext.activeJobContext.jobTitle} at ${memoryContext.activeJobContext.companyName || 'Target Employer'}`);
   }
