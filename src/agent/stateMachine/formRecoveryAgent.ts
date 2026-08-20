@@ -76,17 +76,30 @@ export const SCAN_AND_HEAL_FORM_SCRIPT = `
     }
 
     // 3. Dropdown / Select healing
-    else if (tagName === 'SELECT') {
-      const select = input;
-      if (!select.value || select.value === '' || select.selectedIndex <= 0) {
-        // Pick first non-empty option
-        const validOption = Array.from(select.options).find(opt => opt.value && opt.value !== '' && !opt.text.toLowerCase().includes('select') && !opt.text.toLowerCase().includes('choose'));
-        if (validOption) {
-          select.value = validOption.value;
-          select.dispatchEvent(new Event('change', { bubbles: true }));
-          select.dispatchEvent(new Event('input', { bubbles: true }));
-          fixedFields.push(\`Dropdown '\${labelText}': Selected '\${validOption.text.trim()}'\`);
-          action = 'select_first_option';
+    else if (tagName === 'SELECT' || input.getAttribute('role') === 'combobox' || input.classList.contains('artdeco-dropdown__trigger')) {
+      if (tagName === 'SELECT') {
+        const select = input;
+        if (!select.value || select.value === '' || select.selectedIndex <= 0) {
+          // Pick best valid option: prioritize Yes / Authorized / Bachelor's / or first non-placeholder option
+          const options = Array.from(select.options);
+          let targetOption = options.find(opt => /^(?:yes|authorized|citizen|bachelor|immediate|proficient|expert)/i.test((opt.text || opt.value).trim())) ||
+                             options.find(opt => opt.value && opt.value !== '' && !/^(?:select|choose|--)/i.test(opt.text.trim()));
+          if (targetOption) {
+            targetOption.selected = true;
+            select.selectedIndex = options.indexOf(targetOption);
+            try {
+              const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+              if (setter) setter.call(select, targetOption.value);
+              else select.value = targetOption.value;
+            } catch {
+              select.value = targetOption.value;
+            }
+            select.dispatchEvent(new Event('input', { bubbles: true }));
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            select.dispatchEvent(new Event('blur', { bubbles: true }));
+            fixedFields.push(\`Dropdown '\${labelText}': Selected '\${targetOption.text.trim()}'\`);
+            action = 'select_first_option';
+          }
         }
       }
     }

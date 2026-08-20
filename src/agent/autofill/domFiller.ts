@@ -27,7 +27,10 @@ export async function executeDomAutofill(
     if (!webview || typeof webview.executeJavaScript !== 'function') {
       return { filledCount: 0, skippedCount: instructions.length, totalTargeted: instructions.length };
     }
-    result = await webview.executeJavaScript(script);
+    result = await webview.executeJavaScript(script).catch((err: any) => {
+      console.warn('DOM autofill execution non-fatal catch:', err);
+      return null;
+    });
 
     return {
       filledCount: result?.filledCount || 0,

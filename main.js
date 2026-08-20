@@ -60,11 +60,36 @@ function getAuthSession() {
   return configureSession(authSession);
 }
 
-// LinkedIn's normal email/password and account-creation flows stay in the
-// existing webview. Do not let third-party pages create arbitrary native
-// windows: the previous permissive handler allowed unrelated ad/tracker URLs
-// to create windows and could crash Electron when navigation failed.
-const denyNewWindow = () => ({ action: 'deny' });
+const TRUSTED_AUTH_HOSTS = [
+  'accounts.google.com',
+  'appleid.apple.com',
+  'login.microsoftonline.com',
+  'github.com',
+  'linkedin.com',
+];
+
+const handleWindowOpen = ({ url }) => {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const isAuth = TRUSTED_AUTH_HOSTS.some(h => host === h || host.endsWith('.' + h));
+    if (isAuth) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 600,
+          height: 720,
+          autoHideMenuBar: true,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+          },
+        },
+      };
+    }
+  } catch {}
+  return { action: 'deny' };
+};
 
 function createWindow() {
   const customSession = getAuthSession();
@@ -97,7 +122,7 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
   }
 
-  mainWindow.webContents.setWindowOpenHandler(denyNewWindow);
+  mainWindow.webContents.setWindowOpenHandler(handleWindowOpen);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -105,7 +130,7 @@ function createWindow() {
 }
 
 app.on('web-contents-created', (event, contents) => {
-  contents.setWindowOpenHandler(denyNewWindow);
+  contents.setWindowOpenHandler(handleWindowOpen);
 
   contents.on('will-attach-webview', (event, webPreferences) => {
     // The React app creates the only supported webview. Remote pages must not

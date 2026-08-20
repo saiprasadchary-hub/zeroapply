@@ -13,15 +13,15 @@ export function buildSearchUrl(query: BatchSearchQuery): string {
     case 'linkedin':
       return `https://www.linkedin.com/jobs/search/?keywords=${role}&location=${loc}&f_AL=true`; // f_AL=true filters Easy Apply
     case 'unstop':
-      return `https://unstop.com/jobs?searchTerm=${role}`;
+      return `https://unstop.com/jobs?keyword=${role}&location=${loc}`;
     case 'indeed':
-      return `https://www.indeed.com/jobs?q=${role}&l=${loc}`;
+      return `https://www.indeed.com/jobs?q=${role}&l=${loc}&sc=0kf%3Aattr(KOCMT)%3B`;
     case 'naukri':
       return `https://www.naukri.com/${role}-jobs-in-${loc}`;
     case 'glassdoor':
-      return `https://www.glassdoor.com/Job/jobs.htm?sc.keyword=${role}`;
+      return `https://www.glassdoor.com/Job/jobs.htm?keyword=${role}&loc=${loc}&applicationType=1`;
     default:
-      return `https://www.google.com/search?q=${role}+jobs`;
+      return `https://www.google.com/search?q=${role}+jobs+${loc}+easy+apply`;
   }
 }
 

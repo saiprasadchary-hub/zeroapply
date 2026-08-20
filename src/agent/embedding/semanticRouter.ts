@@ -19,7 +19,8 @@ export type ChunkKey =
   | 'relocation'
   | 'securityClearance'
   | 'domainExpertise'
-  | 'eeoDemographics';
+  | 'eeoDemographics'
+  | 'references';
 
 export interface SemanticRouteResult {
   targetChunk: ChunkKey | null;
@@ -47,6 +48,7 @@ const CHUNK_TAXONOMY: Record<ChunkKey, string[]> = {
   securityClearance: ['clearance', 'security clearance', 'top secret', 'secret', 'public trust', 'polygraph', 'ts/sci', 'government clearance'],
   domainExpertise: ['domain', 'fintech', 'healthtech', 'saas', 'enterprise', 'e-commerce', 'crypto', 'banking', 'cybersecurity', 'automotive'],
   eeoDemographics: ['veteran', 'disability', 'race', 'ethnicity', 'gender', 'pronoun', 'voluntary', 'self-identification', 'eeo', 'equal opportunity'],
+  references: ['reference', 'references', 'referee', 'former manager', 'supervisor', 'professional reference'],
 };
 
 /**

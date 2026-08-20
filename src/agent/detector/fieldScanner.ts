@@ -1,7 +1,7 @@
 export interface ScannedField {
   id: string;
   elementSelector: string;
-  type: 'text' | 'email' | 'tel' | 'number' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'file' | 'custom_dropdown';
+  type: 'text' | 'email' | 'tel' | 'number' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'file' | 'custom_dropdown' | 'signature';
   label: string;
   name: string;
   placeholder: string;
@@ -25,55 +25,112 @@ export const DOM_SCANNER_SCRIPT = `
   const modals = Array.from(document.querySelectorAll('[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal, .jobs-apply-form')).filter(isVisible);
   const root = modals.find(m => /easy apply|application|contact info|resume/i.test(String(m.innerText || ''))) || modals[0] || document.body;
 
+  function cleanQuestionText(raw) {
+    if (!raw) return '';
+    let txt = String(raw).replace(/\\s+/g, ' ').trim();
+    // Strip required asterisks, visually hidden badges, or trailing colons
+    txt = txt.replace(/[\\n\\r]+/g, ' ')
+             .replace(/[*]+/g, '')
+             .replace(/\\s*\\(optional\\)\\s*$/i, '')
+             .replace(/\\s*\\(required\\)\\s*$/i, '')
+             .replace(/[:]\\s*$/, '')
+             .trim();
+    return txt;
+  }
+
+  function isGenericPlaceholder(txt) {
+    if (!txt) return true;
+    const lower = txt.toLowerCase().trim();
+    return /^(?:select|please select|choose|--|select an option|select one|choose an option|select...|options)$/i.test(lower) || lower.length < 2;
+  }
+
   function getLabelText(el) {
+    let foundText = '';
+
+    // 1. Direct label[for="id"]
     if (el.id) {
       const labelEl = root.querySelector('label[for="' + CSS.escape(el.id) + '"]');
-      if (labelEl && labelEl.innerText.trim()) return labelEl.innerText.trim();
+      if (labelEl) {
+        const spanVisible = labelEl.querySelector('span[aria-hidden="true"]') || labelEl;
+        foundText = cleanQuestionText(spanVisible.innerText || labelEl.innerText);
+      }
     }
-    const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('title');
-    if (ariaLabel && ariaLabel.trim()) return ariaLabel.trim();
-    const labelledBy = el.getAttribute('aria-labelledby');
-    if (labelledBy) {
-      const lblEl = document.getElementById(labelledBy);
-      if (lblEl && lblEl.innerText.trim()) return lblEl.innerText.trim();
+
+    // 2. aria-labelledby
+    if (isGenericPlaceholder(foundText)) {
+      const labelledBy = el.getAttribute('aria-labelledby');
+      if (labelledBy) {
+        const idList = labelledBy.split(/\\s+/);
+        const lblTexts = idList.map(id => {
+          const l = document.getElementById(id);
+          return l ? l.innerText.trim() : '';
+        }).filter(Boolean);
+        if (lblTexts.length > 0) foundText = cleanQuestionText(lblTexts.join(' '));
+      }
     }
-    const parentLabel = el.closest('label');
-    if (parentLabel && parentLabel.innerText.trim()) {
-      return parentLabel.innerText.trim();
+
+    // 3. aria-label or title
+    if (isGenericPlaceholder(foundText)) {
+      const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('title');
+      if (ariaLabel && !isGenericPlaceholder(ariaLabel)) {
+        foundText = cleanQuestionText(ariaLabel);
+      }
     }
-    const parentBlock = el.closest('.display-flex, .form-group, .ember-view, .jobs-easy-apply-form-section__grouping, .fb-dropdown, [class*="form-element"]');
-    if (parentBlock) {
-      const potentialQuestion = parentBlock.querySelector('label span, legend span, label, legend, .artdeco-dropdown__label, .fb-dropdown__label, [class*="label"]');
-      if (potentialQuestion && potentialQuestion.innerText.trim()) return potentialQuestion.innerText.trim();
+
+    // 4. Closest label wrapper
+    if (isGenericPlaceholder(foundText)) {
+      const parentLabel = el.closest('label');
+      if (parentLabel) {
+        const span = parentLabel.querySelector('span[aria-hidden="true"], .fb-form-element-label__title--is-required, span') || parentLabel;
+        foundText = cleanQuestionText(span.innerText);
+      }
     }
-    return el.placeholder || el.value || el.name || el.id || '';
+
+    // 5. Parent form element container / LinkedIn fb-form-element
+    if (isGenericPlaceholder(foundText)) {
+      const parentBlock = el.closest('.fb-form-element, .artdeco-form-element, .jobs-easy-apply-form-section__grouping, .fb-dropdown, [class*="form-element"], .display-flex, .form-group');
+      if (parentBlock) {
+        const potentialQuestion = parentBlock.querySelector(
+          '.fb-form-element-label, label span[aria-hidden="true"], label span, legend span, label, legend, .artdeco-dropdown__label, .fb-dropdown__label, .t-14.t-bold, [class*="label"]'
+        );
+        if (potentialQuestion) {
+          foundText = cleanQuestionText(potentialQuestion.innerText);
+        }
+      }
+    }
+
+    if (!isGenericPlaceholder(foundText)) {
+      return foundText;
+    }
+
+    return cleanQuestionText(el.placeholder || el.name || el.id || '');
   }
 
   function getRadioQuestionText(el) {
     const fieldset = el.closest('fieldset');
     if (fieldset) {
-      const legend = fieldset.querySelector('legend');
-      if (legend && legend.innerText.trim()) return legend.innerText.trim();
+      const legend = fieldset.querySelector('legend span[aria-hidden="true"]') || fieldset.querySelector('legend');
+      if (legend && legend.innerText.trim()) return cleanQuestionText(legend.innerText);
     }
     const rg = el.closest('[role="radiogroup"]');
     if (rg) {
       const id = rg.getAttribute('aria-labelledby');
       if (id) {
         const lbl = document.getElementById(id);
-        if (lbl) return lbl.innerText.trim();
+        if (lbl) return cleanQuestionText(lbl.innerText);
       }
-      if (rg.getAttribute('aria-label')) return rg.getAttribute('aria-label');
+      if (rg.getAttribute('aria-label')) return cleanQuestionText(rg.getAttribute('aria-label'));
     }
-    // Fallback: Check previous element or parent blocks
-    const parentBlock = el.closest('.display-flex, .form-group, .ember-view');
+    // Fallback: Check parent blocks
+    const parentBlock = el.closest('.fb-form-element, .jobs-easy-apply-form-section__grouping, .display-flex, .form-group, .ember-view');
     if (parentBlock) {
-      const potentialQuestion = parentBlock.querySelector('label span, legend span, label, legend');
-      if (potentialQuestion) return potentialQuestion.innerText.trim();
+      const potentialQuestion = parentBlock.querySelector('label span[aria-hidden="true"], legend span, label, legend');
+      if (potentialQuestion) return cleanQuestionText(potentialQuestion.innerText);
     }
-    return el.name || '';
+    return cleanQuestionText(el.name || '');
   }
 
-  const selector = 'input, textarea, select, [role="combobox"], [role="listbox"], button[aria-haspopup="listbox"], button[data-test-fb-dropdown-trigger], .artdeco-dropdown__trigger';
+  const selector = 'input, textarea, select, canvas, [role="combobox"], [role="listbox"], button[aria-haspopup="listbox"], button[data-test-fb-dropdown-trigger], .artdeco-dropdown__trigger';
   const elements = Array.from(root.querySelectorAll(selector));
 
   elements.forEach((el) => {
@@ -128,6 +185,7 @@ export const DOM_SCANNER_SCRIPT = `
     let fieldType = 'text';
     if (tag === 'textarea') fieldType = 'textarea';
     else if (tag === 'select') fieldType = 'select';
+    else if (tag === 'canvas' || el.classList.contains('signature-pad') || /sign/i.test(el.id || el.className)) fieldType = 'signature';
     else if (el.type === 'file') fieldType = 'file';
     else if (el.type === 'checkbox') fieldType = 'checkbox';
     else if (el.type === 'email') fieldType = 'email';
@@ -139,7 +197,20 @@ export const DOM_SCANNER_SCRIPT = `
 
     let options = [];
     if (tag === 'select') {
-      options = Array.from(el.options).map(o => o.text.trim()).filter(Boolean);
+      options = Array.from(el.options)
+        .map(o => (o.text || o.value || '').trim())
+        .filter(t => t && !isGenericPlaceholder(t));
+    } else if (fieldType === 'custom_dropdown') {
+      // Check for hidden select or sibling option elements
+      const parentContainer = el.closest('.fb-dropdown, .artdeco-dropdown, [class*="dropdown"]') || el.parentElement;
+      if (parentContainer) {
+        const hiddenSelect = parentContainer.querySelector('select');
+        if (hiddenSelect && hiddenSelect.options) {
+          options = Array.from(hiddenSelect.options)
+            .map(o => (o.text || o.value || '').trim())
+            .filter(t => t && !isGenericPlaceholder(t));
+        }
+      }
     }
 
     fields.push({

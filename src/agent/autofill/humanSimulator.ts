@@ -122,6 +122,72 @@ export function generateHumanBypassScript(instructionsJson: string): string {
     element.dispatchEvent(new Event('blur', { bubbles: true }));
   }
 
+  // Autonomous Canvas Signature Pad Vector Signer
+  async function simulateCanvasSignature(canvas, name) {
+    if (!canvas) return;
+    try {
+      const rect = canvas.getBoundingClientRect();
+      const ctx = canvas.getContext ? canvas.getContext('2d') : null;
+      const width = rect.width || 300;
+      const height = rect.height || 100;
+      const startX = rect.left + width * 0.15;
+      const startY = rect.top + height * 0.55;
+
+      function dispatchPointer(type, clientX, clientY) {
+        const init = {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX,
+          clientY,
+          button: 0,
+          buttons: 1,
+          pressure: 0.7
+        };
+        canvas.dispatchEvent(new PointerEvent(type, init));
+        canvas.dispatchEvent(new MouseEvent(type, init));
+      }
+
+      dispatchPointer('pointerdown', startX, startY);
+      dispatchPointer('mousedown', startX, startY);
+
+      if (ctx) {
+        ctx.beginPath();
+        ctx.moveTo(width * 0.15, height * 0.55);
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 2.5;
+      }
+
+      // Generate smooth cursive wave loop strokes based on applicant name
+      const pointsCount = Math.max(16, Math.min(40, (name || 'Applicant').length * 2));
+      const stepX = (width * 0.7) / pointsCount;
+
+      for (let p = 0; p <= pointsCount; p++) {
+        const curX = startX + p * stepX;
+        const wave = Math.sin(p * 0.7) * (height * 0.18) + Math.cos(p * 1.3) * (height * 0.08);
+        const curY = startY + wave;
+
+        dispatchPointer('pointermove', curX, curY);
+        dispatchPointer('mousemove', curX, curY);
+
+        if (ctx) {
+          ctx.lineTo(width * 0.15 + p * stepX, height * 0.55 + wave);
+          ctx.stroke();
+        }
+
+        await sleep(15);
+      }
+
+      const endX = startX + pointsCount * stepX;
+      const endY = startY;
+      dispatchPointer('pointerup', endX, endY);
+      dispatchPointer('mouseup', endX, endY);
+      canvas.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) {
+      console.warn('Canvas signature generation skipped:', e);
+    }
+  }
+
   function scoreOptionMatch(optionText, optionValue, targetValue) {
     if (!targetValue || (!optionText && !optionValue)) return -1;
     const target = String(targetValue).toLowerCase().trim();
@@ -129,7 +195,7 @@ export function generateHumanBypassScript(instructionsJson: string): string {
     const optVal = String(optionValue || '').toLowerCase().trim();
 
     // Ignore generic placeholder options
-    if (/^(?:select|please select|choose|--|select an option|select one)/i.test(optText)) return -1;
+    if (/^(?:select|please select|choose|--|select an option|select one|choose an option|options)$/i.test(optText)) return -1;
 
     if (optText === target || optVal === target) return 100;
     if (optText.startsWith(target) || optVal.startsWith(target)) return 85;
@@ -146,32 +212,37 @@ export function generateHumanBypassScript(instructionsJson: string): string {
       if (target.includes(c) && optText.includes(c)) return 95;
     }
 
-    // 2. Yes / No / Authorization / Sponsorship Matching
-    if (target === 'yes' || target === 'true' || target === '1') {
-      if (/^yes|^true|authorized|citizen|permanent resident|agree|acknowledge|certify|confirm|eligible/i.test(optText) || optVal === 'true' || optVal === '1' || optVal === 'yes') return 95;
+    // 2. Yes / No / Authorization / Sponsorship / Driver's License Matching
+    if (target === 'yes' || target === 'true' || target === '1' || /^yes/i.test(target)) {
+      if (/^yes|^true|authorized|citizen|permanent resident|agree|acknowledge|certify|confirm|eligible|valid license|have a (?:valid )?driver/i.test(optText) || optVal === 'true' || optVal === '1' || optVal === 'yes') return 95;
     }
-    if (target === 'no' || target === 'false' || target === '0') {
-      if (/^no|^false|will not|do not|none|disagree|not a veteran|no disability/i.test(optText) || optVal === 'false' || optVal === '0' || optVal === 'no') return 95;
+    if (target === 'no' || target === 'false' || target === '0' || /^no/i.test(target)) {
+      if (/^no|^false|will not|do not|none|disagree|not a (?:protected )?veteran|no disability|do not require|not authorized/i.test(optText) || optVal === 'false' || optVal === '0' || optVal === 'no') return 95;
     }
 
-    // 3. Experience & Proficiency Levels
+    // 3. Notice Period / Availability Matching
+    if (/immediate|2 week|notice|start date/i.test(target)) {
+      if (/immediate|serving notice|15 days|2 weeks|1 month|less than 1 month|asap/i.test(optText)) return 90;
+    }
+
+    // 4. Experience & Proficiency Levels
     const numTarget = parseInt(target, 10);
     if (!isNaN(numTarget)) {
       if (optText.includes(String(numTarget)) || optVal === String(numTarget)) return 90;
-      if (numTarget >= 5 && /expert|advanced|senior|lead|5\\+|5 to/i.test(optText)) return 85;
-      if (numTarget >= 2 && numTarget <= 4 && /intermediate|proficient|mid|2 to|2\\+|3\\+/i.test(optText)) return 85;
-      if (numTarget <= 1 && /beginner|entry|fresher|junior|0-1|1\\+/i.test(optText)) return 85;
+      if (numTarget >= 5 && /expert|advanced|senior|lead|5\\+|5 to|5-7|7\\+|10\\+/i.test(optText)) return 85;
+      if (numTarget >= 2 && numTarget <= 4 && /intermediate|proficient|mid|2 to|2\\+|3\\+|3-5|2-4/i.test(optText)) return 85;
+      if (numTarget <= 1 && /beginner|entry|fresher|junior|0-1|1\\+|less than 1/i.test(optText)) return 85;
     }
 
-    // 4. Degree & Education Levels
-    if (/bachelor/i.test(target) && /bachelor|undergraduate|b\\.?tech|b\\.?e\\.|b\\.?s\\.|b\\.?a\\.|bca/i.test(optText)) return 95;
-    if (/master/i.test(target) && /master|postgraduate|m\\.?tech|m\\.?s\\.|m\\.?e\\.|mba|mca/i.test(optText)) return 95;
+    // 5. Degree & Education Levels
+    if (/bachelor/i.test(target) && /bachelor|undergraduate|b\\.?tech|b\\.?e\\.|b\\.?s\\.|b\\.?a\\.|bca|bs/i.test(optText)) return 95;
+    if (/master/i.test(target) && /master|postgraduate|m\\.?tech|m\\.?s\\.|m\\.?e\\.|mba|mca|ms/i.test(optText)) return 95;
     if (/ph\\.?d|doctor/i.test(target) && /doctor|ph\\.?d/i.test(optText)) return 95;
 
-    // 5. EEO Demographics & Self-Identification
-    if (/decline|not wish|prefer not/i.test(target) && /decline|prefer not|do not wish|choose not|not specified/i.test(optText)) return 95;
+    // 6. EEO Demographics & Self-Identification
+    if (/decline|not wish|prefer not/i.test(target) && /decline|prefer not|do not wish|choose not|not specified|i do not/i.test(optText)) return 95;
 
-    // 6. Work Preference
+    // 7. Work Preference
     if (/remote/i.test(target) && /remote|work from home|virtual/i.test(optText)) return 90;
     if (/hybrid/i.test(target) && /hybrid|flexible/i.test(optText)) return 90;
     if (/on-site/i.test(target) && /on-site|in-office|office/i.test(optText)) return 90;
@@ -237,25 +308,62 @@ export function generateHumanBypassScript(instructionsJson: string): string {
           }
         });
         
-        if (bestMatch && bestScore >= 30) {
+        if (bestMatch && bestScore >= 20) {
           el.focus();
-          await sleep(randomDelay(100, 250));
+          await sleep(randomDelay(100, 200));
           bestMatch.selected = true;
           el.selectedIndex = options.indexOf(bestMatch);
-          el.value = bestMatch.value;
-          setNativeValue(el, bestMatch.value);
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
+          
+          try {
+            // Reset React internal value tracker so React detects the selection change
+            const tracker = el._valueTracker;
+            if (tracker && typeof tracker.setValue === 'function') {
+              tracker.setValue('');
+            }
+            const selectValueSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+            if (selectValueSetter) {
+              selectValueSetter.call(el, bestMatch.value);
+            } else {
+              el.value = bestMatch.value;
+            }
+          } catch {
+            el.value = bestMatch.value;
+          }
+
+          el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+          el.dispatchEvent(new CustomEvent('change', { bubbles: true, detail: { value: bestMatch.value } }));
           el.dispatchEvent(new Event('blur', { bubbles: true }));
           filledCount++;
           emitTelemetry({
             type: 'click',
-            title: 'Selected dropdown: ' + bestMatch.text,
+            title: 'Selected dropdown: ' + (bestMatch.text || bestMatch.value).trim(),
             target: fieldLabel,
             status: 'completed'
           });
         } else {
-          skippedCount++;
+          // Robust Fallback: If no option met score threshold but field is required, pick first valid non-placeholder option
+          const fallbackOpt = options.find(o => o.value && !/^(?:select|choose|--|select an option|select one)/i.test((o.text || '').trim()));
+          if (fallbackOpt) {
+            el.focus();
+            fallbackOpt.selected = true;
+            el.selectedIndex = options.indexOf(fallbackOpt);
+            try {
+              const tracker = el._valueTracker;
+              if (tracker && typeof tracker.setValue === 'function') tracker.setValue('');
+              const selectValueSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+              if (selectValueSetter) selectValueSetter.call(el, fallbackOpt.value);
+              else el.value = fallbackOpt.value;
+            } catch {
+              el.value = fallbackOpt.value;
+            }
+            el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+            el.dispatchEvent(new Event('blur', { bubbles: true }));
+            filledCount++;
+          } else {
+            skippedCount++;
+          }
         }
       } else if (inst.type === 'radio') {
         const radios = Array.from(document.querySelectorAll(inst.selector));
@@ -308,11 +416,12 @@ export function generateHumanBypassScript(instructionsJson: string): string {
         if (!lbl && el.closest('label')) lbl = el.closest('label').innerText.trim();
         const labelLower = (lbl || '').toLowerCase();
         
+        const valLower = (inst.value || '').toLowerCase();
         const shouldCheck = 
-          inst.value.toLowerCase() === 'yes' || 
-          inst.value.toLowerCase() === 'true' || 
-          inst.value === '1' ||
-          /agree|acknowledge|certify|terms|privacy|confirm|above 18|authorized/i.test(labelLower);
+          valLower === 'yes' || 
+          valLower === 'true' || 
+          valLower === '1' ||
+          /agree|acknowledge|certify|terms|privacy|confirm|above 18|authorized|consent|eligible|willing|comfortable|i agree/i.test(labelLower);
 
         const isFollowCompany = /follow\\s+.*to stay up to date|follow company|follow this employer/i.test(labelLower);
 
@@ -358,55 +467,119 @@ export function generateHumanBypassScript(instructionsJson: string): string {
         const isInput = el.tagName.toLowerCase() === 'input' || el.tagName.toLowerCase() === 'textarea';
         if (isInput) {
           await simulateTyping(el, inst.value);
-          await sleep(350);
         } else {
           simulateMouse(el);
           await sleep(80);
+          el.focus();
           el.click();
-          await sleep(350);
         }
 
-        const dropdownContainers = Array.from(document.querySelectorAll('[role="listbox"], [role="menu"], .dropdown-menu, .typeahead-options, .artdeco-dropdown__content, .Select-menu-outer, .MuiAutocomplete-listbox, .ant-select-dropdown'))
-          .concat(el.closest('.search-basic-typeahead, [class*="typeahead"], [class*="dropdown"]') || []);
-          
         let clickedOption = false;
-        for (const container of dropdownContainers) {
-          if (!container) continue;
-          const options = Array.from(container.querySelectorAll('[role="option"], [role="menuitem"], .artdeco-dropdown__item, li, .option, .item'));
-          let bestMatch = null;
-          let bestScore = -1;
-          for (const opt of options) {
-            const text = (opt.innerText || opt.textContent || '').trim();
-            const score = scoreOptionMatch(text, '', inst.value);
-            if (score > bestScore) {
-              bestScore = score;
-              bestMatch = opt;
+        // Adaptive polling loop: wait for suggestions to render over network
+        for (let pollAttempt = 0; pollAttempt < 6; pollAttempt++) {
+          await sleep(150);
+
+          const dropdownContainers = Array.from(document.querySelectorAll('[role="listbox"], [role="menu"], .dropdown-menu, .typeahead-options, .artdeco-dropdown__content, .Select-menu-outer, .MuiAutocomplete-listbox, .ant-select-dropdown, .fb-dropdown__select-dropdown, ul[class*="dropdown"]'))
+            .concat(el.closest('.search-basic-typeahead, [class*="typeahead"], [class*="dropdown"], .fb-dropdown, .artdeco-dropdown') || []);
+            
+          for (const container of dropdownContainers) {
+            if (!container) continue;
+            const options = Array.from(container.querySelectorAll('[role="option"], [role="menuitem"], .artdeco-dropdown__item, li, .option, .item, button'));
+            let bestMatch = null;
+            let bestScore = -1;
+            for (const opt of options) {
+              const text = (opt.innerText || opt.textContent || '').trim();
+              const score = scoreOptionMatch(text, '', inst.value);
+              if (score > bestScore) {
+                bestScore = score;
+                bestMatch = opt;
+              }
+            }
+            if (bestMatch && bestScore >= 20) {
+              simulateMouse(bestMatch);
+              await sleep(80);
+              bestMatch.click();
+              bestMatch.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+              bestMatch.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+              bestMatch.dispatchEvent(new Event('click', { bubbles: true }));
+              clickedOption = true;
+              filledCount++;
+              emitTelemetry({
+                type: 'click',
+                title: 'Selected custom dropdown: ' + (bestMatch.innerText || '').trim(),
+                target: fieldLabel,
+                status: 'completed'
+              });
+              break;
             }
           }
-          if (bestMatch && bestScore >= 30) {
-            simulateMouse(bestMatch);
-            await sleep(80);
-            bestMatch.click();
-            bestMatch.dispatchEvent(new Event('click', { bubbles: true }));
-            clickedOption = true;
-            filledCount++;
-            emitTelemetry({
-              type: 'click',
-              title: 'Selected custom dropdown: ' + (bestMatch.innerText || '').trim(),
-              target: fieldLabel,
-              status: 'completed'
+          if (clickedOption) break;
+        }
+
+        // Check for underlying hidden select element in parent wrapper
+        const parentContainer = el.closest('.fb-dropdown, .artdeco-dropdown, [class*="dropdown"]') || el.parentElement;
+        if (parentContainer) {
+          const hiddenSelect = parentContainer.querySelector('select');
+          if (hiddenSelect && hiddenSelect.options) {
+            const opts = Array.from(hiddenSelect.options);
+            let bestHiddenMatch = null;
+            let bestHiddenScore = -1;
+            opts.forEach(o => {
+              const s = scoreOptionMatch(o.text, o.value, inst.value);
+              if (s > bestHiddenScore) {
+                bestHiddenScore = s;
+                bestHiddenMatch = o;
+              }
             });
-            break;
+            if (bestHiddenMatch && bestHiddenScore >= 20) {
+              bestHiddenMatch.selected = true;
+              hiddenSelect.selectedIndex = opts.indexOf(bestHiddenMatch);
+              try {
+                const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+                if (setter) setter.call(hiddenSelect, bestHiddenMatch.value);
+                else hiddenSelect.value = bestHiddenMatch.value;
+              } catch {
+                hiddenSelect.value = bestHiddenMatch.value;
+              }
+              hiddenSelect.dispatchEvent(new Event('input', { bubbles: true }));
+              hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
+              hiddenSelect.dispatchEvent(new Event('blur', { bubbles: true }));
+              if (!clickedOption) {
+                clickedOption = true;
+                filledCount++;
+              }
+            }
           }
         }
+
         if (!clickedOption && isInput) {
           el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 }));
           await sleep(80);
           el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter', keyCode: 13 }));
           filledCount++;
         }
+      } else if (el.tagName.toLowerCase() === 'canvas' || inst.type === 'signature') {
+        await simulateCanvasSignature(el, inst.value);
+        filledCount++;
+        emitTelemetry({
+          type: 'type',
+          title: 'Signed signature canvas',
+          target: fieldLabel,
+          status: 'completed'
+        });
       } else if (inst.type !== 'file' && inst.value !== '[ATTACH_RESUME]') {
-        await simulateTyping(el, inst.value);
+        let textToType = inst.value;
+        const isNumericInput = el.type === 'number' || el.getAttribute('inputmode') === 'numeric' || (el.getAttribute('pattern') && el.getAttribute('pattern').includes('[0-9]'));
+        if (isNumericInput) {
+          const numDigits = textToType.match(/\\b[0-9]+(?:\\.[0-9]+)?\\b/);
+          if (numDigits) {
+            textToType = numDigits[0];
+          } else {
+            const maxVal = el.getAttribute('max');
+            textToType = maxVal || '10';
+          }
+        }
+        await simulateTyping(el, textToType);
         filledCount++;
       }
       

@@ -25,21 +25,23 @@ const DEFAULT_CONFIG: AutoApplyConfig = {
 
 const JOB_EXTRACTOR_SCRIPT = `
 (function extractJobs() {
-  const cards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item, [data-oc-id], .jobTuple'));
+  const cards = Array.from(document.querySelectorAll(
+    '.job-card-container, .jobs-search-results__list-item, .jobs-search-results-list__list-item, .scaffold-layout__list-item, [data-oc-id], [data-job-id], .base-card, .job-search-card, .jobTuple, [data-entity-urn*="jobPosting"]'
+  ));
   const links = [];
 
   cards.forEach((card, idx) => {
-    const titleEl = card.querySelector('.job-card-list__title, .job-title, h3, a');
+    const titleEl = card.querySelector('.job-card-list__title, .job-title, .base-search-card__title, h3, a');
     const title = titleEl ? titleEl.innerText.trim() : 'Job #' + (idx + 1);
-    const companyEl = card.querySelector('.job-card-container__company-name, .company-name');
+    const companyEl = card.querySelector('.job-card-container__company-name, .company-name, .base-search-card__subtitle');
     const company = companyEl ? companyEl.innerText.trim() : 'Unknown Company';
     
     // Find the main clickable link for the job
-    const linkEl = card.querySelector('a[href*="/jobs/"], a[href*="/job/"]') || card.closest('a') || titleEl;
+    const linkEl = card.querySelector('a[href*="/jobs/"], a[href*="/job/"], a[href*="currentJobId"]') || card.closest('a') || titleEl;
 
     // Check if card explicitly specifies Easy Apply
     const cardText = (card.innerText || '').toLowerCase();
-    const isEasyApply = cardText.includes('easy apply') || Boolean(card.querySelector('.job-card-container__apply-method, [aria-label*="Easy Apply"], .job-card-list__easy-apply-label'));
+    const isEasyApply = cardText.includes('easy apply') || Boolean(card.querySelector('.job-card-container__apply-method, [aria-label*="Easy Apply"], .job-card-list__easy-apply-label, .job-card-container__apply-method--easy-apply'));
 
     // Check if card explicitly marks that the user already applied
     const isAlreadyApplied = 
@@ -206,16 +208,33 @@ export class AutoApplyEngine {
     }
 
     let jobs: any[] = [];
-    try {
-      jobs = await webview.executeJavaScript(JOB_EXTRACTOR_SCRIPT);
-    } catch {
-      this.updateStatus('Failed to extract job listings from page.', 'error');
-      this.isRunning = false;
-      return;
+    this.updateStatus(`Waiting for ${platformName} job listings to appear...`);
+
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      if (!this.isRunning) return;
+
+      const currentUrl = await webview.executeJavaScript('window.location.href').catch(() => '');
+      if (currentUrl && (currentUrl.includes('/login') || currentUrl.includes('/signup') || currentUrl.includes('/auth') || currentUrl.includes('/checkpoint/'))) {
+        this.updateStatus('⚠️ Please log in to your account in the browser to view and apply to jobs!', 'warning');
+        this.isRunning = false;
+        return;
+      }
+
+      try {
+        jobs = await webview.executeJavaScript(JOB_EXTRACTOR_SCRIPT);
+        if (jobs && jobs.length > 0) break;
+      } catch (err) {
+        console.warn(`[AutoApplyEngine] Scan attempt ${attempt} warning:`, err);
+      }
+
+      if (attempt < 6) {
+        this.updateStatus(`Scanning page for job listings (attempt ${attempt}/5)...`);
+        await this.wait(2000);
+      }
     }
 
     if (!jobs || jobs.length === 0) {
-      this.updateStatus('No job listings found on current page.', 'warning');
+      this.updateStatus('No job listings found on page. Please ensure you have searched for jobs with Easy Apply.', 'warning');
       this.isRunning = false;
       return;
     }
@@ -298,9 +317,9 @@ export class AutoApplyEngine {
             
             // 2. If selector lost or ID changed due to re-render, search all cards by title
             if (!el) {
-              const allCards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item, [data-oc-id], .jobTuple'));
+              const allCards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item, .jobs-search-results-list__list-item, .scaffold-layout__list-item, [data-oc-id], [data-job-id], .base-card, .job-search-card, .jobTuple'));
               el = allCards.find(c => {
-                const t = c.querySelector('.job-card-list__title, .job-title, h3, a');
+                const t = c.querySelector('.job-card-list__title, .job-title, .base-search-card__title, h3, a');
                 const cardTitle = t ? t.innerText.trim().toLowerCase() : '';
                 return cardTitle.includes('` + escapedTitle.toLowerCase() + `') || (c.innerText || '').toLowerCase().includes('` + escapedTitle.toLowerCase() + `');
               });
@@ -308,7 +327,7 @@ export class AutoApplyEngine {
             
             // 3. Fallback: match by index
             if (!el) {
-              const allCards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item'));
+              const allCards = Array.from(document.querySelectorAll('.job-card-container, .jobs-search-results__list-item, .jobs-search-results-list__list-item, .scaffold-layout__list-item, [data-oc-id], [data-job-id]'));
               if (allCards[` + i + `]) el = allCards[` + i + `];
             }
 
@@ -494,7 +513,10 @@ export class AutoApplyEngine {
           wait: (milliseconds) => this.wait(milliseconds),
           fillCurrentStep: () => this.agentEngine.autoFillCurrentPage(webview, persona, platformName, false),
           advanceStep: () => this.agentEngine.advanceApplicationStep(webview),
-          executeScript: <T>(script: string) => webview.executeJavaScript(script) as Promise<T>,
+          executeScript: <T>(script: string) => webview.executeJavaScript(script).catch((err: any) => {
+            console.warn('executeScript non-fatal warning:', err);
+            return null as any;
+          }) as Promise<T>,
           onStatus: (message, type = 'info') => this.updateStatus(`[Job ${i + 1}] ${message}`, type),
         });
 

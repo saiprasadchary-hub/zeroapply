@@ -5,25 +5,36 @@ export interface SavedResumeFile {
 }
 
 const RESUME_STORAGE_KEY = 'zeroapply_saved_resume_file';
+let inMemoryResumeCache: SavedResumeFile | null = null;
 
 export function saveResumeFileToStorage(file: SavedResumeFile): void {
+  inMemoryResumeCache = file;
   try {
     localStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(file));
   } catch (e) {
-    console.error('Failed to save resume file to storage:', e);
+    console.warn('LocalStorage quota reached or storage restricted; keeping resume in runtime memory cache:', e);
   }
 }
 
 export function getSavedResumeFileFromStorage(): SavedResumeFile | null {
+  if (inMemoryResumeCache) {
+    return inMemoryResumeCache;
+  }
   try {
     const raw = localStorage.getItem(RESUME_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      inMemoryResumeCache = parsed;
+      return parsed;
+    }
+  } catch (e) {
+    console.warn('Could not read saved resume from localStorage:', e);
   }
+  return null;
 }
 
 export function clearSavedResumeFileFromStorage(): void {
+  inMemoryResumeCache = null;
   try {
     localStorage.removeItem(RESUME_STORAGE_KEY);
   } catch (error) {

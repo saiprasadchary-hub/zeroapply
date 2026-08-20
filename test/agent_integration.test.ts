@@ -11,12 +11,15 @@ const store = new Map<string, string>();
 
 import { checkOllamaStatus, solveScreeningQuestion } from '../src/agent/llm/ollamaClient';
 import { classifyAllFields } from '../src/agent/detector/fieldClassifier';
+import { mapPersonaToFields } from '../src/agent/autofill/personaMapper';
+import { HierarchicalMemory } from '../src/agent/memory/hierarchicalMemory';
 import { SecurityGuardian } from '../src/agent/security/securityGuardian';
 import { generateCoverLetter } from '../src/agent/autofill/coverLetterGenerator';
 import { JobMatchingAgent } from '../src/agent/matching/jobMatchingAgent';
 import { SalaryOptimizerAgent } from '../src/agent/compensation/salaryOptimizerAgent';
 import { SCAN_AND_HEAL_FORM_SCRIPT } from '../src/agent/stateMachine/formRecoveryAgent';
 import { VISUAL_INSPECTOR_SCRIPT } from '../src/agent/vision/visionAgent';
+import { calculateAtsScore } from '../src/ats';
 import type { PersonaData } from '../src/types';
 import type { ScannedField } from '../src/agent/detector/fieldScanner';
 
@@ -46,8 +49,10 @@ Certifications: AWS Certified Solutions Architect, CKA Certified Kubernetes Admi
     summary: 'Senior Full Stack AI Engineer with 6+ years experience building scalable web applications and local LLM edge pipelines using React, TypeScript, and Ollama.',
     skills: 'React, TypeScript, Vite, Python, Ollama, ONNX Runtime, Electron, TailwindCSS, Docker, Git',
     experience: 'Tech Lead at Apex Dynamics (2022-Present): Built high-throughput autonomous automation tools and reactive frontend architectures. Led team of 8 engineers. Software Engineer at DataFlow Labs (2019-2022).',
+    projects: 'Key projects include high-throughput autonomous automation tools, reactive micro frontends with React and TypeScript, and on-device ONNX RAG pipelines.',
     education: 'B.S. in Computer Science from Stanford University, Graduated 2019.',
     certifications: 'AWS Certified Solutions Architect, CKA Certified Kubernetes Administrator.',
+    references: 'John Doe - Director of Engineering at Apex Dynamics (Email: john@apex.com, Phone: +1-555-0199)'
   },
   customSkills: ['React', 'TypeScript', 'Vite', 'Ollama', 'Electron', 'ONNX'],
   workExperience: [
@@ -62,16 +67,16 @@ async function runSuite() {
   let passed = 0;
   let failed = 0;
 
-  // TEST 1: Ollama & Qwen 2.5 (1.5B) Engine Verification
-  console.log('▶ TEST 1: Checking Ollama Engine & qwen2.5:1.5b health...');
+  // TEST 1: Ollama & Qwen 2.5 (3B) Engine Verification
+  console.log('▶ TEST 1: Checking Ollama Engine & qwen2.5:3b health...');
   try {
-    const status = await checkOllamaStatus('qwen2.5:1.5b');
+    const status = await checkOllamaStatus('qwen2.5:3b');
     console.log('   Status Response:', status);
     if (status.online && status.modelAvailable) {
-      console.log('   ✅ TEST 1 PASSED: qwen2.5:1.5b is online (Latency: ' + status.latencyMs + 'ms)');
+      console.log('   ✅ TEST 1 PASSED: qwen2.5:3b is online (Latency: ' + status.latencyMs + 'ms)');
       passed++;
     } else {
-      console.log('   ⚠️ TEST 1 WARNING: Ollama server or qwen2.5:1.5b not immediately responding online. Fallback heuristic available.');
+      console.log('   ⚠️ TEST 1 WARNING: Ollama server or qwen2.5:3b not immediately responding online. Fallback heuristic available.');
       passed++;
     }
   } catch (e) {
@@ -116,16 +121,35 @@ async function runSuite() {
     const result = await solveScreeningQuestion(questionText, samplePersona, { timeoutMs: 20000 });
     const duration = Date.now() - startTime;
     console.log(`   Qwen 2.5 / RAG Answer (${result.source}, took ${duration}ms):`);
-    console.log(`   "${result.answer}"`);
-    if (result.answer && result.answer.length > 15 && result.answer !== 'Yes' && result.answer !== 'No') {
-      console.log('   ✅ TEST 3 PASSED: High-cohesion grounded response generated cleanly!');
+    if (result.answer && result.answer.length > 15 && result.answer !== 'Yes' && result.answer !== 'No' && !/@|\+91|linkedin/i.test(result.answer)) {
+      console.log('   ✅ TEST 3 PASSED: High-cohesion grounded response generated cleanly without contact headers!');
       passed++;
     } else {
-      console.log('   ❌ TEST 3 FAILED: Answer too short or generic: ' + result.answer);
+      console.log('   ❌ TEST 3 FAILED: Answer polluted or too short: ' + result.answer);
       failed++;
     }
   } catch (e) {
     console.error('   ❌ TEST 3 FAILED:', e);
+    failed++;
+  }
+
+  // TEST 3b: Scale & Numeric Rating Question Resolution (1 to 10 scale)
+  console.log('\n▶ TEST 3b: Evaluating Scale Rating Question (1 to 10)...');
+  try {
+    const scaleQuestion = 'On a scale of 1 to 10, how interested are you in technology, AI, and startups?*';
+    const scaleResult = await solveScreeningQuestion(scaleQuestion, samplePersona);
+    console.log(`   Question: "${scaleQuestion}"`);
+    console.log(`   Answer Output: "${scaleResult.answer}" (${scaleResult.source})`);
+
+    if (scaleResult.answer === '10' || scaleResult.answer === '9') {
+      console.log('   ✅ TEST 3b PASSED: Accurately resolved 1-to-10 scale rating as high-conviction positive integer (10)!');
+      passed++;
+    } else {
+      console.log('   ❌ TEST 3b FAILED: Expected numeric rating 10, got: ' + scaleResult.answer);
+      failed++;
+    }
+  } catch (e) {
+    console.error('   ❌ TEST 3b FAILED:', e);
     failed++;
   }
 
@@ -271,6 +295,135 @@ async function runSuite() {
     }
   } catch (e) {
     console.error('   ❌ TEST 9 FAILED:', e);
+    failed++;
+  }
+
+  // TEST 10: Accurate Dropdown Selection & Question Comprehension
+  console.log('\n▶ TEST 10: Testing Dropdown Question Comprehension & Accurate Option Selection...');
+  try {
+    // 1. Authorization Dropdown
+    const authQuestion = 'Are you legally authorized to work in the United States without sponsorship?';
+    const authOptions = ['-- Please Select --', 'Yes, I am legally authorized', 'No, I will require sponsorship'];
+    const authRes = await solveScreeningQuestion(authQuestion, samplePersona, { availableOptions: authOptions });
+    console.log(`   - Work Auth Dropdown -> Picked: "${authRes.answer}"`);
+
+    // 2. Skill Proficiency Dropdown
+    const profQuestion = 'What is your level of experience and proficiency with React and TypeScript?';
+    const profOptions = ['None', 'Beginner (0-1 yrs)', 'Intermediate (2-4 yrs)', 'Advanced / Expert (5+ yrs)'];
+    const profRes = await solveScreeningQuestion(profQuestion, samplePersona, { availableOptions: profOptions });
+    console.log(`   - Skill Proficiency Dropdown -> Picked: "${profRes.answer}"`);
+
+    // 3. Education Degree Dropdown
+    const degQuestion = 'What is your highest level of completed education?';
+    const degOptions = ['High School', 'Associate Degree', "Bachelor's Degree", "Master's Degree", 'Doctorate / PhD'];
+    const degRes = await solveScreeningQuestion(degQuestion, samplePersona, { availableOptions: degOptions });
+    console.log(`   - Degree Dropdown -> Picked: "${degRes.answer}"`);
+
+    // 4. Work Location Dropdown
+    const locQuestion = 'What is your preferred work arrangement?';
+    const locOptions = ['On-site full time', 'Hybrid (2 days remote)', 'Remote / Work from home'];
+    const locRes = await solveScreeningQuestion(locQuestion, samplePersona, { availableOptions: locOptions });
+    console.log(`   - Location Dropdown -> Picked: "${locRes.answer}"`);
+
+    const authValid = authRes.answer.toLowerCase().includes('yes');
+    const degValid = degRes.answer.toLowerCase().includes('bachelor');
+    const locValid = locRes.answer.toLowerCase().includes('remote');
+
+    if (authValid && degValid && locValid) {
+      console.log('   ✅ TEST 10 PASSED: Agent accurately understands dropdown questions and picks optimal matching options!');
+      passed++;
+    } else {
+      console.log('   ❌ TEST 10 FAILED: Dropdown options did not match expected criteria.');
+      failed++;
+    }
+  } catch (e) {
+    console.error('   ❌ TEST 10 FAILED:', e);
+    failed++;
+  }
+
+  // TEST 11: Enterprise ATS Scoring & Breaking Rules Diagnostic Engine
+  console.log('\n▶ TEST 11: Evaluating Super-Advanced ATS Scoring & Breaking Rules Engine...');
+  try {
+    const atsResult = calculateAtsScore(samplePersona, samplePersona.resumeText, samplePersona.resumeChunks);
+    console.log(`   - Overall ATS Score: ${atsResult.overallScore}/100 (Grade: ${atsResult.grade})`);
+    console.log(`   - Deal-Breakers Count: ${atsResult.dealBreakersCount} | Total Rule Violations: ${atsResult.ruleViolations.length}`);
+    console.log(`   - Hard Skills Detected: ${atsResult.hardSkillsCount} (${atsResult.detectedSkills.slice(0, 5).map(s => s.name).join(', ')}...)`);
+    console.log(`   - Quantified KPI Metrics: ${atsResult.metricsCount} (${atsResult.detailedMetrics.map(m => `${m.value} [${m.category}]`).join(', ')})`);
+    console.log(`   - Power Verbs Detected: ${atsResult.actionVerbsCount} (${atsResult.detailedVerbs.slice(0, 5).map(v => `${v.verb} [${v.category}]`).join(', ')}...)`);
+    console.log(`   - Readability: ${atsResult.readability.wordCount} words, ${atsResult.readability.bulletCount} bullets, ${atsResult.readability.bulletsWithMetricsPercent}% quantified`);
+    console.log(`   - Prioritized Action Plan: ${atsResult.actionPlan.length} steps generated (Top step: "${atsResult.actionPlan[0]?.title}")`);
+    console.log(`   - 6 Pillar Scores: Contact=${atsResult.pillars.contactProfile.score}%, Structure=${atsResult.pillars.sectionArchitecture.score}%, Impact=${atsResult.pillars.actionImpact.score}%, Skills=${atsResult.pillars.keywordsSkills.score}%, Format=${atsResult.pillars.formattingReadability.score}%, Linguistics=${atsResult.pillars.linguisticHygiene.score}%`);
+
+    const hasGoodScore = atsResult.overallScore >= 70;
+    const hasDetailedMetrics = atsResult.detailedMetrics.length >= 2;
+    const hasDetailedVerbs = atsResult.detailedVerbs.length >= 3;
+    const hasActionPlan = atsResult.actionPlan.length > 0;
+    const hasPillars = Boolean(atsResult.pillars.linguisticHygiene && atsResult.pillars.actionImpact);
+
+    if (hasGoodScore && hasDetailedMetrics && hasDetailedVerbs && hasActionPlan && hasPillars) {
+      console.log('   ✅ TEST 11 PASSED: Super-Advanced ATS Scoring Engine verified across all breaking rules, metrics classifiers, and roadmap generators!');
+      passed++;
+    } else {
+      console.log('   ❌ TEST 11 FAILED: ATS diagnostic output missing expected advanced fields.');
+      failed++;
+    }
+  } catch (e) {
+    console.error('   ❌ TEST 11 FAILED:', e);
+    failed++;
+  }
+
+  // TEST 12: Memory Chunk Grounding, Canvas Signature, & References Auto-Mapping
+  console.log('\n▶ TEST 12: Evaluating Memory Chunk RAG Grounding & Signature/Reference Handlers...');
+  try {
+    // 1. Semantic memory chunk retrieval
+    const memContext = await HierarchicalMemory.retrieveMemoryForQuestion('What projects have you engineered with React and TypeScript?', samplePersona);
+    console.log(`   - Routed Target Chunk: "${memContext.targetChunkKey}"`);
+    console.log(`   - Verified Snippet: "${(memContext.extractedSnippet || '').slice(0, 75)}..."`);
+
+    // 2. Field Classification & Mapping for Signature Canvas & References
+    const testFields = [
+      {
+        id: 'f_sig',
+        elementSelector: '#sigCanvas',
+        type: 'signature' as const,
+        label: 'Candidate Signature',
+        name: 'signature',
+        placeholder: '',
+        required: true,
+      },
+      {
+        id: 'f_ref',
+        elementSelector: '#refText',
+        type: 'textarea' as const,
+        label: 'Professional References (Name, Title, Contact)',
+        name: 'references',
+        placeholder: '',
+        required: false,
+      }
+    ];
+
+    const classified = classifyAllFields(testFields);
+    const instructions = await mapPersonaToFields(classified, samplePersona);
+
+    const sigInst = instructions.find(i => i.category === 'signature');
+    const refInst = instructions.find(i => i.category === 'references');
+
+    console.log(`   - Signature Instruction Value: "${sigInst?.value}" (Type: ${sigInst?.type})`);
+    console.log(`   - References Instruction Value: "${refInst?.value}"`);
+
+    const hasChunkMatch = memContext.targetChunkKey === 'projects' || memContext.targetChunkKey === 'skills';
+    const hasSig = sigInst && sigInst.value === samplePersona.fullName;
+    const hasRef = refInst && refInst.value.length > 0;
+
+    if (hasChunkMatch && hasSig && hasRef) {
+      console.log('   ✅ TEST 12 PASSED: Resume Memory Chunk RAG Grounding, Canvas Signature, and Reference mappings verified!');
+      passed++;
+    } else {
+      console.log('   ❌ TEST 12 FAILED: Memory chunk routing or signature/reference mappings failed.');
+      failed++;
+    }
+  } catch (e) {
+    console.error('   ❌ TEST 12 FAILED:', e);
     failed++;
   }
 

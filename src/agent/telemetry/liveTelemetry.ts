@@ -53,7 +53,7 @@ class LiveTelemetryService {
     questionsSolved: 0,
     stepsCompleted: 0,
     jobsProcessed: 0,
-    activeModel: 'qwen2.5:1.5b',
+    activeModel: 'qwen2.5:3b',
     lastLatencyMs: 0,
   };
 
@@ -174,7 +174,7 @@ class LiveTelemetryService {
       questionsSolved: 0,
       stepsCompleted: 0,
       jobsProcessed: 0,
-      activeModel: 'qwen2.5:1.5b',
+      activeModel: 'qwen2.5:3b',
       lastLatencyMs: 0,
     };
     const readyRecord: LiveActionRecord = {

@@ -83,11 +83,12 @@ export async function runLocalMLClassification(text: string, current: PersonaDat
   if (!result.fullName) {
     const lines = text.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
     for (const rawLine of lines.slice(0, 15)) {
-      const cleanLine = rawLine.split(/[|•–—-]/)[0].trim();
+      let cleanLine = rawLine.split(/[|,•–—-]/)[0].trim();
+      cleanLine = cleanLine.replace(/(?:Hyderabad|Bengaluru|Bangalore|Mumbai|Delhi|Pune|Chennai|Noida|San Francisco|New York|Seattle|Austin|Boston|London|Toronto|India|Telangana|Karnataka|Maharashtra|USA|US).*/i, '').trim();
       if (/@|http|linkedin|github|resume|curriculum|phone|email|skills|experience|education|summary|contact|profile|project|page/i.test(cleanLine)) {
         continue;
       }
-      const words = cleanLine.split(/\s+/);
+      const words = cleanLine.split(/\s+/).filter(Boolean);
       if (words.length >= 2 && words.length <= 4 && cleanLine.length <= 40 && cleanLine.length >= 3) {
         if (words.every((w) => /^[A-Za-z.-]+$/.test(w))) {
           result.fullName = words.map((w) => (w === w.toUpperCase() && w.length > 2 ? w[0] + w.slice(1).toLowerCase() : w)).join(' ');

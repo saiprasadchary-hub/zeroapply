@@ -20,6 +20,7 @@ export const RESUME_CHUNK_KEYS = [
   'securityClearance',
   'domainExpertise',
   'eeoDemographics',
+  'references',
 ] as const;
 
 export type ResumeChunks = Record<(typeof RESUME_CHUNK_KEYS)[number], string>;
@@ -28,10 +29,10 @@ const HEADING_PATTERNS: Array<[keyof ResumeChunks, RegExp]> = [
   ['summary', /^(?:professional\s+)?(?:summary|profile|objective|about(?:\s+me)?|career\s+overview|executive\s+summary|highlights?)$/i],
   ['experience', /^(?:work|professional|employment|career|industry|relevant)\s+(?:experience|history)|experience|work\s+history$/i],
   ['education', /^(?:education|academic(?:\s+(?:background|qualifications?))?|degrees?)$/i],
-  ['skills', /^(?:technical\s+)?(?:skills|competenc(?:y|ies)|technologies|tools(?:\s*(?:&|and)\s*technologies)?|core\s+competencies|expertise|proficiencies|tech\s+stack)$/i],
+  ['skills', /^(?:technical\s+)?(?:skills|competenc(?:y|ies)|technologies|tools(?:\s*(?:&|and)\s*technologies)?|core\s+competencies|expertise|proficiencies|tech\s+stack|programming\s+languages?|technical\s+expertise|databases?|frameworks?|core\s+cs|data\s+science)$/i],
   ['projects', /^(?:selected|personal|academic|key|notable|featured)?\s*projects?$/i],
   ['certifications', /^(?:certifications?|licenses?(?:\s*(?:&|and)\s*certifications?)?|credentials|accreditations|training)$/i],
-  ['languages', /^(?:languages?|language\s+proficiency|spoken\s+languages)$/i],
+  ['languages', /^(?:spoken\s+languages|natural\s+languages|human\s+languages|languages\s+known|spoken\s+fluency|language\s+proficienc(?:y|ies))$/i],
   ['publications', /^(?:publications?|research(?:\s+papers?)?|patents?)$/i],
   ['awards', /^(?:awards?(?:\s*(?:&|and)\s*(?:honors?|achievements?))?|honors?|achievements?|accomplishments?|recognitions?)$/i],
   ['leadership', /^(?:leadership|community|extracurricular|volunteering|affiliations?)$/i],
@@ -42,6 +43,7 @@ const HEADING_PATTERNS: Array<[keyof ResumeChunks, RegExp]> = [
   ['securityClearance', /^(?:security\s+clearance|clearance\s+level|government\s+clearance)$/i],
   ['domainExpertise', /^(?:domain\s+expertise|industry\s+experience|specializations?|domain\s+knowledge)$/i],
   ['eeoDemographics', /^(?:voluntary\s+self-identification|eeo\s+information|demographics?|diversity)$/i],
+  ['references', /^(?:professional\s+)?references?$/i],
 ];
 
 export function emptyChunks(): ResumeChunks {
@@ -128,8 +130,21 @@ export async function chunkResumeText(rawText: string, _options?: { enableLlmSyn
   for (const line of lines) {
     const section = headingFor(line);
     if (section) {
-      if (activeSection) append(chunks, activeSection, pending);
-      else if (pending.some(Boolean)) append(chunks, 'summary', pending);
+      if (activeSection) {
+        append(chunks, activeSection, pending);
+      } else if (pending.some(Boolean)) {
+        // Filter out header lines containing contact info (email, phone, linkedin, location pipes)
+        const nonContactPending = pending.filter(l => {
+          const lClean = l.trim();
+          if (!lClean) return false;
+          if (/@|http|linkedin\.com|github\.com|\+\d{1,4}|\b\d{10}\b/i.test(lClean)) return false;
+          if (lClean.includes('|') && /phone|email|location|tel|mobile/i.test(lClean)) return false;
+          return true;
+        });
+        if (nonContactPending.length > 0) {
+          append(chunks, 'summary', nonContactPending);
+        }
+      }
       pending = [];
       activeSection = section;
       foundHeading = true;
@@ -184,6 +199,31 @@ export async function chunkResumeText(rawText: string, _options?: { enableLlmSyn
   }
   if (authMentions.notice && !chunks.availability) {
     chunks.availability = authMentions.notice;
+  }
+
+  // Pass 5: Disambiguate Programming Languages / Tech Stack from Spoken Languages
+  const technicalIndicatorRegex = /\b(?:python|javascript|typescript|c\+\+|java\b|c#|sql|mongodb|firebase|html5?|css3?|react|node|flask|opencv|dsa|system design|pandas|numpy|matplotlib|scikit-learn|databases|frameworks|oop|beautifulsoup|scrapy)\b/i;
+
+  if (chunks.languages && technicalIndicatorRegex.test(chunks.languages)) {
+    const techContent = chunks.languages;
+    if (!chunks.skills || !chunks.skills.includes('Python')) {
+      chunks.skills = chunks.skills ? `${chunks.skills}\n\n${techContent}` : techContent;
+    }
+    chunks.languages = '';
+  }
+
+  if (!chunks.languages) {
+    const spokenMatch = text.match(/(?:spoken\s+languages?|languages?\s+known|languages?\s+proficiency)[\s:]*([^\n]+(?:\n[^\n]+)?)/i);
+    const commonSpoken = ['English', 'Hindi', 'Telugu', 'Tamil', 'Kannada', 'Malayalam', 'Marathi', 'Bengali', 'Gujarati', 'Punjabi', 'Urdu', 'Spanish', 'French', 'German', 'Mandarin', 'Japanese', 'Arabic', 'Russian', 'Portuguese', 'Italian'];
+
+    if (spokenMatch && !technicalIndicatorRegex.test(spokenMatch[1])) {
+      chunks.languages = spokenMatch[1].trim();
+    } else {
+      const foundSpoken = commonSpoken.filter((lang) => new RegExp(`\\b${lang}\\b`, 'i').test(text));
+      if (foundSpoken.length > 0) {
+        chunks.languages = foundSpoken.join(', ');
+      }
+    }
   }
 
   const populatedCount = Object.values(chunks).filter((c) => c.trim().length > 0).length;

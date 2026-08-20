@@ -47,6 +47,54 @@ export const GOLDEN_EXEMPLARS: GoldenExemplar[] = [
     question: 'Are you comfortable working in a collaborative hybrid or remote environment?',
     goldenResponse: 'Yes',
   },
+  {
+    category: 'yes_no',
+    keywords: ['laptop', 'desktop', 'computer', 'hardware', 'equipment', 'access to'],
+    question: 'Do you have access to a laptop or desktop computer for this work?',
+    goldenResponse: 'Yes',
+  },
+  {
+    category: 'yes_no',
+    keywords: ['headphones', 'headset', 'quiet', 'workspace', 'home office', 'internet', 'wifi'],
+    question: 'Do you have headphones and a consistently quiet place to work?',
+    goldenResponse: 'Yes',
+  },
+  {
+    category: 'yes_no',
+    keywords: ['enrolled', 'student', 'graduate', 'recent graduate', 'degree program'],
+    question: 'Are you currently enrolled in a degree program or a recent graduate?',
+    goldenResponse: 'Yes',
+  },
+  {
+    category: 'yes_no',
+    keywords: ['full-time upon graduation', 'available full-time', 'upon graduation', 'after graduation'],
+    question: 'Are you available for full-time employment upon graduation?',
+    goldenResponse: 'Yes',
+  },
+  {
+    category: 'yes_no',
+    keywords: ['internship', 'co-op', 'entry-level', 'junior'],
+    question: 'Are you looking for an internship, co-op, or entry-level software engineering role?',
+    goldenResponse: 'Yes',
+  },
+  {
+    category: 'yes_no',
+    keywords: ['40 hours', '40 hrs', 'commit to', 'full time'],
+    question: 'Can you commit to 40 hours per week for this role?',
+    goldenResponse: 'Yes',
+  },
+  {
+    category: 'motivation_fit',
+    keywords: ['tell me about yourself', 'student', 'background', 'walk me through your resume'],
+    question: 'Tell me about yourself and your technical background.',
+    goldenResponse: 'I am a passionate engineering student with solid computer science fundamentals in data structures, algorithms, and full-stack software development. Through hands-on academic and personal projects, I have built scalable web applications and high-throughput tools, and I am excited to bring my technical drive and rapid learning agility to your team.',
+  },
+  {
+    category: 'technical_depth',
+    keywords: ['academic project', 'course project', 'project you built', 'college project'],
+    question: 'Tell us about a technical project you built during your studies.',
+    goldenResponse: 'Designed and developed a responsive full-stack application featuring modular component architecture, RESTful API integration, and structured database indexing. Emphasized clean code principles, version control with Git, and robust error handling to ensure seamless performance.',
+  },
 ];
 
 /**

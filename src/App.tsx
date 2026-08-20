@@ -38,7 +38,7 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [leftWidth, setLeftWidth] = useState(30); // percentage for PersonaForm on desktop
-  const [pendingBrowserAction, setPendingBrowserAction] = useState<{ action: 'search' | 'fillApply'; platform: PlatformId; timestamp: number } | null>(null);
+  const [pendingBrowserAction, setPendingBrowserAction] = useState<{ action: 'search' | 'fillApply' | 'autoApply'; platform: PlatformId; timestamp: number } | null>(null);
   const isResizingRef = useRef(false);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -218,10 +218,13 @@ export const App: React.FC = () => {
             onSaveToast={triggerToast}
             onLaunchBrowser={(action, platform) => {
               setPendingBrowserAction({ action, platform, timestamp: Date.now() });
+              setActiveTab('browser');
               triggerToast(
                 action === 'search'
-                  ? `Searching ${platform} in the background...`
-                  : `Autonomous Auto-Apply started for ${platform}!`
+                  ? `Searching ${platform} for listings...`
+                  : action === 'autoApply'
+                  ? `🚀 Full Auto-Apply launched for ${platform} (Searching & Applying)!`
+                  : `Autonomous Fill & Apply started for ${platform}!`
               );
             }}
           />

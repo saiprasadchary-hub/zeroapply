@@ -48,6 +48,12 @@ function extractResumeDetail(category: string, persona: PersonaData): string {
       return persona.email || '';
     case 'phone':
       return persona.phone || '';
+    case 'phoneCountryCode': {
+      if (persona.phone && persona.phone.startsWith('+91')) return '+91';
+      if (persona.phone && persona.phone.startsWith('+44')) return '+44';
+      if (persona.phone && persona.phone.startsWith('+1')) return '+1';
+      return isIndia ? '+91' : isUK ? '+44' : '+1';
+    }
     case 'city':
       return city;
     case 'state':
@@ -109,6 +115,20 @@ function extractResumeDetail(category: string, persona: PersonaData): string {
     case 'summary':
       return persona.resumeChunks?.summary ||
         `Dedicated and results-driven engineering professional with ${persona.experienceYears || 3}+ years of experience in ${(persona.techStack || []).slice(0, 4).join(', ')}. Passionate about building reliable, high-performance software solutions.`;
+    case 'coverLetter': {
+      const role = persona.targetRoles?.[0] || 'Software Engineer';
+      const techList = (persona.techStack || ['Full Stack Development', 'TypeScript', 'React', 'Python']).slice(0, 4).join(', ');
+      return `Dear Hiring Team,\n\nI am writing to express my strong interest in joining your team as a ${role}. With a background in technical engineering and practical experience developing with ${techList}, I specialize in architecting responsive web applications, robust APIs, and intelligent automation systems.\n\nThroughout my work, I have focused on building clean, high-performance software and solving complex technical challenges. I thrive in collaborative environments that emphasize rapid iteration, user-centric design, and continuous learning.\n\nI welcome the opportunity to discuss how my technical problem-solving and engineering skills can contribute to your upcoming goals. Thank you for your time and consideration.\n\nSincerely,\n${persona.fullName || 'Applicant'}`;
+    }
+    case 'signature':
+      return persona.fullName || 'Authorized Applicant';
+    case 'references': {
+      if (persona.resumeChunks?.references) return persona.resumeChunks.references;
+      if (persona.references && persona.references.length > 0) {
+        return persona.references.map(r => `${r.name} - ${r.title} at ${r.company} (Email: ${r.email}, Phone: ${r.phone})`).join('\n');
+      }
+      return 'Available upon request';
+    }
     case 'resume':
       return '[ATTACH_RESUME]';
     default:
@@ -131,11 +151,31 @@ export async function mapPersonaToFields(
 
     if (category === 'screeningQuestion') {
       if (field.label) {
-        const solved = await solveScreeningQuestion(field.label, persona);
+        const solved = await solveScreeningQuestion(field.label, persona, { availableOptions: field.options });
         fillValue = solved.answer;
       }
     } else if (category !== 'ignore') {
       fillValue = extractResumeDetail(category, persona);
+      // If it's a dropdown with explicit options, refine value to best matching option
+      if ((field.type === 'select' || field.type === 'custom_dropdown' || field.type === 'radio') && field.options && field.options.length > 0) {
+        const directMatch = field.options.some(o => o.toLowerCase().trim() === fillValue.toLowerCase().trim());
+        if (!directMatch && field.label) {
+          const refined = await solveScreeningQuestion(field.label, persona, { availableOptions: field.options });
+          if (refined.answer) {
+            fillValue = refined.answer;
+          }
+        }
+      }
+    }
+
+    // Defensive Type Casting: Ensure numeric and scale inputs receive valid digits only
+    if (field.type === 'number' || (field.label && /(?:scale of \d+|rate (?:your|yourself)|\b1 to 10\b|\b1-10\b|\b1 to 5\b|\b1-5\b)/i.test(field.label))) {
+      const digitMatch = fillValue.match(/\b\d+(\.\d+)?\b/);
+      if (digitMatch) {
+        fillValue = digitMatch[0];
+      } else {
+        fillValue = '10';
+      }
     }
 
     if (fillValue) {

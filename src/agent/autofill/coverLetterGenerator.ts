@@ -2,7 +2,7 @@ import type { PersonaData } from '../../types';
 import { checkOllamaStatus } from '../llm/ollamaClient';
 
 const OLLAMA_BASE_URL = 'http://localhost:11434';
-const DEFAULT_MODEL = 'qwen2.5:0.5b';
+const DEFAULT_MODEL = 'qwen2.5:3b';
 
 export interface CoverLetterOptions {
   jobTitle: string;
@@ -14,7 +14,7 @@ export interface CoverLetterOptions {
 
 /**
  * Production-grade Dynamic Cover Letter & Employer Pitch Generator
- * Uses local Qwen-2.5-0.5B to craft personalized applications on the fly.
+ * Uses local Qwen-2.5-3B to craft personalized applications on the fly.
  */
 export async function generateCoverLetter(
   persona: PersonaData,

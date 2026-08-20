@@ -6,6 +6,7 @@ export type FieldCategory =
   | 'fullName'
   | 'email'
   | 'phone'
+  | 'phoneCountryCode'
   | 'city'
   | 'state'
   | 'zip'
@@ -25,7 +26,10 @@ export type FieldCategory =
   | 'graduationYear'
   | 'skills'
   | 'summary'
+  | 'coverLetter'
   | 'resume'
+  | 'signature'
+  | 'references'
   | 'ignore'
   | 'screeningQuestion';
 
@@ -41,41 +45,61 @@ export interface ClassifiedField {
 export function classifyField(field: ScannedField): ClassifiedField {
   const label = (field.label + ' ' + field.name + ' ' + field.placeholder).toLowerCase();
 
+  if (field.type === 'signature' || label.includes('signature') || label.includes('sign here') || label.includes('drawn signature')) {
+    return { field, category: 'signature', confidence: 0.95 };
+  }
+
+  if (label.includes('reference') || label.includes('referee') || label.includes('former manager') || label.includes('supervisor contact')) {
+    return { field, category: 'references', confidence: 0.9 };
+  }
+
   if (field.type === 'file' || label.includes('resume') || label.includes('cv') || (label.includes('upload') && !label.includes('cover'))) {
     return { field, category: 'resume', confidence: 0.95 };
   }
 
-  // Name classifications (First, Last, Full)
-  if (!label.includes('company') && !label.includes('school') && !label.includes('university') && !label.includes('employer') && !label.includes('institution')) {
-    if (label.includes('first name') || label.includes('given name') || label.includes('fname')) {
-      return { field, category: 'firstName', confidence: 0.95 };
+  // Question sentences (e.g. "Are you comfortable reaching out...", "Do you have experience...", "Will you require...")
+  const isQuestionSentence = /^(?:are you|do you|have you|will you|can you|would you|is it|is your|should you|please confirm|how comfortable|comfortable with|are you comfortable|willing to|do you agree|open to|able to|describe|tell us)/i.test(label) || label.includes('?');
+
+  const isDropdownOrRadio = field.type === 'select' || field.type === 'custom_dropdown' || field.type === 'radio';
+
+  // If it's a question sentence or dropdown, contact profile fields (email, linkedIn, gitHub, phone, name) MUST NOT hijack it
+  if (!isQuestionSentence && !isDropdownOrRadio) {
+    // Name classifications (First, Last, Full)
+    if (!label.includes('company') && !label.includes('school') && !label.includes('university') && !label.includes('employer') && !label.includes('institution')) {
+      if (label.includes('first name') || label.includes('given name') || label.includes('fname')) {
+        return { field, category: 'firstName', confidence: 0.95 };
+      }
+      if (label.includes('last name') || label.includes('surname') || label.includes('family name') || label.includes('lname')) {
+        return { field, category: 'lastName', confidence: 0.95 };
+      }
+      if (label.includes('full name') || label.includes('candidate name') || label.includes('your name') || /^name$/.test(label.trim())) {
+        return { field, category: 'fullName', confidence: 0.9 };
+      }
     }
-    if (label.includes('last name') || label.includes('surname') || label.includes('family name') || label.includes('lname')) {
-      return { field, category: 'lastName', confidence: 0.95 };
+
+    if (field.type === 'email' || label.includes('email address') || label.includes('e-mail address') || /^e-?mail$/i.test(label.trim())) {
+      return { field, category: 'email', confidence: 0.95 };
     }
-    if (label.includes('full name') || label.includes('candidate name') || label.includes('your name') || /^name$/.test(label.trim())) {
-      return { field, category: 'fullName', confidence: 0.9 };
+
+    if (label.includes('country code') || label.includes('dialing code') || label.includes('phone code') || (field.type === 'select' && label.includes('phone'))) {
+      return { field, category: 'phoneCountryCode', confidence: 0.95 };
     }
-  }
 
-  if (field.type === 'email' || label.includes('email') || label.includes('e-mail')) {
-    return { field, category: 'email', confidence: 0.95 };
-  }
+    if (field.type === 'tel' || label.includes('phone number') || label.includes('mobile number') || label.includes('contact number') || /^phone$/i.test(label.trim())) {
+      return { field, category: 'phone', confidence: 0.95 };
+    }
 
-  if (field.type === 'tel' || label.includes('phone') || label.includes('mobile') || label.includes('contact number')) {
-    return { field, category: 'phone', confidence: 0.95 };
-  }
+    if (/(?:linkedin|linked in)\s*(?:url|profile|link|handle|page)/i.test(label) || /^(?:linkedin|linked in)$/i.test(label.trim())) {
+      return { field, category: 'linkedIn', confidence: 0.95 };
+    }
 
-  if (label.includes('linkedin') || label.includes('linked in')) {
-    return { field, category: 'linkedIn', confidence: 0.95 };
-  }
+    if (/(?:github|git hub)\s*(?:url|profile|link|handle|repo)/i.test(label) || /^(?:github|git hub)$/i.test(label.trim())) {
+      return { field, category: 'gitHub', confidence: 0.95 };
+    }
 
-  if (label.includes('github') || label.includes('git hub')) {
-    return { field, category: 'gitHub', confidence: 0.95 };
-  }
-
-  if (label.includes('portfolio') || label.includes('website') || label.includes('personal site') || label.includes('url')) {
-    return { field, category: 'portfolio', confidence: 0.85 };
+    if (/(?:portfolio|website|personal site)\s*(?:url|link|address)/i.test(label) || /^(?:portfolio|website|personal website)$/i.test(label.trim())) {
+      return { field, category: 'portfolio', confidence: 0.85 };
+    }
   }
 
   // Granular location address breakdowns
@@ -121,7 +145,10 @@ export function classifyField(field: ScannedField): ClassifiedField {
   if (label.includes('skills') || label.includes('technical skills') || label.includes('technologies') || label.includes('core competencies')) {
     return { field, category: 'skills', confidence: 0.9 };
   }
-  if (label.includes('summary') || label.includes('about yourself') || label.includes('cover letter') || label.includes('personal statement') || label.includes('bio')) {
+  if (label.includes('cover letter') || label.includes('why should we hire you') || label.includes('message to hiring') || label.includes('note to recruiter') || label.includes('personal statement')) {
+    return { field, category: 'coverLetter', confidence: 0.95 };
+  }
+  if (label.includes('summary') || label.includes('about yourself') || label.includes('bio')) {
     return { field, category: 'summary', confidence: 0.85 };
   }
 
@@ -129,7 +156,12 @@ export function classifyField(field: ScannedField): ClassifiedField {
     return { field, category: 'minSalary', confidence: 0.9 };
   }
 
-  if (label.includes('years of experience') || label.includes('total experience') || label.includes('how many years') || (label.includes('experience') && (label.includes('with') || label.includes('in') || label.includes('using') || /\d/.test(label)))) {
+  // Scale & Rating Questions (e.g. "On a scale of 1 to 10...")
+  if (label.includes('scale') || label.includes('rate your') || label.includes('rate yourself') || /\b\d+\s*(?:to|-)\s*\d+\b/.test(label)) {
+    return { field, category: 'screeningQuestion', confidence: 0.95 };
+  }
+
+  if (label.includes('years of experience') || label.includes('total experience') || label.includes('how many years') || (label.includes('experience') && (label.includes('with') || label.includes('in') || label.includes('using')))) {
     return { field, category: 'experienceYears', confidence: 0.9 };
   }
 

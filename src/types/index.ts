@@ -2,6 +2,15 @@ export type PersonaTone = 'Confident' | 'Minimalist' | 'Detailed';
 export type WorkLocation = 'Remote' | 'Hybrid' | 'On-site';
 export type ApplyMode = 'easy' | 'normal';
 
+export interface ProfessionalReference {
+  name: string;
+  title: string;
+  company: string;
+  email: string;
+  phone: string;
+  relationship?: string;
+}
+
 export interface PersonaData {
   fullName: string;
   location: string;
@@ -21,6 +30,8 @@ export interface PersonaData {
   verified: boolean;
   resumeText?: string;
   experienceSummary?: string;
+  education?: string;
+  references?: ProfessionalReference[];
   resumeChunks?: {
     summary?: string;
     experience?: string;
@@ -40,6 +51,7 @@ export interface PersonaData {
     securityClearance?: string;
     domainExpertise?: string;
     eeoDemographics?: string;
+    references?: string;
     [key: string]: string | undefined;
   };
 }

@@ -20,24 +20,24 @@ export interface QuestionSolveResult {
   rawResponse?: string;
 }
 
-const OLLAMA_BASE_URL = 'http://localhost:11434';
-let cachedActiveModel: string = 'qwen2.5:1.5b';
+const OLLAMA_ENDPOINTS = ['http://127.0.0.1:11434', 'http://localhost:11434'];
+let cachedBaseUrl = 'http://127.0.0.1:11434';
+let cachedActiveModel: string = 'qwen2.5:3b';
 
 export function getActiveModelName(): string {
   return cachedActiveModel;
 }
 
 /**
- * Checks if local Ollama server is running and accessible at http://localhost:11434
+ * Checks if local Ollama server is running and accessible at http://127.0.0.1:11434 or http://localhost:11434
  */
 export async function checkOllamaStatus(modelName?: string): Promise<OllamaStatus> {
   const startTime = Date.now();
-  const endpoints = ['http://localhost:11434', 'http://127.0.0.1:11434'];
 
-  for (const baseUrl of endpoints) {
+  for (const baseUrl of OLLAMA_ENDPOINTS) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1500);
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
 
       const response = await fetch(`${baseUrl}/api/tags`, {
         method: 'GET',
@@ -46,20 +46,21 @@ export async function checkOllamaStatus(modelName?: string): Promise<OllamaStatu
       clearTimeout(timeoutId);
 
       if (response.ok) {
+        cachedBaseUrl = baseUrl;
         const data = await response.json();
         const models: Array<{ name: string }> = data.models || [];
         
-        // Priority order for auto-selecting best lightweight 1GB/sub-3GB models
+        // Priority order for auto-selecting best model (qwen2.5:3b ranked #1)
         const candidateModels = [
           modelName,
-          'qwen2.5:1.5b',
-          'llama3.2:1b',
-          'deepseek-r1:1.5b',
           'qwen2.5:3b',
+          'qwen2.5:1.5b',
           'llama3.2:3b',
+          'deepseek-r1:1.5b',
+          'llama3.2:1b',
           'qwen2.5:0.5b',
-          'phi3:mini',
-          'phi3.5'
+          'phi3.5',
+          'phi3:mini'
         ].filter(Boolean) as string[];
 
         let detected = models.find(m => candidateModels.some(c => m.name.toLowerCase().includes(c.toLowerCase())));
@@ -81,7 +82,7 @@ export async function checkOllamaStatus(modelName?: string): Promise<OllamaStatu
         };
       }
     } catch {
-      // Try next endpoint fallback
+      // Try next endpoint
     }
   }
 
@@ -90,89 +91,97 @@ export async function checkOllamaStatus(modelName?: string): Promise<OllamaStatu
     modelAvailable: false,
     modelName: modelName || cachedActiveModel,
     latencyMs: Date.now() - startTime,
-    error: 'Ollama server unreachable at http://localhost:11434 or http://127.0.0.1:11434',
+    error: 'Ollama server unreachable at http://127.0.0.1:11434 or http://localhost:11434',
   };
 }
 
 /**
- * Solves a custom form screening question using local Ollama (qwen2.5:0.5b)
- * with instant heuristic fallback if Ollama is unreachable or slow.
+ * Solves a custom form screening question using local Ollama (qwen2.5:3b)
+ * with dual-stack network retry and intelligent semantic reasoning.
  */
 export async function solveScreeningQuestion(
   questionText: string,
   persona: PersonaData,
-  options?: { model?: string; timeoutMs?: number }
+  options?: { model?: string; timeoutMs?: number; availableOptions?: string[] }
 ): Promise<QuestionSolveResult> {
   const model = options?.model || cachedActiveModel;
   const timeoutMs = options?.timeoutMs || 15000;
+  const availableOptions = options?.availableOptions;
 
   const thinkingAction = liveTelemetry.startAction({
     type: 'think',
     title: `Qwen 2.5: Reasoning "${questionText.length > 40 ? questionText.slice(0, 38) + '...' : questionText}"`,
-    detail: `Prompting local model: ${model}`,
+    detail: `Prompting local model: ${model}${availableOptions && availableOptions.length > 0 ? ` (${availableOptions.length} choices)` : ''}`,
     target: questionText,
     model,
     source: 'ollama',
   });
 
-  const prompt = await buildQuestionPrompt(questionText, persona);
+  const prompt = await buildQuestionPrompt(questionText, persona, availableOptions);
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  // Attempt generation against primary and fallback Ollama endpoints
+  const endpointsToTry = [cachedBaseUrl, ...OLLAMA_ENDPOINTS.filter(e => e !== cachedBaseUrl)];
 
-    const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        prompt,
-        stream: false,
-        options: {
-          temperature: 0.1,
-          num_predict: 100,
-        },
-      }),
-    });
+  for (const endpoint of endpointsToTry) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    clearTimeout(timeoutId);
+      const response = await fetch(`${endpoint}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model,
+          prompt,
+          stream: false,
+          options: {
+            temperature: 0.1,
+            num_predict: 120,
+          },
+        }),
+      });
 
-    if (response.ok) {
-      const data = await response.json();
-      const rawResponse = data.response || '';
-      const parsed = parseLlmAnswer(rawResponse, questionText, persona);
+      clearTimeout(timeoutId);
 
-      if (parsed) {
-        HierarchicalMemory.recordStepAnswer(questionText, parsed.answer);
-        thinkingAction.complete({
-          title: `Qwen 2.5 Solved: "${parsed.answer}"`,
-          detail: `Confidence: ${Math.round(parsed.confidence * 100)}% | Question: ${questionText}`,
-          value: parsed.answer,
-          confidence: parsed.confidence,
-        });
+      if (response.ok) {
+        cachedBaseUrl = endpoint;
+        const data = await response.json();
+        const rawResponse = data.response || '';
+        const parsed = parseLlmAnswer(rawResponse, questionText, persona, availableOptions);
 
-        return {
-          answer: parsed.answer,
-          confidence: parsed.confidence,
-          source: 'ollama',
-          rawResponse,
-        };
+        if (parsed) {
+          HierarchicalMemory.recordStepAnswer(questionText, parsed.answer);
+          thinkingAction.complete({
+            title: `Qwen 2.5 Solved: "${parsed.answer}"`,
+            detail: `Confidence: ${Math.round(parsed.confidence * 100)}% | Question: ${questionText}`,
+            value: parsed.answer,
+            confidence: parsed.confidence,
+          });
+
+          return {
+            answer: parsed.answer,
+            confidence: parsed.confidence,
+            source: 'ollama',
+            rawResponse,
+          };
+        }
       }
+    } catch (err) {
+      console.warn(`Ollama query to ${endpoint} failed, trying next:`, err);
     }
-  } catch (err) {
-    console.warn('Ollama local LLM query skipped or timed out, using heuristic solver:', err);
-    ErrorLogger.log({
-      source: 'Ollama LLM Client',
-      message: `Local LLM query failed or timed out: ${err instanceof Error ? err.message : String(err)}. Falling back to heuristic solver.`,
-      severity: 'NETWORK',
-    });
   }
 
   // Instant Heuristic Fallback
-  const fallbackAnswer = parseLlmAnswer('', questionText, persona);
+  const fallbackAnswer = parseLlmAnswer('', questionText, persona, availableOptions);
   const resultAnswer = fallbackAnswer ? fallbackAnswer.answer : '';
   const resultConf = fallbackAnswer ? fallbackAnswer.confidence : 0.5;
+
+  ErrorLogger.log({
+    source: 'Ollama LLM Client',
+    message: `Ollama unavailable on all endpoints. Used heuristic solver: "${resultAnswer}" for question "${questionText}"`,
+    severity: 'INFO',
+  });
 
   thinkingAction.complete({
     title: `Heuristic: Solved "${resultAnswer}"`,

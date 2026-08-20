@@ -35,7 +35,7 @@ interface AgentBrowserProps {
   persona: PersonaData;
   onSaveToast: (message: string) => void;
   onGlobalLog?: (log: any) => void;
-  pendingAction?: { action: 'search' | 'fillApply'; platform: PlatformId; timestamp: number } | null;
+  pendingAction?: { action: 'search' | 'fillApply' | 'autoApply'; platform: PlatformId; timestamp: number } | null;
 }
 
 const LINKEDIN_SIGNUP_URL = 'https://www.linkedin.com/signup/cold-join';
@@ -71,11 +71,17 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
     const { action, platform } = pendingAction;
     selectPlatform(platform);
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       if (action === 'search') {
         actionsRef.current.handleSearchAndApply();
       } else if (action === 'fillApply') {
         actionsRef.current.handleAutoFillAndApply();
+      } else if (action === 'autoApply') {
+        onSaveToast(`Launching Full Auto-Apply Autopilot on ${platform}...`);
+        await actionsRef.current.handleSearchAndApply();
+        setTimeout(() => {
+          actionsRef.current.handleAutoFillAndApply();
+        }, 3500);
       }
     }, 400);
 

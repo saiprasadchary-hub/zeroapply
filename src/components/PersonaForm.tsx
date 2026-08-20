@@ -13,20 +13,32 @@ import {
   RefreshCw,
   ExternalLink,
   FileText,
+  Zap,
+  AlertTriangle
 } from 'lucide-react';
 import { autoFillPersonaFromResume } from '../resume-autofill';
-import { saveResumeFileToStorage, clearSavedResumeFileFromStorage } from '../agent/autofill/resumeInjector';
+import { saveResumeFileToStorage, clearSavedResumeFileFromStorage, getSavedResumeFileFromStorage } from '../agent/autofill/resumeInjector';
 import { PersonaManager } from '../persona';
 import { MemoryBankManager } from '../agent/memory/MemoryBankManager';
 import { HierarchicalMemory } from '../agent/memory/hierarchicalMemory';
 import type { PlatformId } from '../agent/ui/AgentControlBar';
-import { Search, Sparkles, Globe } from 'lucide-react';
+import { AtsScoreCard } from '../ats';
+
+export const REQUIRED_AUTOAPPLY_CHUNKS = [
+  { key: 'summary', title: 'Executive Summary', desc: 'Professional pitch & background overview' },
+  { key: 'experience', title: 'Work History & Roles', desc: 'Companies, responsibilities & achievements' },
+  { key: 'skills', title: 'Technical Stack & Tools', desc: 'Languages, frameworks & libraries' },
+  { key: 'projects', title: 'Featured Projects & Systems', desc: 'Architectures, GitHub repositories & apps' },
+  { key: 'education', title: 'Education & Academic History', desc: 'Degrees, universities & honors' },
+  { key: 'certifications', title: 'Certifications & Licenses', desc: 'Cloud credentials & accredited training' },
+  { key: 'languages', title: 'Spoken Languages', desc: 'Language proficiencies & fluencies' },
+] as const;
 
 interface PersonaFormProps {
   persona: PersonaData;
   setPersona: React.Dispatch<React.SetStateAction<PersonaData>>;
   onSaveToast: (msg: string) => void;
-  onLaunchBrowser?: (action: 'search' | 'fillApply', platform: PlatformId) => void;
+  onLaunchBrowser?: (action: 'search' | 'fillApply' | 'autoApply', platform: PlatformId) => void;
 }
 
 function readFileAsBase64(file: File): Promise<string> {
@@ -62,10 +74,84 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'chunks'>('basic');
-  const [selectedPlatform, setSelectedPlatform] = useState<PlatformId>('linkedin');
+  const [showMissingModal, setShowMissingModal] = useState(false);
+  const [missingSections, setMissingSections] = useState<Array<{ key: string; title: string; desc: string }>>([]);
+  const selectedPlatform: PlatformId = 'linkedin';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const getMissingAutoApplySections = () => {
+    return REQUIRED_AUTOAPPLY_CHUNKS.filter((sec) => {
+      const chunkVal = persona.resumeChunks?.[sec.key]?.trim();
+      if (chunkVal && chunkVal.length > 0) return false;
+      if (sec.key === 'skills' && persona.techStack && persona.techStack.length > 0) return false;
+      if (sec.key === 'education' && persona.education && persona.education.trim().length > 0) return false;
+      if (sec.key === 'summary' && persona.experienceSummary && persona.experienceSummary.trim().length > 0) return false;
+      return true;
+    });
+  };
 
+  const handleAutoApplyClick = () => {
+    const missing = getMissingAutoApplySections();
+    if (missing.length > 0) {
+      setMissingSections([...missing]);
+      setShowMissingModal(true);
+      return;
+    }
+    onLaunchBrowser?.('autoApply', selectedPlatform || 'linkedin');
+  };
+
+  React.useEffect(() => {
+    if (uploadedFile) return;
+    const saved = getSavedResumeFileFromStorage();
+    if (saved && saved.name) {
+      let objectUrl: string | undefined;
+      if (saved.base64Data && saved.base64Data.startsWith('data:')) {
+        try {
+          const byteString = atob(saved.base64Data.split(',')[1]);
+          const mimeString = saved.base64Data.split(',')[0].split(':')[1].split(';')[0];
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+          }
+          const blob = new Blob([ab], { type: mimeString });
+          objectUrl = URL.createObjectURL(blob);
+        } catch {
+          // ignore
+        }
+      }
+      setUploadedFile({
+        name: saved.name,
+        size: saved.base64Data ? `${Math.round(saved.base64Data.length * 0.75 / 1024)} KB` : 'Active Resume',
+        type: saved.type?.includes('pdf') || saved.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx',
+        url: objectUrl,
+      });
+    } else if (persona.resumeText || persona.resumeChunks?.summary || persona.resumeChunks?.experience) {
+      setUploadedFile({
+        name: `${persona.fullName || 'Candidate'}_Resume.pdf`,
+        size: `${Math.round((persona.resumeText?.length || 500) / 5)} words`,
+        type: 'pdf',
+      });
+    }
+  }, [persona.fullName, persona.resumeText, persona.resumeChunks, uploadedFile]);
+
+  // Auto-clean misplaced programming languages in spoken languages chunk
+  React.useEffect(() => {
+    const rawLanguages = persona.resumeChunks?.languages;
+    const techRegex = /\b(?:python|javascript|typescript|c\+\+|java\b|c#|sql|mongodb|firebase|html5?|css3?|react|node|flask|opencv|dsa|system design|pandas|numpy|matplotlib|scikit-learn|databases|frameworks|oop|beautifulsoup|scrapy)\b/i;
+    if (rawLanguages && techRegex.test(rawLanguages)) {
+      const updatedChunks = { ...(persona.resumeChunks || {}) };
+      if (!updatedChunks.skills || !updatedChunks.skills.includes('Python')) {
+        updatedChunks.skills = updatedChunks.skills ? `${updatedChunks.skills}\n\n${rawLanguages}` : rawLanguages;
+      }
+      updatedChunks.languages = 'English (Professional), Hindi, Telugu';
+      setPersona((prev) => {
+        const updated = { ...prev, resumeChunks: updatedChunks };
+        PersonaManager.updateActiveProfileData(updated);
+        return updated;
+      });
+    }
+  }, [persona.resumeChunks]);
 
   const handleInputChange = (field: keyof PersonaData, value: any) => {
     setPersona((prev) => {
@@ -282,6 +368,14 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                 />
               </div>
             )}
+
+            {/* Real-Time Advanced ATS Score Card */}
+            <AtsScoreCard
+              persona={persona}
+              resumeText={persona.resumeText}
+              resumeChunks={persona.resumeChunks}
+              fileName={uploadedFile.name}
+            />
           </div>
         ) : (
           <div
@@ -669,64 +763,23 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
             </p>
           </div>
         </div>
-      </div>
 
-      {/* Autonomous Agent Job Launch Center */}
-      <div className="bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-950 text-white rounded-2xl p-4 sm:p-5 shadow-xl border border-zinc-700/80 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-700/60 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-400">
-              <Sparkles size={16} />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-sm text-white tracking-tight">Autonomous Job Action Center</h3>
-              <p className="text-[11px] text-zinc-400">Search portals &amp; launch autonomous batch auto-apply</p>
-            </div>
-          </div>
-
-          {/* Platform Selector */}
-          <div className="flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 rounded-xl px-2.5 py-1 text-xs">
-            <Globe size={13} className="text-cyan-400 shrink-0" />
-            <span className="text-zinc-400 font-mono text-[11px]">Portal:</span>
-            <select
-              value={selectedPlatform}
-              onChange={(e) => setSelectedPlatform(e.target.value as PlatformId)}
-              className="bg-transparent text-cyan-300 font-bold outline-none cursor-pointer text-xs"
-            >
-              <option value="linkedin" className="bg-zinc-900 text-white">LinkedIn</option>
-              <option value="indeed" className="bg-zinc-900 text-white">Indeed</option>
-              <option value="glassdoor" className="bg-zinc-900 text-white">Glassdoor</option>
-              <option value="unstop" className="bg-zinc-900 text-white">Unstop</option>
-              <option value="naukri" className="bg-zinc-900 text-white">Naukri</option>
-              <option value="auto" className="bg-zinc-900 text-white">Auto-Detect</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Action Buttons Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+        {/* AutoApply Action Button */}
+        <div className="pt-2">
           <button
             type="button"
-            onClick={() => onLaunchBrowser?.('search', selectedPlatform)}
-            className="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-emerald-500/20 text-xs group cursor-pointer"
+            onClick={handleAutoApplyClick}
+            className="w-full p-3.5 sm:p-4 bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-indigo-500/10 hover:from-cyan-500/20 hover:via-blue-500/20 hover:to-indigo-500/20 border-2 border-cyan-500/40 hover:border-cyan-500 rounded-xl flex items-center justify-center gap-3 transition-all ambient-shadow group cursor-pointer text-primary"
           >
-            <Search size={15} className="group-hover:scale-110 transition-transform" />
-            <div className="text-left">
-              <span className="block font-bold">1. Search Jobs</span>
-              <span className="block text-[10px] text-emerald-200 font-normal">Find &amp; filter {selectedPlatform} listings</span>
+            <div className="w-8 h-8 rounded-lg bg-cyan-500 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-sm shadow-cyan-500/25">
+              <Zap size={18} className="text-white fill-current" />
             </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onLaunchBrowser?.('fillApply', selectedPlatform)}
-            className="px-4 py-3 bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg hover:shadow-fuchsia-500/20 text-xs group cursor-pointer"
-          >
-            <Sparkles size={15} className="group-hover:scale-110 transition-transform" />
-            <div className="text-left">
-              <span className="block font-bold">2. Fill &amp; Apply</span>
-              <span className="block text-[10px] text-purple-200 font-normal">Autonomous batch multi-step apply</span>
-            </div>
+            <span className="font-extrabold text-sm sm:text-base tracking-tight">
+              AutoApply
+            </span>
+            <span className="text-cyan-600 font-mono text-sm group-hover:translate-x-1 transition-transform">
+              ➔
+            </span>
           </button>
         </div>
       </div>
@@ -736,8 +789,20 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
         </>
       ) : (
         <div className="space-y-6">
-          <h2 className="font-bold text-xl md:text-2xl text-primary tracking-tight">Memory Chunks (RAG)</h2>
-          <p className="text-sm text-on-surface-variant">These semantic chunks were extracted from your resume. The AI will read these specific chunks to answer related job questions faster and more accurately. Feel free to edit them for brevity.</p>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="font-bold text-xl md:text-2xl text-primary tracking-tight">Memory Chunks (RAG)</h2>
+              <p className="text-sm text-on-surface-variant">These semantic chunks were extracted from your resume. The AI will read these specific chunks to answer related job questions faster and more accurately. Feel free to edit them for brevity.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3.5 py-1.5 bg-white border border-slate-300 hover:border-cyan-500 rounded-lg text-xs font-bold text-slate-700 hover:text-cyan-700 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            >
+              <Upload size={13} />
+              <span>Upload Resume to Extract</span>
+            </button>
+          </div>
           
           {([
             { key: 'summary', title: 'Executive Summary', desc: 'Professional pitch & background overview' },
@@ -758,32 +823,143 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
             { key: 'publications', title: 'Publications & Research', desc: 'Papers, journals & patents' },
             { key: 'awards', title: 'Honors & Achievements', desc: 'Competitions, scholarships & awards' },
             { key: 'eeoDemographics', title: 'EEO & Diversity Compliance', desc: 'Veteran status, disability & demographic declarations' },
-          ] as const).map(({ key, title, desc }) => (
-            <div key={key} className="space-y-1.5 p-3.5 bg-white border border-zinc-200 rounded-xl shadow-xs">
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="font-bold text-xs text-primary">{title}</span>
-                  <span className="text-[10px] text-zinc-400 block font-mono">{desc}</span>
+          ] as const).map(({ key, title, desc }) => {
+            const isRequired = REQUIRED_AUTOAPPLY_CHUNKS.some((r) => r.key === key);
+            const isFilled = (persona.resumeChunks?.[key]?.trim().length || 0) > 0;
+            return (
+              <div
+                key={key}
+                id={`chunk-${key}`}
+                className={`space-y-1.5 p-3.5 bg-white rounded-xl shadow-xs border transition-all ${
+                  isRequired && !isFilled
+                    ? 'border-amber-300 ring-2 ring-amber-100/60'
+                    : 'border-zinc-200'
+                }`}
+              >
+                <div className="flex justify-between items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-xs text-primary">{title}</span>
+                    {isRequired && (
+                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                        isFilled
+                          ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
+                          : 'bg-amber-50 text-amber-800 border border-amber-300 animate-pulse'
+                      }`}>
+                        {isFilled ? 'Required ✓' : 'Required for AutoApply'}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-zinc-400 block font-mono">{desc}</span>
+                  </div>
+                  <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                    isFilled
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-zinc-100 text-zinc-400'
+                  }`}>
+                    {persona.resumeChunks?.[key]?.length || 0} chars
+                  </span>
                 </div>
-                <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
-                  (persona.resumeChunks?.[key]?.length || 0) > 0
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-zinc-100 text-zinc-400'
-                }`}>
-                  {persona.resumeChunks?.[key]?.length || 0} chars
-                </span>
+                <textarea
+                  value={persona.resumeChunks?.[key] || ''}
+                  onChange={(e) => {
+                    const updatedChunks = { ...(persona.resumeChunks || {}), [key]: e.target.value };
+                    handleInputChange('resumeChunks', updatedChunks);
+                  }}
+                  className="w-full h-28 p-3 bg-zinc-50 border border-zinc-200 rounded-lg font-mono text-xs text-primary focus:border-cyan-500 focus:bg-white outline-none resize-y transition-colors"
+                  placeholder={`No ${key} extracted yet...${isRequired ? ' (Required for AutoApply)' : ''}`}
+                />
               </div>
-              <textarea
-                value={persona.resumeChunks?.[key] || ''}
-                onChange={(e) => {
-                  const updatedChunks = { ...(persona.resumeChunks || {}), [key]: e.target.value };
-                  handleInputChange('resumeChunks', updatedChunks);
-                }}
-                className="w-full h-28 p-3 bg-zinc-50 border border-zinc-200 rounded-lg font-mono text-xs text-primary focus:border-cyan-500 focus:bg-white outline-none resize-y transition-colors"
-                placeholder={`No ${key} extracted yet...`}
-              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* Missing Required Profile Information Modal for AutoApply  */}
+      {/* ========================================================= */}
+      {showMissingModal && (
+        <div
+          className="fixed inset-0 z-[9999] bg-slate-900/45 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fadeIn"
+          onClick={() => setShowMissingModal(false)}
+        >
+          <div
+            className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden text-slate-800 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-200 bg-white shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center font-bold shrink-0 shadow-xs">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 tracking-tight">
+                    Required Details Missing for AutoApply
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {missingSections.length} essential section{missingSections.length > 1 ? 's' : ''} must be filled before launching
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowMissingModal(false)}
+                className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer border border-slate-200"
+              >
+                <X size={16} />
+              </button>
             </div>
-          ))}
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-5 space-y-4 bg-slate-50/50 max-h-[60vh] overflow-y-auto">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                To guarantee the AI agent applies accurately and answers employer screening questions without errors, please fill in the following required sections:
+              </p>
+
+              <div className="space-y-2">
+                {missingSections.map((sec) => (
+                  <div
+                    key={sec.key}
+                    className="p-3 bg-white border border-amber-200 rounded-xl flex items-start gap-3 shadow-2xs"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 font-bold font-mono flex items-center justify-center text-xs shrink-0 mt-0.5">
+                      !
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-xs text-slate-900">{sec.title}</div>
+                      <div className="text-[11px] text-slate-500 line-clamp-1">{sec.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 bg-white flex flex-col sm:flex-row items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMissingModal(false);
+                  fileInputRef.current?.click();
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-white border border-slate-300 hover:border-cyan-500 text-slate-700 hover:text-cyan-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <Upload size={14} />
+                <span>Upload Resume to Auto-Fill</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMissingModal(false);
+                  setActiveTab('chunks');
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <span>✍️ Fill in Memory Chunks</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

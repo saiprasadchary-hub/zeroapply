@@ -44,17 +44,33 @@ const DEFAULT_INITIAL_PROFILES: PersonaProfile[] = [
 ];
 
 export class PersonaManager {
+  private static inMemoryProfiles: PersonaProfile[] | null = null;
+
   public static getProfiles(): PersonaProfile[] {
+    if (this.inMemoryProfiles && this.inMemoryProfiles.length > 0) {
+      return this.inMemoryProfiles;
+    }
     try {
       const raw = localStorage.getItem(PROFILES_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          const techRegex = /\b(?:python|javascript|typescript|c\+\+|java\b|c#|sql|mongodb|firebase|html5?|css3?|react|node|flask|opencv|dsa|system design|pandas|numpy|matplotlib|scikit-learn|databases|frameworks|oop|beautifulsoup|scrapy)\b/i;
           parsed.forEach((p: any) => {
             if (p.data && (p.data.applicationLimit === 50 || p.data.applicationLimit === undefined)) {
               p.data.applicationLimit = 5;
             }
+            if (p.data?.resumeChunks?.languages && techRegex.test(p.data.resumeChunks.languages)) {
+              const techContent = p.data.resumeChunks.languages;
+              if (!p.data.resumeChunks.skills || !p.data.resumeChunks.skills.includes('Python')) {
+                p.data.resumeChunks.skills = p.data.resumeChunks.skills
+                  ? `${p.data.resumeChunks.skills}\n\n${techContent}`
+                  : techContent;
+              }
+              p.data.resumeChunks.languages = 'English (Professional), Hindi, Telugu';
+            }
           });
+          this.inMemoryProfiles = parsed;
           return parsed;
         }
       }
@@ -66,10 +82,19 @@ export class PersonaManager {
   }
 
   public static saveProfiles(profiles: PersonaProfile[]): void {
+    this.inMemoryProfiles = profiles;
     try {
       localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(profiles));
     } catch (e) {
-      console.error('Failed to save persona profiles:', e);
+      console.warn('LocalStorage quota limit reached when saving profiles; falling back to memory cache:', e);
+      // Attempt saving with stripped large binary payloads if quota is exceeded
+      try {
+        const leanProfiles = profiles.map(p => ({
+          ...p,
+          savedResume: p.savedResume ? { name: p.savedResume.name, type: p.savedResume.type, base64Data: '' } : null
+        }));
+        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(leanProfiles));
+      } catch {}
     }
   }
 
