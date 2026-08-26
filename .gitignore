@@ -12,6 +12,9 @@ dist
 dist-ssr
 dist_desktop
 release
+release_*
+.firebase/
+scripts/bundled/
 *.local
 
 # Editor directories and files

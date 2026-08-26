@@ -2,18 +2,17 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { PersonaData } from './types';
 import { Header } from './components/Header';
 import { PersonaForm } from './components/PersonaForm';
-import { AgentBrowser } from './components/AgentBrowser';
+import { AgentBrowser } from '../AgentBrowser';
 import { ApplicationDashboard } from './components/ApplicationDashboard';
-import { CheckCircle2, X } from 'lucide-react';
-import { ProcessLog } from './components/ProcessLog';
-import type { ProcessLogEntry } from './components/ProcessLog';
-import { ProcessLogger } from './agent/tracker/processLogger';
-import { ErrorLog } from './components/ErrorLog';
-import type { ErrorLogEntry } from './components/ErrorLog';
-import { ErrorLogger } from './agent/tracker/errorLogger';
+import { CheckCircle2, X, Bot } from 'lucide-react';
 import { SubmissionCheck } from './components/SubmissionCheck';
+import { ResumeStudio } from './resume';
 import { MobileBottomNav, type NavTab } from './components/MobileBottomNav';
 import type { PlatformId } from './agent/ui/AgentControlBar';
+import { AuthProvider, useAuth } from './auth/AuthContext';
+import { LoginPage } from './auth/LoginPage';
+import { FirebaseCloudSync } from './services/firebase/cloudSyncService';
+import { PersonaManager } from './persona/personaManager';
 
 const DEFAULT_PERSONA: PersonaData = {
   fullName: '',
@@ -24,7 +23,7 @@ const DEFAULT_PERSONA: PersonaData = {
   gitHub: '',
   portfolio: '',
   experienceYears: 0,
-  minSalary: 50,
+  minSalary: 12,
   workPreference: 'Remote',
   tone: 'Confident',
   techStack: [],
@@ -34,89 +33,65 @@ const DEFAULT_PERSONA: PersonaData = {
   verified: false,
 };
 
-export const App: React.FC = () => {
+const MainDashboard: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [leftWidth, setLeftWidth] = useState(30); // percentage for PersonaForm on desktop
   const [pendingBrowserAction, setPendingBrowserAction] = useState<{ action: 'search' | 'fillApply' | 'autoApply'; platform: PlatformId; timestamp: number } | null>(null);
   const isResizingRef = useRef(false);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const cloudProfilesLoadedRef = useRef(false);
+  const cloudProfileMigrationRef = useRef<string | null>(null);
 
-  // Initialize Persona Data with LocalStorage Persistence
-  const [persona, setPersona] = useState<PersonaData>(() => {
-    try {
-      const saved = localStorage.getItem('persona_profile_default');
-      return saved ? JSON.parse(saved) : DEFAULT_PERSONA;
-    } catch {
-      return DEFAULT_PERSONA;
-    }
-  });
+  // Initialize Persona Data with Firebase Cloud Firestore
+  const [persona, setPersona] = useState<PersonaData>(DEFAULT_PERSONA);
 
-  // Global Logs State (Bridged with ProcessLogger)
-  const [globalLogs, setGlobalLogs] = useState<ProcessLogEntry[]>([]);
-  const [errorLogs, setErrorLogs] = useState<ErrorLogEntry[]>(() => ErrorLogger.getErrors());
-
+  // Subscribe to real-time Persona updates from Firebase Cloud Firestore
   useEffect(() => {
-    const unsubscribe = ErrorLogger.subscribe((errs) => {
-      setErrorLogs(errs);
+    cloudProfilesLoadedRef.current = false;
+    if (!user?.uid) return;
+    const unsubscribe = FirebaseCloudSync.subscribeToPersona(user?.uid, (cloudData) => {
+      if (cloudData && !cloudProfilesLoadedRef.current) {
+        setPersona(cloudData);
+      }
     });
+
+    // Also fetch initial data if exists
+    FirebaseCloudSync.getPersona(user?.uid).then((initialData) => {
+      if (initialData && !cloudProfilesLoadedRef.current) {
+        setPersona(initialData);
+      }
+    });
+
     return () => unsubscribe();
-  }, []);
+  }, [user?.uid]);
 
-  // Save Persona changes automatically
   useEffect(() => {
-    try {
-      localStorage.setItem('persona_profile_default', JSON.stringify(persona));
-    } catch (e) {
-      console.error('Failed to auto-save persona to local storage:', e);
-    }
-  }, [persona]);
+    if (!user?.uid) return;
+    return FirebaseCloudSync.subscribeToPersonaProfiles(user.uid, ({ profiles, activeProfileId }) => {
+      if (profiles.length === 0) {
+        if (cloudProfileMigrationRef.current !== user.uid) {
+          cloudProfileMigrationRef.current = user.uid;
+          const localProfiles = PersonaManager.getProfiles().map(({ savedResume: _savedResume, ...profile }) => profile);
+          void FirebaseCloudSync.savePersonaProfiles(localProfiles, PersonaManager.getActiveProfileId(), user.uid);
+        }
+        return;
+      }
+      cloudProfilesLoadedRef.current = true;
+      const restored = PersonaManager.restoreCloudProfiles(profiles, activeProfileId);
+      const activeId = PersonaManager.getActiveProfileId();
+      const activeProfile = restored.find((profile) => profile.id === activeId) ?? restored[0];
+      if (activeProfile) setPersona(activeProfile.data);
+    });
+  }, [user?.uid]);
 
-  // Global Error Catching
+  // Save Persona changes automatically to Firebase Cloud Firestore
   useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      const entry = {
-        id: Math.random().toString(36).substring(7),
-        timestamp: new Date().toLocaleTimeString(),
-        source: 'System Exception',
-        message: event.message,
-        stack: event.error?.stack || ''
-      };
-      setErrorLogs(prev => [...prev, entry]);
-      ErrorLogger.log({
-        source: 'System Exception',
-        message: event.message,
-        stack: event.error?.stack || '',
-        severity: 'CRITICAL',
-      });
-    };
-
-    const handlePromiseRejection = (event: PromiseRejectionEvent) => {
-      const msg = typeof event.reason === 'string' ? event.reason : event.reason?.message || 'Unknown Promise Rejection';
-      const stk = event.reason?.stack || '';
-      const entry = {
-        id: Math.random().toString(36).substring(7),
-        timestamp: new Date().toLocaleTimeString(),
-        source: 'Unhandled Promise',
-        message: msg,
-        stack: stk
-      };
-      setErrorLogs(prev => [...prev, entry]);
-      ErrorLogger.log({
-        source: 'Unhandled Promise',
-        message: msg,
-        stack: stk,
-        severity: 'WARNING',
-      });
-    };
-
-    window.addEventListener('error', handleError);
-    window.addEventListener('unhandledrejection', handlePromiseRejection);
-    return () => {
-      window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handlePromiseRejection);
-    };
-  }, []);
+    if (!user?.uid || !(persona.fullName || persona.email || persona.techStack.length > 0)) return;
+    const timer = setTimeout(() => void FirebaseCloudSync.savePersona(persona, user.uid), 800);
+    return () => clearTimeout(timer);
+  }, [persona, user?.uid]);
 
   // Resizer mouse drag handler
   useEffect(() => {
@@ -152,32 +127,14 @@ export const App: React.FC = () => {
     }, 4000);
   }, []);
 
-  const appendProcessLog = useCallback((log: ProcessLogEntry) => {
-    setGlobalLogs((previous) => [...previous, log]);
-
-    ProcessLogger.log({
-      id: log.id,
-      level: log.type === 'error' ? 'ERROR' : log.type === 'success' ? 'SUCCESS' : log.type === 'warning' ? 'WARNING' : 'INFO',
-      source: 'Agent Engine',
-      message: log.message,
-    });
-    
-    // Auto-forward agent errors to God-Level dashboard
-    if (log.type === 'error') {
-      ErrorLogger.log({
-        source: 'Agent Engine',
-        message: log.message,
-        severity: 'CRITICAL',
-      });
-    }
-  }, []);
-
   const [mobileDashboardSubTab, setMobileDashboardSubTab] = useState<'persona' | 'insights'>('persona');
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#f7f9fd] font-sans text-on-surface">
       {/* Top Navigation Header with Tab Switcher */}
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} errorCount={errorLogs.length} />
+      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* Main Content Area: Dashboard (Desktop Split vs Mobile Sub-Tabs) */}
       <main className={`flex-1 flex flex-col md:flex-row overflow-hidden relative pb-16 md:pb-0 ${activeTab === 'dashboard' ? '' : 'hidden'}`}>
@@ -207,7 +164,7 @@ export const App: React.FC = () => {
 
         {/* Persona Section */}
         <section
-          style={{ width: window.innerWidth >= 768 ? `${leftWidth}%` : '100%' }}
+          style={{ width: isMounted && window.innerWidth >= 768 ? `${leftWidth}%` : '100%' }}
           className={`bg-surface flex flex-col overflow-y-auto border-r border-outline-variant shrink-0 transition-none ${
             mobileDashboardSubTab === 'persona' ? 'flex-1 md:flex-none' : 'hidden md:flex'
           }`}
@@ -216,6 +173,7 @@ export const App: React.FC = () => {
             persona={persona}
             setPersona={setPersona}
             onSaveToast={triggerToast}
+            onNavigateToResume={() => setActiveTab('resume')}
             onLaunchBrowser={(action, platform) => {
               setPendingBrowserAction({ action, platform, timestamp: Date.now() });
               setActiveTab('browser');
@@ -245,7 +203,7 @@ export const App: React.FC = () => {
         <section className={`flex-1 bg-white flex flex-col h-full overflow-hidden ${
           mobileDashboardSubTab === 'insights' ? 'flex' : 'hidden md:flex'
         }`}>
-          <ApplicationDashboard globalLogs={globalLogs} />
+          <ApplicationDashboard />
         </section>
       </main>
 
@@ -253,37 +211,66 @@ export const App: React.FC = () => {
         <AgentBrowser
           persona={persona}
           onSaveToast={triggerToast}
-          onGlobalLog={appendProcessLog}
           pendingAction={pendingBrowserAction}
         />
-      </main>
-
-      <main className={`flex-1 flex overflow-hidden relative pb-16 md:pb-0 ${activeTab === 'process' ? '' : 'hidden'}`}>
-        <ProcessLog logs={globalLogs} />
-      </main>
-
-      <main className={`flex-1 flex overflow-hidden relative pb-16 md:pb-0 ${activeTab === 'errors' ? '' : 'hidden'}`}>
-        <ErrorLog errors={errorLogs} onClearErrors={() => setErrorLogs([])} />
       </main>
 
       <main className={`flex-1 flex overflow-hidden relative pb-16 md:pb-0 ${activeTab === 'qa' ? '' : 'hidden'}`}>
         <SubmissionCheck />
       </main>
 
+      <main className={`flex-1 flex overflow-hidden relative pb-16 md:pb-0 ${activeTab === 'resume' ? '' : 'hidden'}`}>
+        <ResumeStudio
+          persona={persona}
+          onSaveToast={triggerToast}
+        />
+      </main>
+
       {/* Native App-Style Mobile Bottom Navigation Bar */}
-      <MobileBottomNav activeTab={activeTab} setActiveTab={setActiveTab} errorCount={errorLogs.length} />
+      <MobileBottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* Global Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 bg-zinc-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-50 animate-slideUp text-xs font-semibold">
+        <div role="status" aria-live="polite" className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 bg-zinc-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-50 animate-slideUp text-xs font-semibold">
           <CheckCircle2 size={16} className="text-cyan-400 shrink-0" />
           <span>{toastMessage}</span>
-          <button onClick={() => setToastMessage(null)} className="ml-2 opacity-60 hover:opacity-100">
+          <button type="button" aria-label="Dismiss notification" onClick={() => setToastMessage(null)} className="ml-2 opacity-60 hover:opacity-100">
             <X size={14} />
           </button>
         </div>
       )}
     </div>
+  );
+};
+
+const AppContent: React.FC = () => {
+  const { user, isGuest, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-[#fbfbfd] flex flex-col items-center justify-center text-zinc-900">
+        <div className="relative flex items-center justify-center mb-3">
+          <div className="w-12 h-12 rounded-xl bg-zinc-900 flex items-center justify-center shadow-lg shadow-zinc-900/10 animate-pulse">
+            <Bot size={24} className="text-emerald-400" />
+          </div>
+        </div>
+        <p className="text-xs font-medium text-zinc-500 animate-pulse">Initializing ZeroApply...</p>
+      </div>
+    );
+  }
+
+  if (!user && !isGuest) {
+    return <LoginPage />;
+  }
+
+  return <MainDashboard />;
+};
+
+export const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 

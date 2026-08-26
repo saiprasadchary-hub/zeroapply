@@ -152,8 +152,19 @@ export function classifyField(field: ScannedField): ClassifiedField {
     return { field, category: 'summary', confidence: 0.85 };
   }
 
-  if (label.includes('salary') || label.includes('compensation') || label.includes('pay') || label.includes('rate')) {
-    return { field, category: 'minSalary', confidence: 0.9 };
+  if (
+    label.includes('salary') ||
+    label.includes('compensation') ||
+    label.includes('last drawn') ||
+    label.includes('current ctc') ||
+    label.includes('expected ctc') ||
+    label.includes('drawn') ||
+    label.includes('pay') ||
+    label.includes('stipend') ||
+    label.includes('remuneration') ||
+    label.includes('rate')
+  ) {
+    return { field, category: 'minSalary', confidence: 0.95 };
   }
 
   // Scale & Rating Questions (e.g. "On a scale of 1 to 10...")

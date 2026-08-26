@@ -1,4 +1,5 @@
 import { liveTelemetry, type LiveActionRecord } from '../telemetry/liveTelemetry';
+import { getSecureItem, removeSecureItem, setSecureItem } from '../../services/secureStorage';
 
 export type ProcessLogLevel = 'INFO' | 'SUCCESS' | 'ACTION' | 'LLM' | 'SECURITY' | 'WARNING' | 'ERROR';
 
@@ -111,16 +112,17 @@ class ProcessLoggerService {
 
   public getLogs(): ProcessLogRecord[] {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
+      const data = getSecureItem(STORAGE_KEY);
       return data ? JSON.parse(data) : [];
-    } catch {
+    } catch (error) {
+      console.warn('Failed to read process logs:', error);
       return [];
     }
   }
 
   private saveLogs(logs: ProcessLogRecord[]) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(logs.slice(0, 300)));
+      setSecureItem(STORAGE_KEY, JSON.stringify(logs.slice(0, 300)));
     } catch (e) {
       console.error('Failed to save process logs:', e);
     }
@@ -148,8 +150,10 @@ class ProcessLoggerService {
 
   public clearLogs(): void {
     try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {}
+      removeSecureItem(STORAGE_KEY);
+    } catch (error) {
+      console.warn('Failed to clear process logs:', error);
+    }
     this.notifyListeners();
   }
 

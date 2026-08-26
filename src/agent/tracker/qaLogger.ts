@@ -45,16 +45,17 @@ export class QALogger {
 
   public static getLogs(): QALogRecord[] {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
+      const data = getSecureItem(STORAGE_KEY);
       return data ? JSON.parse(data) : [];
-    } catch {
+    } catch (error) {
+      console.warn('Failed to read QA logs:', error);
       return [];
     }
   }
 
   private static saveLogs(logs: QALogRecord[]) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(logs.slice(0, 150)));
+      setSecureItem(STORAGE_KEY, JSON.stringify(logs.slice(0, 150)));
     } catch (e) {
       console.error('Failed to save QA logs:', e);
     }
@@ -141,8 +142,10 @@ export class QALogger {
 
   public static clearLogs(): void {
     try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {}
+      removeSecureItem(STORAGE_KEY);
+    } catch (error) {
+      console.warn('Failed to clear QA logs:', error);
+    }
     this.notifyListeners();
   }
 
@@ -172,3 +175,4 @@ export class QALogger {
     return rows.map((r) => r.join(',')).join('\n');
   }
 }
+import { getSecureItem, removeSecureItem, setSecureItem } from '../../services/secureStorage';

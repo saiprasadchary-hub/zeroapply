@@ -4,10 +4,12 @@ export interface ApplicationStepResult {
   success: boolean;
   action: ApplicationStepAction;
   text?: string;
+  requiresConfirmation?: boolean;
 }
 
-export const STEP_NAVIGATOR_SCRIPT = `
+export const createStepNavigatorScript = (allowSubmit: boolean) => `
 (function clickApplicationStepButton() {
+  const allowSubmit = ${allowSubmit ? 'true' : 'false'};
   const selectors = 'button, input[type="button"], input[type="submit"], a[role="button"], div[role="button"], span[role="button"], [class*="btn-primary"], [class*="submit"], [class*="next"]';
   const rawElements = Array.from(document.querySelectorAll(selectors));
   
@@ -63,6 +65,15 @@ export const STEP_NAVIGATOR_SCRIPT = `
       targetBtn.scrollIntoView({ block: 'center', behavior: 'instant' });
       targetBtn.focus();
     } catch {}
+
+    if (action === 'submit' && !allowSubmit) {
+      return {
+        success: false,
+        action,
+        text: targetBtn.innerText || targetBtn.textContent || targetBtn.value,
+        requiresConfirmation: true,
+      };
+    }
 
     targetBtn.click();
 

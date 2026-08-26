@@ -3,10 +3,9 @@ import { DOM_SCANNER_SCRIPT, type ScannedField } from '../detector/fieldScanner'
 import { classifyAllFields } from '../detector/fieldClassifier';
 import { mapPersonaToFields } from '../autofill/personaMapper';
 import { executeDomAutofill, type FillResult } from '../autofill/domFiller';
-import { TELEMETRY_INJECTION_SCRIPT } from '../autofill/telemetryTracker';
 import { getSavedResumeFileFromStorage, generateSmartResumeHandlerScript } from '../autofill/resumeInjector';
 import { ApplicationStateMachine } from '../stateMachine/appStateMachine';
-import { STEP_NAVIGATOR_SCRIPT, type ApplicationStepResult } from '../stateMachine/stepNavigator';
+import { createStepNavigatorScript, type ApplicationStepResult } from '../stateMachine/stepNavigator';
 import { ApplicationLogger } from '../tracker/applicationLogger';
 import { QALogger, type QAPair } from '../tracker/qaLogger';
 import { ErrorLogger } from '../tracker/errorLogger';
@@ -86,9 +85,7 @@ export class AgentEngine {
         return { success: false, detectedCount: 0, filledCount: 0, message: 'Security checkpoint: ' + secStatus.reason };
       }
 
-      // 3. Inject the self-healing telemetry script and run DOM scanning
-      webview.executeJavaScript(TELEMETRY_INJECTION_SCRIPT).catch(console.warn);
-      
+      // Run DOM scanning. Webview telemetry is provided by the isolated preload.
       scannedFields = await webview.executeJavaScript(DOM_SCANNER_SCRIPT);
     } catch (err) {
       console.error('DOM scanner error:', err);
@@ -233,13 +230,16 @@ export class AgentEngine {
     return result.success;
   }
 
-  public async advanceApplicationStep(webview: any): Promise<ApplicationStepResult> {
+  public async advanceApplicationStep(webview: any, allowSubmit: boolean = false): Promise<ApplicationStepResult> {
     try {
       if (webview && typeof webview.executeJavaScript !== 'function') {
         return { success: false, action: 'none' };
       }
 
-      let result = await webview.executeJavaScript(STEP_NAVIGATOR_SCRIPT);
+      const navigationScript = createStepNavigatorScript(allowSubmit);
+      let result = await webview.executeJavaScript(navigationScript);
+
+      if (result?.requiresConfirmation) return result;
       
       if (result && result.success) {
         liveTelemetry.emit({
@@ -256,7 +256,8 @@ export class AgentEngine {
       if (healingResult.healedCount > 0) {
         // Wait 300ms for DOM state update and retry advance
         await new Promise(res => setTimeout(res, 300));
-        result = await webview.executeJavaScript(STEP_NAVIGATOR_SCRIPT);
+        result = await webview.executeJavaScript(navigationScript);
+        if (result?.requiresConfirmation) return result;
         if (result && result.success) {
           liveTelemetry.emit({
             type: 'click',
@@ -268,7 +269,10 @@ export class AgentEngine {
         }
       }
 
-      // 2. Vision Inspector Fallback: Check for visual coordinate targets or obstructing overlays
+      // Coordinate fallback cannot reliably distinguish a final submit button.
+      if (!allowSubmit) return result || { success: false, action: 'none' };
+
+      // 2. Deterministic DOM geometry fallback for obstructed semantic controls.
       const visualInspection = await VisionAgent.inspectScreen(webview);
       if (visualInspection.primaryActionButton && !visualInspection.primaryActionButton.isObstructed) {
         const btn = visualInspection.primaryActionButton;
@@ -286,7 +290,7 @@ export class AgentEngine {
         if (clicked) {
           liveTelemetry.emit({
             type: 'click',
-            title: `Vision Agent Clicked "${btn.text}"`,
+            title: `DOM Geometry Clicked "${btn.text}"`,
             detail: `Triggered at coordinates (${btn.x}, ${btn.y})`,
             status: 'completed',
           });

@@ -1,21 +1,72 @@
 import React, { useState, useEffect } from 'react';
 import { QALogger, type QALogRecord } from '../agent/tracker/qaLogger';
 import { 
-  ClipboardCheck, 
   ChevronDown, 
   ChevronUp, 
   Search, 
   Trash2, 
-  Building2, 
-  Briefcase, 
   FileSpreadsheet, 
   FileCode, 
-  BrainCircuit, 
-  UserCheck, 
   Copy, 
   Check, 
-  Layers
+  Clock,
+  Send,
+  ListChecks,
+  Workflow,
+  User,
+  CheckCircle2,
+  Inbox
 } from 'lucide-react';
+
+const getPortalInfo = (portal: string, company: string) => {
+  const p = (portal || '').toLowerCase();
+  if (p.includes('linkedin')) {
+    return {
+      bg: 'bg-white text-blue-600 border border-blue-300',
+      tagBg: 'bg-blue-50 text-blue-700 border-blue-200',
+      label: 'LinkedIn',
+      short: 'in',
+    };
+  }
+  if (p.includes('greenhouse')) {
+    return {
+      bg: 'bg-emerald-600 text-white border-emerald-600',
+      tagBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      label: 'Greenhouse',
+      short: 'GH',
+    };
+  }
+  if (p.includes('lever')) {
+    return {
+      bg: 'bg-zinc-900 text-white border-zinc-900',
+      tagBg: 'bg-zinc-100 text-zinc-800 border-zinc-200',
+      label: 'Lever',
+      short: 'LV',
+    };
+  }
+  if (p.includes('workday')) {
+    return {
+      bg: 'bg-amber-600 text-white border-amber-600',
+      tagBg: 'bg-amber-50 text-amber-800 border-amber-200',
+      label: 'Workday',
+      short: 'WD',
+    };
+  }
+  if (p.includes('indeed')) {
+    return {
+      bg: 'bg-indigo-600 text-white border-indigo-600',
+      tagBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      label: 'Indeed',
+      short: 'ID',
+    };
+  }
+  return {
+    bg: 'bg-zinc-800 text-white border-zinc-700',
+    tagBg: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+    label: portal || 'Direct Apply',
+    short: (company || 'AP').slice(0, 2).toUpperCase(),
+  };
+};
 
 export const SubmissionCheck: React.FC = () => {
   const [logs, setLogs] = useState<QALogRecord[]>([]);
@@ -97,9 +148,9 @@ export const SubmissionCheck: React.FC = () => {
     return matchesSearch && matchesStatus && matchesPortal;
   });
 
-  // Calculate live stats
+  // Calculate stats
   const totalQuestions = logs.reduce((sum, l) => sum + (l.qaPairs?.length || 0), 0);
-  const llmSolved = logs.reduce(
+  const contextualSolved = logs.reduce(
     (sum, l) => sum + (l.qaPairs?.filter((qa) => qa.source === 'ollama').length || 0),
     0
   );
@@ -109,22 +160,17 @@ export const SubmissionCheck: React.FC = () => {
   );
 
   return (
-    <div className="flex-1 bg-[#F8FAFC] flex flex-col h-full overflow-y-auto p-3 sm:p-6 md:p-8 font-sans">
-      <div className="max-w-4xl mx-auto w-full space-y-4 sm:space-y-6">
+    <div className="flex-1 bg-[#FAFAFA] flex flex-col h-full overflow-y-auto p-4 sm:p-6 md:p-8 font-sans">
+      <div className="max-w-4xl mx-auto w-full space-y-5 sm:space-y-6">
         
         {/* Header Title & Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200/80 pb-5">
           <div>
-            <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs font-mono tracking-wide uppercase">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span>100% Real-Time QA Telemetry</span>
-            </div>
-            <h1 className="text-2xl font-extrabold text-zinc-900 tracking-tight mt-1">Submission Check</h1>
-            <p className="text-xs font-semibold text-zinc-500 mt-0.5">
-              Live audit trail of exact questions, screening prompts, and responses filled by the agent.
+            <h1 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
+              QA &amp; Submission Audit
+            </h1>
+            <p className="text-xs text-zinc-500 font-medium mt-0.5">
+              Verified record of screening questions, field responses, and candidate data mapped during applications.
             </p>
           </div>
 
@@ -133,110 +179,110 @@ export const SubmissionCheck: React.FC = () => {
             <button
               onClick={handleExportCsv}
               disabled={logs.length === 0}
-              className="px-3 py-1.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 hover:bg-zinc-50 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs disabled:opacity-40"
+              className="px-3 py-1.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 hover:bg-zinc-50 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs disabled:opacity-40"
               title="Export as CSV spreadsheet"
             >
-              <FileSpreadsheet size={13} className="text-emerald-600" />
+              <FileSpreadsheet size={13} className="text-zinc-600" />
               <span>Export CSV</span>
             </button>
 
             <button
               onClick={handleExportJson}
               disabled={logs.length === 0}
-              className="px-3 py-1.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 hover:bg-zinc-50 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs disabled:opacity-40"
+              className="px-3 py-1.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 hover:bg-zinc-50 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs disabled:opacity-40"
               title="Export as JSON dataset"
             >
-              <FileCode size={13} className="text-cyan-600" />
-              <span>Export JSON</span>
+              <FileCode size={13} className="text-zinc-600" />
+              <span>JSON Backup</span>
             </button>
 
             <button
               onClick={handleClearHistory}
               disabled={logs.length === 0}
-              className="px-3 py-1.5 bg-white border border-zinc-200 hover:border-red-300 text-red-600 hover:bg-red-50 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs disabled:opacity-40"
+              className="px-3 py-1.5 bg-white border border-zinc-200 hover:border-red-300 text-red-600 hover:bg-red-50 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs disabled:opacity-40"
               title="Clear QA history"
             >
               <Trash2 size={13} />
-              <span>Clear Data</span>
+              <span>Clear Log</span>
             </button>
           </div>
         </div>
 
-        {/* Real-time Summary Stat Cards */}
+        {/* Clean Stat Metric Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-2xs flex flex-col">
+          <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
             <div className="flex items-center justify-between text-zinc-400 mb-1">
-              <span className="text-[11px] font-mono font-bold uppercase">Applications</span>
-              <Briefcase size={14} className="text-cyan-600" />
+              <span className="text-[11px] font-mono font-bold uppercase text-zinc-500">Applications</span>
+              <Send size={13} className="text-zinc-500" />
             </div>
-            <span className="text-xl font-extrabold text-zinc-900">{logs.length}</span>
-            <span className="text-[10px] text-zinc-400 mt-0.5">Recorded targets</span>
+            <span className="text-2xl font-black text-zinc-900 tracking-tight">{logs.length}</span>
+            <span className="text-[10px] font-medium text-zinc-400 mt-0.5">Tracked submissions</span>
           </div>
 
-          <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-2xs flex flex-col">
+          <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
             <div className="flex items-center justify-between text-zinc-400 mb-1">
-              <span className="text-[11px] font-mono font-bold uppercase">Total Q&A</span>
-              <Layers size={14} className="text-emerald-600" />
+              <span className="text-[11px] font-mono font-bold uppercase text-zinc-500">Fields Handled</span>
+              <ListChecks size={14} className="text-zinc-500" />
             </div>
-            <span className="text-xl font-extrabold text-zinc-900">{totalQuestions}</span>
-            <span className="text-[10px] text-zinc-400 mt-0.5">Inputs answered</span>
+            <span className="text-2xl font-black text-zinc-900 tracking-tight">{totalQuestions}</span>
+            <span className="text-[10px] font-medium text-zinc-400 mt-0.5">Form inputs verified</span>
           </div>
 
-          <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-2xs flex flex-col">
+          <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
             <div className="flex items-center justify-between text-zinc-400 mb-1">
-              <span className="text-[11px] font-mono font-bold uppercase">Qwen 2.5 Local</span>
-              <BrainCircuit size={14} className="text-cyan-600" />
+              <span className="text-[11px] font-mono font-bold uppercase text-zinc-500">Dynamic Forms</span>
+              <Workflow size={13} className="text-zinc-500" />
             </div>
-            <span className="text-xl font-extrabold text-cyan-700">{llmSolved}</span>
-            <span className="text-[10px] text-zinc-400 mt-0.5">Screening answers</span>
+            <span className="text-2xl font-black text-zinc-900 tracking-tight">{contextualSolved}</span>
+            <span className="text-[10px] font-medium text-zinc-400 mt-0.5">Screening answers</span>
           </div>
 
-          <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-2xs flex flex-col">
+          <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
             <div className="flex items-center justify-between text-zinc-400 mb-1">
-              <span className="text-[11px] font-mono font-bold uppercase">Persona Data</span>
-              <UserCheck size={14} className="text-fuchsia-600" />
+              <span className="text-[11px] font-mono font-bold uppercase text-zinc-500">Direct Profile</span>
+              <User size={13} className="text-zinc-500" />
             </div>
-            <span className="text-xl font-extrabold text-zinc-900">{personaInjected}</span>
-            <span className="text-[10px] text-zinc-400 mt-0.5">Credentials mapped</span>
+            <span className="text-2xl font-black text-zinc-900 tracking-tight">{personaInjected}</span>
+            <span className="text-[10px] font-medium text-zinc-400 mt-0.5">Credentials injected</span>
           </div>
         </div>
 
         {/* Filter & Search Bar */}
-        <div className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="bg-white border border-zinc-200 rounded-2xl p-3.5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 w-full sm:w-80">
             <Search size={14} className="text-zinc-400 shrink-0" />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search questions, answers, jobs..."
-              className="bg-transparent text-xs text-zinc-800 outline-none w-full font-medium"
+              placeholder="Filter by question, company, or portal..."
+              className="bg-transparent text-xs text-zinc-800 outline-none w-full font-medium placeholder:text-zinc-400"
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto text-xs font-mono">
-            {/* Status Selector */}
-            <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl">
+          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto text-xs">
+            {/* Status Segmented Control */}
+            <div className="flex items-center gap-1 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/70">
               {(['ALL', 'SUBMITTED', 'IN_PROGRESS'] as const).map((st) => (
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
-                  className={`px-2.5 py-1 rounded-lg transition-all text-[11px] font-bold ${
+                  className={`px-3 py-1 rounded-lg transition-all text-xs font-semibold ${
                     statusFilter === st
-                      ? 'bg-white text-zinc-900 shadow-2xs'
+                      ? 'bg-white text-zinc-900 shadow-2xs font-bold border border-zinc-200/60'
                       : 'text-zinc-500 hover:text-zinc-800'
                   }`}
                 >
-                  {st === 'ALL' ? 'All' : st === 'SUBMITTED' ? 'Submitted' : 'In-Progress'}
+                  {st === 'ALL' ? 'All' : st === 'SUBMITTED' ? 'Submitted' : 'In Progress'}
                 </button>
               ))}
             </div>
 
-            {/* Portal Selector */}
+            {/* Portal Dropdown */}
             {portals.length > 0 && (
               <select
                 value={portalFilter}
                 onChange={(e) => setPortalFilter(e.target.value)}
-                className="bg-zinc-100 border border-zinc-200 text-zinc-700 text-xs font-bold rounded-xl px-2.5 py-1.5 outline-none cursor-pointer"
+                className="bg-zinc-100 border border-zinc-200 text-zinc-700 text-xs font-semibold rounded-xl px-3 py-1.5 outline-none cursor-pointer hover:bg-zinc-50 transition"
               >
                 <option value="ALL">All Portals</option>
                 {portals.map((p) => (
@@ -249,98 +295,104 @@ export const SubmissionCheck: React.FC = () => {
           </div>
         </div>
 
-        {/* Submissions List */}
-        <div className="space-y-3.5">
+        {/* Submissions Ledger List */}
+        <div className="space-y-3">
           {filteredLogs.length === 0 ? (
-            <div className="bg-white border border-zinc-200/80 rounded-2xl p-12 text-center text-zinc-500 space-y-2 shadow-2xs">
-              <ClipboardCheck size={36} className="mx-auto text-zinc-300 mb-2" />
-              <p className="font-semibold text-sm text-zinc-700">No QA records matching criteria</p>
-              <p className="text-xs text-zinc-400">
-                Form questions and auto-filled answers populate live as the agent operates.
+            <div className="bg-white border border-zinc-200 rounded-2xl p-12 text-center text-zinc-500 space-y-2 shadow-2xs">
+              <Inbox size={36} className="mx-auto text-zinc-300 mb-2" />
+              <p className="font-bold text-sm text-zinc-800">No QA records found</p>
+              <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                Application questions and verified answers will automatically populate here as submissions are completed.
               </p>
             </div>
           ) : (
             filteredLogs.map((log) => {
               const isExpanded = expandedId === log.id;
               const isInProgress = log.status === 'IN_PROGRESS';
+              const portalMeta = getPortalInfo(log.portal, log.companyName);
               
               return (
                 <div 
                   key={log.id} 
                   className={`bg-white border rounded-2xl overflow-hidden shadow-2xs transition-all ${
-                    isInProgress ? 'border-cyan-300 ring-2 ring-cyan-50' : 'border-zinc-200/80 hover:border-zinc-300'
+                    isInProgress ? 'border-zinc-400' : 'border-zinc-200 hover:border-zinc-300'
                   }`}
                 >
                   <div 
-                    className="p-4 cursor-pointer flex items-center justify-between bg-white hover:bg-zinc-50/70 transition-colors"
+                    className="p-4 cursor-pointer flex items-center justify-between bg-white hover:bg-zinc-50/60 transition-colors"
                     onClick={() => setExpandedId(isExpanded ? null : log.id)}
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                        isInProgress ? 'bg-cyan-50 text-cyan-600' : 'bg-emerald-50 text-emerald-600'
-                      }`}>
-                        <Briefcase size={18} />
+                      {/* Distinctive Portal / Brand Badge */}
+                      <div className={`w-10 h-10 rounded-xl ${portalMeta.bg} font-black text-xs flex items-center justify-center shrink-0 shadow-2xs font-mono tracking-tight`}>
+                        {portalMeta.short}
                       </div>
+
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-zinc-900 truncate text-sm">{log.jobTitle}</h3>
+                          <h3 className="font-extrabold text-zinc-900 truncate text-sm">{log.jobTitle}</h3>
                           {isInProgress ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-100 text-cyan-800 border border-cyan-200 animate-pulse">
-                              LIVE DRAFT
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              IN PROGRESS
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              SUBMITTED
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                              <CheckCircle2 size={10} className="text-emerald-600" />
+                              <span>SUBMITTED</span>
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2.5 text-xs font-semibold text-zinc-500 mt-0.5">
-                          <span className="flex items-center gap-1">
-                            <Building2 size={12} />
+                        <div className="flex items-center gap-2 text-xs font-medium text-zinc-500 mt-0.5 flex-wrap">
+                          <span className="font-semibold text-zinc-800">
                             {log.companyName}
                           </span>
                           <span className="w-1 h-1 rounded-full bg-zinc-300" />
-                          <span>{log.portal}</span>
+                          <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold border ${portalMeta.tagBg}`}>
+                            {portalMeta.label}
+                          </span>
                           <span className="w-1 h-1 rounded-full bg-zinc-300" />
-                          <span className="font-mono text-[10.5px] text-zinc-400">
-                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          <span className="font-mono text-[10.5px] text-zinc-400 flex items-center gap-1">
+                            <Clock size={11} />
+                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200/60 font-mono">
-                        {log.qaPairs.length} inputs
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span className="text-xs font-bold text-zinc-700 bg-zinc-100 px-2.5 py-1 rounded-lg border border-zinc-200 font-mono">
+                        {log.qaPairs.length} {log.qaPairs.length === 1 ? 'field' : 'fields'}
                       </span>
 
                       <button
+                        type="button"
                         onClick={(e) => copyLogAnswers(e, log)}
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-cyan-700 hover:bg-cyan-50 transition-colors"
-                        title="Copy all Q&A pairs for this job"
+                        className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 transition"
+                        title="Copy all Q&A for this application"
                       >
                         {copiedId === log.id ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                       </button>
 
                       <button
+                        type="button"
                         onClick={(e) => handleDeleteEntry(e, log.id)}
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="Delete this record"
+                        className="p-1.5 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 transition"
+                        title="Delete record"
                       >
                         <Trash2 size={14} />
                       </button>
 
-                      <div className="text-zinc-400 pl-1">
-                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      <div className="text-zinc-400 pl-0.5">
+                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </div>
                     </div>
                   </div>
                   
                   {isExpanded && (
-                    <div className="border-t border-zinc-100 bg-zinc-50/50 p-4 sm:p-5 space-y-3.5 animate-fadeIn">
+                    <div className="border-t border-zinc-100 bg-zinc-50/70 p-4 sm:p-5 space-y-3 animate-fadeIn">
                       {log.qaPairs.length === 0 ? (
                         <p className="text-xs font-medium text-zinc-500 italic px-2">
-                          No fields auto-filled for this application yet.
+                          No fields logged for this application.
                         </p>
                       ) : (
                         log.qaPairs.map((qa, index) => {
@@ -351,14 +403,14 @@ export const SubmissionCheck: React.FC = () => {
                           return (
                             <div 
                               key={index} 
-                              className="bg-white border border-zinc-200/90 hover:border-zinc-300 rounded-2xl p-4 shadow-xs transition-all flex flex-col gap-3 group"
+                              className="bg-white border border-zinc-200/90 rounded-xl p-4 shadow-2xs transition-all space-y-2.5 group"
                             >
-                              {/* Question Block */}
-                              <div className="space-y-1.5">
+                              {/* Question Line */}
+                              <div className="space-y-1">
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-extrabold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/70 flex items-center gap-1">
-                                      <span>Question #{index + 1}</span>
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-zinc-100 text-zinc-700 border border-zinc-200">
+                                      Field #{index + 1}
                                     </span>
                                     {qa.category && (
                                       <span className="text-[10px] font-mono text-zinc-400 font-semibold">
@@ -367,36 +419,30 @@ export const SubmissionCheck: React.FC = () => {
                                     )}
                                   </div>
 
-                                  {/* AI / Persona Source Badge */}
-                                  <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold">
+                                  {/* Clean Source Badge */}
+                                  <div className="flex items-center gap-1 text-[10px] font-mono font-bold">
                                     {qa.source === 'ollama' ? (
-                                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-50 text-cyan-800 border border-cyan-200 shadow-2xs">
-                                        <BrainCircuit size={11} className="text-cyan-600" />
-                                        <span>Qwen 2.5 Local {qa.confidence ? `(${Math.round(qa.confidence * 100)}%)` : ''}</span>
+                                      <span className="px-2 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200">
+                                        Dynamic Screen Response
                                       </span>
                                     ) : (
-                                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-zinc-100 text-zinc-700 border border-zinc-200 shadow-2xs">
-                                        <UserCheck size={11} className="text-zinc-500" />
-                                        <span>Candidate Profile</span>
+                                      <span className="px-2 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200">
+                                        Candidate Profile
                                       </span>
                                     )}
                                   </div>
                                 </div>
 
-                                <div className="text-xs sm:text-sm font-bold text-zinc-900 leading-snug pl-0.5">
+                                <div className="text-xs sm:text-sm font-bold text-zinc-900 leading-snug">
                                   {qa.question}
                                 </div>
                               </div>
 
-                              {/* Divider */}
-                              <div className="h-px bg-zinc-100 w-full" />
-
-                              {/* Answer Block */}
-                              <div className="space-y-1.5">
+                              {/* Answer Box */}
+                              <div className="space-y-1 pt-1 border-t border-zinc-100">
                                 <div className="flex items-center justify-between">
-                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/70 flex items-center gap-1">
-                                    <Check size={10} className="text-emerald-600" />
-                                    <span>Answer</span>
+                                  <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase">
+                                    Verified Value
                                   </span>
 
                                   <button
@@ -407,31 +453,31 @@ export const SubmissionCheck: React.FC = () => {
                                       setCopiedId(`${log.id}-${index}`);
                                       setTimeout(() => setCopiedId(null), 2000);
                                     }}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-mono text-zinc-400 hover:text-zinc-700 flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-zinc-100"
-                                    title="Copy answer"
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-mono text-zinc-400 hover:text-zinc-800 flex items-center gap-1 px-2 py-0.5 rounded hover:bg-zinc-100"
+                                    title="Copy value"
                                   >
                                     {isCopied ? (
                                       <>
-                                        <Check size={12} className="text-emerald-600" />
-                                        <span className="text-emerald-600 font-bold">Copied!</span>
+                                        <Check size={11} className="text-emerald-600" />
+                                        <span className="text-emerald-600 font-bold">Copied</span>
                                       </>
                                     ) : (
                                       <>
-                                        <Copy size={12} />
+                                        <Copy size={11} />
                                         <span>Copy</span>
                                       </>
                                     )}
                                   </button>
                                 </div>
 
-                                <div className={`text-xs sm:text-sm font-medium rounded-xl p-3 border transition-all ${
+                                <div className={`text-xs sm:text-sm font-medium rounded-lg p-2.5 border transition-all ${
                                   isYesNo
                                     ? qa.answer.toLowerCase() === 'yes'
-                                      ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950 font-bold'
-                                      : 'bg-zinc-100/80 border-zinc-200 text-zinc-800 font-bold'
+                                      ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 font-bold'
+                                      : 'bg-zinc-100 border-zinc-200 text-zinc-800 font-bold'
                                     : isNumeric
-                                    ? 'bg-cyan-50/50 border-cyan-200/80 text-cyan-950 font-mono font-bold text-base'
-                                    : 'bg-zinc-50 border-zinc-200/70 text-zinc-800 leading-relaxed font-sans'
+                                    ? 'bg-zinc-50 border-zinc-200 text-zinc-900 font-mono font-bold'
+                                    : 'bg-zinc-50 border-zinc-200 text-zinc-800 leading-relaxed font-sans'
                                 }`}>
                                   {qa.answer}
                                 </div>

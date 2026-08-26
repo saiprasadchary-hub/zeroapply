@@ -5,7 +5,7 @@ export const SUBMISSION_CONFIRMED_SCRIPT = `
   const text = (dialogs.length ? dialogs : [document.body])
     .map((element) => String(element?.innerText || '').toLowerCase())
     .join('\n');
-  
+
   const hasModalConfirmation = /application (?:has been )?submitted|application was sent|application sent|thanks for applying|thank you for applying|your application was sent|your application was submitted|we received your application|turn your resume into a profile|keep track of your application in the|applied [0-9]+|applied on linkedin/i.test(text);
   if (hasModalConfirmation) return true;
 
@@ -15,11 +15,67 @@ export const SUBMISSION_CONFIRMED_SCRIPT = `
 })();
 `;
 
-/** Confirms that the agent is still acting inside a visible Easy Apply dialog. */
+/** Automatically dismisses LinkedIn "Job search safety reminder" dialogs by clicking "Continue applying" */
+export const HANDLE_SAFETY_REMINDER_SCRIPT = `
+(function handleSafetyReminderModal() {
+  const isVisible = (el) => el && el.offsetParent !== null && !el.disabled;
+
+  // 1. Look for dialog containing "Job search safety reminder" or "Report suspicious jobs"
+  const dialogs = Array.from(document.querySelectorAll('[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal, div[data-test-modal]')).filter(isVisible);
+  for (const dialog of dialogs) {
+    const text = String(dialog.innerText || dialog.textContent || '').toLowerCase();
+    if (text.includes('job search safety reminder') || text.includes('safety reminder') || text.includes('report suspicious jobs') || text.includes('research the company')) {
+      const buttons = Array.from(dialog.querySelectorAll('button, [role="button"], a')).filter(isVisible);
+      const continueBtn = buttons.find(b => {
+        const bText = String(b.innerText || b.textContent || b.getAttribute('aria-label') || '').trim().toLowerCase();
+        return bText.includes('continue applying') || bText === 'continue applying' || bText === 'continue';
+      });
+
+      if (continueBtn) {
+        continueBtn.click();
+        return { handled: true, action: 'clicked_continue_applying' };
+      }
+    }
+  }
+
+  // 2. Global search for any visible "Continue applying" button
+  const allButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(isVisible);
+  const globalContinueBtn = allButtons.find(b => {
+    const bText = String(b.innerText || b.textContent || b.getAttribute('aria-label') || '').trim().toLowerCase();
+    return bText.includes('continue applying') || bText === 'continue applying';
+  });
+
+  if (globalContinueBtn) {
+    globalContinueBtn.click();
+    return { handled: true, action: 'clicked_global_continue_applying' };
+  }
+
+  return { handled: false };
+})();
+`;
+
+/** Confirms that the agent is still acting inside a visible Easy Apply dialog, auto-clicking safety reminders if encountered. */
 export const EASY_APPLY_MODAL_STATE_SCRIPT = `
 (function getEasyApplyModalState() {
   const visible = (element) => element instanceof HTMLElement && element.offsetParent !== null;
   const dialogs = Array.from(document.querySelectorAll('[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal')).filter(visible);
+
+  // Check if a safety reminder modal is active and auto-click Continue applying
+  for (const d of dialogs) {
+    const text = String(d.innerText || d.textContent || '').toLowerCase();
+    if (text.includes('job search safety reminder') || text.includes('safety reminder') || text.includes('report suspicious jobs')) {
+      const btns = Array.from(d.querySelectorAll('button, [role="button"]')).filter(visible);
+      const cont = btns.find(b => {
+        const t = String(b.innerText || b.textContent || b.getAttribute('aria-label') || '').trim().toLowerCase();
+        return t.includes('continue applying') || t === 'continue applying' || t === 'continue';
+      });
+      if (cont) {
+        cont.click();
+        return { isOpen: true, hasForm: false, clickedSafetyReminder: true };
+      }
+    }
+  }
+
   const dialog = dialogs.find((element) => /easy apply|application|resume|contact info/i.test(String(element.innerText || ''))) || dialogs[0];
   if (!dialog) return { isOpen: false, hasForm: false };
   const hasForm = Boolean(dialog.querySelector('input, textarea, select, [role="combobox"], [role="radiogroup"], button'));

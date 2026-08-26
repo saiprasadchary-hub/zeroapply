@@ -141,7 +141,49 @@ input:focus {
   background: #94a3b8;
 }
 
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #0891b2;
+  outline-offset: 2px;
+}
+
 /* Global smooth transitions */
 *, *::before, *::after {
   scroll-behavior: smooth;
+}
+
+/* ATS Resume PDF & Print Media Optimization */
+@media print {
+  body, html {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  header, nav, footer, .resizer, button, select, input, textarea, .shadow-md, .shadow-lg, .shadow-2xs {
+    box-shadow: none !important;
+  }
+
+  /* Hide app chrome when printing */
+  header, nav, footer, .border-r {
+    display: none !important;
+  }
+
+  /* Expand canvas to full page */
+  #ats-resume-canvas {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    display: block !important;
+    page-break-inside: auto;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm 12mm 15mm;
+  }
 }

@@ -4,52 +4,88 @@
   "version": "1.0.0",
   "description": "ZeroApply High-Output Persona Management Desktop App",
   "author": "ZeroApply Team",
+  "engines": {
+    "node": ">=22.13.0",
+    "npm": ">=10"
+  },
   "type": "module",
   "main": "main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "lint": "oxlint --ignore-pattern release_exe/** --ignore-pattern release_setup/** --ignore-pattern dist/**",
+    "test": "tsx test/ats_detection.test.ts && tsx test/auth_policy.test.ts && tsx test/security_policy.test.ts && tsx test/browser_navigation.test.ts && tsx test/browser_core.test.ts && tsx test/electron_browser_features.test.ts && tsx test/easy_apply_safety.test.ts && tsx test/standard_forms_safety.test.ts && tsx test/single_model_policy.test.ts && tsx test/production_regressions.test.ts",
+    "test:integration": "tsx test/agent_integration.test.ts",
+    "verify": "npm run lint && npm run build && npm test",
     "preview": "vite preview",
     "electron": "electron .",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && set ELECTRON_RENDERER_URL=http://localhost:5173&& electron .\"",
-    "dist:exe": "npm run build && electron-builder --win dir"
+    "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron . --dev\"",
+    "pack:exe:unsigned": "npm run build && npx --no-install @electron/packager . ZeroApply --platform=win32 --arch=x64 --icon=public/logo.ico --out=release_exe_dev --overwrite --prune=true --asar --ignore=\"^(/(release|release_exe.*|release_setup.*|release_build|dist_desktop|dist_exe|dist_portable|scripts|node_modules|src|test|\\.git|\\.firebase|\\.agents)|/AgentBrowser/.*\\.(tsx|ts)$|/(README\\.md|build-exe\\.bat|run-desktop-app\\.bat|firebase\\.json|firestore\\..*|tsconfig.*\\.json|vite\\.config\\.ts|\\.oxlintrc\\.json|package-lock\\.json)$)\"",
+    "dist:exe": "npm run dist:setup",
+    "dist:setup": "set ZEROAPPLY_REQUIRE_SIGNING=1&& node scripts/buildAll.cjs",
+    "dist:setup:unsigned": "node scripts/buildAll.cjs",
+    "dist:portable": "npm run build && electron-builder --win portable",
+    "dist:installer": "npm run dist:setup"
   },
   "build": {
     "appId": "com.zeroapply.app",
     "productName": "ZeroApply Desktop",
     "npmRebuild": false,
     "directories": {
-      "output": "dist_desktop"
+      "output": "release_build"
     },
     "files": [
       "dist/**/*",
       "main.js",
+      "AgentBrowser/browser-navigation.js",
+      "AgentBrowser/electron-browser-features.js",
       "preload-popup.cjs",
+      "AgentBrowser/preload-webview.cjs",
       "package.json"
     ],
     "win": {
-      "target": "dir"
+      "icon": "public/logo.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "ZeroApply",
+      "artifactName": "ZeroApply-Setup.exe",
+      "installerIcon": "public/logo.ico",
+      "uninstallerIcon": "public/logo.ico",
+      "installerHeaderIcon": "public/logo.ico",
+      "runAfterFinish": true
     }
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.3.3",
+    "firebase": "^12.18.0",
     "jszip": "^3.10.1",
     "lucide-react": "^1.26.0",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "tailwindcss": "^4.3.3"
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@tailwindcss/vite": "4.3.3",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "concurrently": "^9.1.2",
-    "electron": "^41.7.1",
+    "electron": "^41.10.6",
     "electron-builder": "^26.15.3",
+    "innosetup-compiler": "6.3.1",
     "oxlint": "^1.71.0",
+    "png-to-ico": "^3.0.2",
+    "tailwindcss": "4.3.3",
     "tsx": "^4.23.7",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",

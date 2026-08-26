@@ -24,57 +24,78 @@ export function generateHumanBypassScript(instructionsJson: string): string {
     } catch {}
   }
 
-  // High-Tech In-Page Element Laser Spotlight
-  function showElementSpotlight(element, labelText) {
-    if (!element) return () => {};
-    const prevOutline = element.style.outline;
-    const prevBoxShadow = element.style.boxShadow;
-    const prevTransition = element.style.transition;
 
-    element.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-    element.style.outline = '2px solid #06b6d4';
-    element.style.boxShadow = '0 0 0 4px rgba(6, 182, 212, 0.25), 0 0 16px rgba(6, 182, 212, 0.4)';
+  // Remove any legacy laser badges or popup bars if present
+  try {
+    const oldBadges = document.querySelectorAll('#za_laser_badge, [id*="za_laser"]');
+    oldBadges.forEach(b => b.parentNode && b.parentNode.removeChild(b));
+  } catch {}
 
-    // Optional floating beacon badge
-    let badge = null;
-    try {
-      const rect = element.getBoundingClientRect();
-      badge = document.createElement('div');
-      badge.id = 'za_laser_badge';
-      badge.style.cssText = 'position:fixed;z-index:999999;background:linear-gradient(135deg,#09090b,#18181b);color:#22d3ee;border:1px solid rgba(6,182,212,0.4);border-radius:6px;padding:3px 8px;font-family:ui-monospace,monospace;font-size:10px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,0.5);pointer-events:none;display:flex;align-items:center;gap:4px;letter-spacing:0.05em;';
-      badge.innerHTML = '<span style="width:6px;height:6px;background:#06b6d4;border-radius:50%;display:inline-block;animation:ping 1s cubic-bezier(0,0,0.2,1) infinite;"></span> ' + (labelText || 'ZeroApply');
-      badge.style.left = Math.max(10, rect.left) + 'px';
-      badge.style.top = Math.max(10, rect.top - 26) + 'px';
-      document.body.appendChild(badge);
-    } catch {}
+  // Inject High-End Visual Virtual Mouse Pointer
+  let pointerEl = document.getElementById('za-virtual-cursor');
+  if (!pointerEl) {
+    const container = document.createElement('div');
+    container.id = 'za-virtual-pointer-root';
+    container.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none!important;user-select:none!important;';
 
-    return () => {
-      try {
-        element.style.outline = prevOutline;
-        element.style.boxShadow = prevBoxShadow;
-        element.style.transition = prevTransition;
-        if (badge && badge.parentNode) {
-          badge.parentNode.removeChild(badge);
-        }
-      } catch {}
-    };
+    const cursorSvg = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));"><path d="M3 3L10.07 20.97L13.58 13.58L20.97 10.07L3 3Z" fill="#09090b" stroke="#ffffff" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+
+    pointerEl = document.createElement('div');
+    pointerEl.id = 'za-virtual-cursor';
+    pointerEl.innerHTML = cursorSvg;
+    pointerEl.style.cssText = 'position:fixed;top:0;left:0;width:24px;height:24px;transform:translate3d(' + (window.innerWidth/2) + 'px,' + (window.innerHeight/2) + 'px,0);transition:transform 0.22s cubic-bezier(0.2,0.8,0.2,1);pointer-events:none!important;will-change:transform;display:flex;align-items:flex-start;';
+
+    const tag = document.createElement('div');
+    tag.id = 'za-pointer-tag';
+    tag.innerText = 'ZeroApply';
+    tag.style.cssText = 'margin-left:16px;margin-top:14px;padding:2px 7px;background:#09090b;color:#ffffff;font-size:10px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,sans-serif;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.15);white-space:nowrap;letter-spacing:0.02em;opacity:0.92;';
+    pointerEl.appendChild(tag);
+
+    container.appendChild(pointerEl);
+    document.documentElement.appendChild(container);
   }
 
-  // Simulates a ghost mouse moving to the element
-  function simulateMouse(element) {
-    if (!element) return;
+  // Animate Virtual Mouse smoothly to element with realistic click dip & ripple
+  async function animateVirtualMouse(element) {
+    if (!element || !pointerEl) return;
     const rect = element.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
+    const targetX = rect.left + rect.width / 2;
+    const targetY = rect.top + rect.height / 2;
 
+    pointerEl.style.transform = 'translate3d(' + targetX + 'px, ' + targetY + 'px, 0)';
+    await sleep(220);
+
+    // Micro click dip animation
+    pointerEl.style.transform = 'translate3d(' + targetX + 'px, ' + targetY + 'px, 0) scale(0.85)';
+    setTimeout(() => {
+      if (pointerEl) pointerEl.style.transform = 'translate3d(' + targetX + 'px, ' + targetY + 'px, 0) scale(1)';
+    }, 100);
+
+    // Click ripple wave
+    try {
+      const ripple = document.createElement('div');
+      ripple.style.cssText = 'position:fixed;left:' + targetX + 'px;top:' + targetY + 'px;width:24px;height:24px;margin-left:-12px;margin-top:-12px;border-radius:50%;border:1.5px solid #09090b;background:rgba(9,9,11,0.08);pointer-events:none!important;animation:zaRipple 0.35s cubic-bezier(0.1,0.8,0.3,1) forwards;';
+      if (!document.getElementById('za-ripple-style')) {
+        const style = document.createElement('style');
+        style.id = 'za-ripple-style';
+        style.innerHTML = '@keyframes zaRipple { 0% { transform: scale(0.3); opacity: 0.8; } 100% { transform: scale(1.6); opacity: 0; } }';
+        document.head.appendChild(style);
+      }
+      document.body.appendChild(ripple);
+      setTimeout(() => {
+        if (ripple.parentNode) ripple.parentNode.removeChild(ripple);
+      }, 380);
+    } catch {}
+
+    // Native browser mouse event dispatch
     const eventNames = ['mousemove', 'mouseenter', 'mouseover', 'mousedown', 'mouseup'];
     eventNames.forEach(type => {
       const e = new MouseEvent(type, {
         bubbles: true,
         cancelable: true,
         view: window,
-        clientX: centerX,
-        clientY: centerY
+        clientX: targetX,
+        clientY: targetY
       });
       element.dispatchEvent(e);
     });
@@ -285,12 +306,10 @@ export function generateHumanBypassScript(instructionsJson: string): string {
         status: 'running'
       });
 
-      // Highlight DOM element with laser spotlight
-      const removeSpotlight = showElementSpotlight(el, fieldLabel);
 
-      // Simulate mouse finding the element
-      simulateMouse(el);
-      await sleep(randomDelay(80, 220));
+      // Animate virtual mouse smoothly to element with click ripple
+      await animateVirtualMouse(el);
+      await sleep(randomDelay(80, 180));
       
       // Scroll element into view smoothly if not visible
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -582,9 +601,8 @@ export function generateHumanBypassScript(instructionsJson: string): string {
         await simulateTyping(el, textToType);
         filledCount++;
       }
-      
-      removeSpotlight();
-      await sleep(randomDelay(200, 500));
+
+      await sleep(randomDelay(150, 350));
 
     } catch (e) {
       console.warn('Field fill error for selector ' + inst.selector, e);

@@ -39,16 +39,17 @@ class ErrorLoggerService {
 
   public getErrors(): ErrorLogRecord[] {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
+      const data = getSecureItem(STORAGE_KEY);
       return data ? JSON.parse(data) : [];
-    } catch {
+    } catch (error) {
+      console.warn('Failed to read error logs:', error);
       return [];
     }
   }
 
   private saveErrors(errors: ErrorLogRecord[]) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(errors.slice(0, 150)));
+      setSecureItem(STORAGE_KEY, JSON.stringify(errors.slice(0, 150)));
     } catch (e) {
       console.error('Failed to save error logs:', e);
     }
@@ -77,8 +78,10 @@ class ErrorLoggerService {
 
   public clearErrors(): void {
     try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {}
+      removeSecureItem(STORAGE_KEY);
+    } catch (error) {
+      console.warn('Failed to clear error logs:', error);
+    }
     this.notifyListeners();
   }
 
@@ -106,3 +109,4 @@ class ErrorLoggerService {
 }
 
 export const ErrorLogger = new ErrorLoggerService();
+import { getSecureItem, removeSecureItem, setSecureItem } from '../../services/secureStorage';

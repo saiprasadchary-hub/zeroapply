@@ -20,7 +20,7 @@ export interface PersonaData {
   gitHub: string;
   portfolio: string;
   experienceYears: number;
-  minSalary: number; // in thousands (e.g., 150 = $150k)
+  minSalary: number; // in LPA / Lakhs Per Annum (e.g., 12 = ₹12 LPA)
   workPreference: WorkLocation;
   tone: PersonaTone;
   techStack: string[];

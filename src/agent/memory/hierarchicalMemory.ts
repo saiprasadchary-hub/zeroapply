@@ -124,7 +124,7 @@ class HierarchicalMemoryService {
       fullName: persona.fullName || 'Candidate',
       yearsOfExperience: persona.experienceYears || 5,
       skills: persona.techStack || ['Software Engineering', 'TypeScript', 'React'],
-      desiredSalary: (persona.minSalary || 150) * 1000,
+      desiredSalary: (persona.minSalary || 12) * 100000,
       education: persona.resumeChunks?.education || "Bachelor's Degree in Computer Science",
     };
 

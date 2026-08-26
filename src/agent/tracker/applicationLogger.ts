@@ -1,3 +1,6 @@
+import { FirebaseCloudSync } from '../../services/firebase/cloudSyncService';
+import { getSecureItem, removeSecureItem, setSecureItem } from '../../services/secureStorage';
+
 export interface ApplicationLogRecord {
   id: string;
   timestamp: string;
@@ -29,9 +32,10 @@ export class ApplicationLogger {
   }
   public static getLogs(): ApplicationLogRecord[] {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
+      const data = getSecureItem(STORAGE_KEY);
       return data ? JSON.parse(data) : [];
-    } catch {
+    } catch (error) {
+      console.warn('Failed to read application logs:', error);
       return [];
     }
   }
@@ -45,19 +49,44 @@ export class ApplicationLogger {
     };
     logs.unshift(newRecord);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(logs.slice(0, 100)));
+      setSecureItem(STORAGE_KEY, JSON.stringify(logs.slice(0, 100)));
     } catch (e) {
       console.error('Failed to save application log:', e);
     }
     this.notifyListeners();
+    void FirebaseCloudSync.logAppliedJob({
+      jobId: newRecord.id,
+      title: newRecord.jobTitle,
+      company: newRecord.companyName,
+      platform: newRecord.portal,
+      url: newRecord.url,
+      status: newRecord.status === 'SUCCESS' ? 'applied' : 'failed',
+    });
     return newRecord;
   }
 
   public static clearLogs(): void {
     try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {}
+      removeSecureItem(STORAGE_KEY);
+    } catch (error) {
+      console.warn('Failed to clear application logs:', error);
+    }
     this.notifyListeners();
+  }
+
+  public static deleteLog(id: string): void {
+    const logs = this.getLogs().filter((l) => l.id !== id);
+    try {
+      setSecureItem(STORAGE_KEY, JSON.stringify(logs));
+    } catch (e) {
+      console.error('Failed to delete application log:', e);
+    }
+    this.notifyListeners();
+  }
+
+  public static exportToJson(): string {
+    const logs = this.getLogs();
+    return JSON.stringify(logs, null, 2);
   }
 
   public static exportToCsv(): string {

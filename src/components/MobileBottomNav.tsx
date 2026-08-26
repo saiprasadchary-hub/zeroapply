@@ -1,18 +1,16 @@
 import React from 'react';
-import { Layers, LayoutDashboard, Terminal, ClipboardCheck, ShieldAlert } from 'lucide-react';
+import { Layers, LayoutDashboard, ClipboardCheck, FileText } from 'lucide-react';
 
-export type NavTab = 'dashboard' | 'browser' | 'process' | 'errors' | 'qa';
+export type NavTab = 'dashboard' | 'browser' | 'qa' | 'resume';
 
 interface MobileBottomNavProps {
   activeTab: NavTab;
   setActiveTab: (tab: NavTab) => void;
-  errorCount?: number;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeTab,
   setActiveTab,
-  errorCount = 0,
 }) => {
   const navItems: Array<{
     id: NavTab;
@@ -36,13 +34,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       activeBg: 'bg-cyan-50 text-cyan-700',
     },
     {
-      id: 'process',
-      label: 'Process',
-      icon: Terminal,
-      color: 'text-fuchsia-600',
-      activeBg: 'bg-fuchsia-50 text-fuchsia-700',
-    },
-    {
       id: 'qa',
       label: 'QA Check',
       icon: ClipboardCheck,
@@ -50,11 +41,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       activeBg: 'bg-emerald-50 text-emerald-700',
     },
     {
-      id: 'errors',
-      label: 'Errors',
-      icon: ShieldAlert,
-      color: 'text-red-600',
-      activeBg: 'bg-red-50 text-red-700',
+      id: 'resume',
+      label: 'Resume',
+      icon: FileText,
+      color: 'text-cyan-600',
+      activeBg: 'bg-cyan-50 text-cyan-700',
     },
   ];
 
@@ -95,16 +86,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               {/* Active Indicator Dot */}
               {isActive && (
                 <span className="w-1.5 h-1.5 rounded-full bg-zinc-900 absolute -bottom-0.5" />
-              )}
-
-              {/* Notification Badge for Errors */}
-              {item.id === 'errors' && errorCount > 0 && (
-                <span className="absolute top-0 right-2 flex h-4 w-4">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 text-[9px] text-white items-center justify-center font-black shadow-xs">
-                    {errorCount > 9 ? '9+' : errorCount}
-                  </span>
-                </span>
               )}
             </button>
           );

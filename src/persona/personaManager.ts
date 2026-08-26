@@ -1,5 +1,7 @@
 import type { PersonaData } from '../types';
 import type { SavedResumeFile } from '../agent/autofill/resumeInjector';
+import { FirebaseCloudSync } from '../services/firebase/cloudSyncService';
+import { getSecureItem, setSecureItem } from '../services/secureStorage';
 
 export interface PersonaProfile {
   id: string;
@@ -21,7 +23,7 @@ const DEFAULT_PERSONA_DATA: PersonaData = {
   gitHub: '',
   portfolio: '',
   experienceYears: 0,
-  minSalary: 50,
+  minSalary: 12,
   workPreference: 'Remote',
   tone: 'Confident',
   techStack: [],
@@ -45,13 +47,14 @@ const DEFAULT_INITIAL_PROFILES: PersonaProfile[] = [
 
 export class PersonaManager {
   private static inMemoryProfiles: PersonaProfile[] | null = null;
+  private static cloudSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
   public static getProfiles(): PersonaProfile[] {
     if (this.inMemoryProfiles && this.inMemoryProfiles.length > 0) {
       return this.inMemoryProfiles;
     }
     try {
-      const raw = localStorage.getItem(PROFILES_STORAGE_KEY);
+      const raw = getSecureItem(PROFILES_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -59,6 +62,9 @@ export class PersonaManager {
           parsed.forEach((p: any) => {
             if (p.data && (p.data.applicationLimit === 50 || p.data.applicationLimit === undefined)) {
               p.data.applicationLimit = 5;
+            }
+            if (p.data && (p.data.minSalary === 50 || p.data.minSalary === undefined || p.data.minSalary === 150)) {
+              p.data.minSalary = 12;
             }
             if (p.data?.resumeChunks?.languages && techRegex.test(p.data.resumeChunks.languages)) {
               const techContent = p.data.resumeChunks.languages;
@@ -84,7 +90,7 @@ export class PersonaManager {
   public static saveProfiles(profiles: PersonaProfile[]): void {
     this.inMemoryProfiles = profiles;
     try {
-      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(profiles));
+      setSecureItem(PROFILES_STORAGE_KEY, JSON.stringify(profiles));
     } catch (e) {
       console.warn('LocalStorage quota limit reached when saving profiles; falling back to memory cache:', e);
       // Attempt saving with stripped large binary payloads if quota is exceeded
@@ -93,21 +99,51 @@ export class PersonaManager {
           ...p,
           savedResume: p.savedResume ? { name: p.savedResume.name, type: p.savedResume.type, base64Data: '' } : null
         }));
-        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(leanProfiles));
-      } catch {}
+        setSecureItem(PROFILES_STORAGE_KEY, JSON.stringify(leanProfiles));
+      } catch (fallbackError) {
+        console.warn('Could not save reduced persona profiles:', fallbackError);
+      }
     }
+
+    if (this.cloudSaveTimer) clearTimeout(this.cloudSaveTimer);
+    this.cloudSaveTimer = setTimeout(() => {
+      const leanProfiles = profiles.map(({ savedResume: _savedResume, ...profile }) => profile);
+      void FirebaseCloudSync.savePersonaProfiles(leanProfiles, this.getActiveProfileId());
+    }, 800);
+  }
+
+  public static restoreCloudProfiles(
+    cloudProfiles: Omit<PersonaProfile, 'savedResume'>[],
+    activeProfileId: string,
+  ): PersonaProfile[] {
+    if (cloudProfiles.length === 0) return this.getProfiles();
+
+    const localResumeById = new Map(
+      this.getProfiles().map((profile) => [profile.id, profile.savedResume]),
+    );
+    const restored = cloudProfiles.slice(0, 50).map((profile) => ({
+      ...profile,
+      savedResume: localResumeById.get(profile.id) ?? null,
+    }));
+    this.inMemoryProfiles = restored;
+    setSecureItem(PROFILES_STORAGE_KEY, JSON.stringify(restored));
+    const validActiveId = restored.some((profile) => profile.id === activeProfileId)
+      ? activeProfileId
+      : restored[0].id;
+    setSecureItem(ACTIVE_PROFILE_ID_KEY, validActiveId);
+    return restored;
   }
 
   public static getActiveProfileId(): string {
     const profiles = this.getProfiles();
-    const activeId = localStorage.getItem(ACTIVE_PROFILE_ID_KEY);
+    const activeId = getSecureItem(ACTIVE_PROFILE_ID_KEY);
     const exists = profiles.some(p => p.id === activeId);
     if (exists && activeId) return activeId;
     return profiles[0]?.id || 'default-profile-1';
   }
 
   public static setActiveProfileId(id: string): void {
-    localStorage.setItem(ACTIVE_PROFILE_ID_KEY, id);
+    setSecureItem(ACTIVE_PROFILE_ID_KEY, id);
   }
 
   public static getActiveProfile(): PersonaProfile {

@@ -151,7 +151,10 @@ export async function mapPersonaToFields(
 
     if (category === 'screeningQuestion') {
       if (field.label) {
-        const solved = await solveScreeningQuestion(field.label, persona, { availableOptions: field.options });
+        const solved = await solveScreeningQuestion(field.label, persona, {
+          availableOptions: field.options,
+          errorMessage: field.errorMessage,
+        });
         fillValue = solved.answer;
       }
     } else if (category !== 'ignore') {
@@ -160,11 +163,26 @@ export async function mapPersonaToFields(
       if ((field.type === 'select' || field.type === 'custom_dropdown' || field.type === 'radio') && field.options && field.options.length > 0) {
         const directMatch = field.options.some(o => o.toLowerCase().trim() === fillValue.toLowerCase().trim());
         if (!directMatch && field.label) {
-          const refined = await solveScreeningQuestion(field.label, persona, { availableOptions: field.options });
+          const refined = await solveScreeningQuestion(field.label, persona, {
+            availableOptions: field.options,
+            errorMessage: field.errorMessage,
+          });
           if (refined.answer) {
             fillValue = refined.answer;
           }
         }
+      }
+    }
+
+    // Active error check: if form requires decimal larger than 0.0 or pure numeric
+    const hasDecimalError = Boolean(field.errorMessage && /decimal|larger than|0\.0|number/i.test(field.errorMessage));
+    if (hasDecimalError) {
+      const matchNum = fillValue.match(/\b\d+(?:\.\d+)?\b/);
+      if (matchNum && parseFloat(matchNum[0]) > 0) {
+        fillValue = matchNum[0];
+      } else {
+        const fallbackSalary = (persona.minSalary ? (persona.minSalary >= 1000 ? persona.minSalary : persona.minSalary * 100000) : 3300);
+        fillValue = String(fallbackSalary);
       }
     }
 

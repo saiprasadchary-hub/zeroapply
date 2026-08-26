@@ -62,21 +62,21 @@ Certifications: AWS Certified Solutions Architect, CKA Certified Kubernetes Admi
 
 async function runSuite() {
   console.log('====================================================');
-  console.log('🚀 ZEROAPPLY MULTIMODAL AGENT INTEGRATION TEST SUITE');
+  console.log('🚀 ZEROAPPLY DOM-FIRST AGENT INTEGRATION TEST SUITE');
   console.log('====================================================\n');
   let passed = 0;
   let failed = 0;
 
   // TEST 1: Ollama & Qwen 2.5 (3B) Engine Verification
-  console.log('▶ TEST 1: Checking Ollama Engine & qwen2.5:3b health...');
+  console.log('▶ TEST 1: Checking Ollama Engine & qwen2.5:1.5b health...');
   try {
-    const status = await checkOllamaStatus('qwen2.5:3b');
+    const status = await checkOllamaStatus();
     console.log('   Status Response:', status);
     if (status.online && status.modelAvailable) {
-      console.log('   ✅ TEST 1 PASSED: qwen2.5:3b is online (Latency: ' + status.latencyMs + 'ms)');
+      console.log('   ✅ TEST 1 PASSED: qwen2.5:1.5b is online (Latency: ' + status.latencyMs + 'ms)');
       passed++;
     } else {
-      console.log('   ⚠️ TEST 1 WARNING: Ollama server or qwen2.5:3b not immediately responding online. Fallback heuristic available.');
+      console.log('   ⚠️ TEST 1 WARNING: Ollama server or qwen2.5:1.5b not immediately responding online. Fallback heuristic available.');
       passed++;
     }
   } catch (e) {
@@ -189,7 +189,12 @@ async function runSuite() {
     console.log('   --------------------------------------------------');
     console.log(coverLetter.substring(0, 300) + '...');
     console.log('   --------------------------------------------------');
-    if (coverLetter && coverLetter.includes('DeepMind') && coverLetter.length > 100) {
+    if (
+      coverLetter
+      && coverLetter.includes('DeepMind')
+      && coverLetter.length > 100
+      && !/\[[^\]\n]{2,80}\]|your address|city,? state,? zip|hiring manager(?:'s)? name/i.test(coverLetter)
+    ) {
       console.log('   ✅ TEST 5 PASSED: Tailored employer pitch created dynamically!');
       passed++;
     } else {
@@ -256,7 +261,16 @@ async function runSuite() {
     console.log(`   Optimized Annual Bid: ${optimalAnnual.currency}${optimalAnnual.value} (${optimalAnnual.rationale})`);
     console.log(`   Optimized Hourly Bid: ${optimalHourly.currency}${optimalHourly.value} (${optimalHourly.rationale})`);
 
-    if (annualRange && annualRange.min === 140000 && annualRange.max === 180000 && optimalAnnual.numericValue === 170000) {
+    if (
+      annualRange?.min === 140000
+      && annualRange.max === 180000
+      && hourlyRange?.min === 55
+      && hourlyRange.max === 75
+      && hourlyRange.period === 'hourly'
+      && optimalAnnual.numericValue === 170000
+      && optimalHourly.numericValue === 70
+      && optimalHourly.currency === '$'
+    ) {
       console.log('   ✅ TEST 7 PASSED: Salary Optimizer calculated precise 75th percentile market bids!');
       passed++;
     } else {
@@ -284,13 +298,13 @@ async function runSuite() {
   }
 
   // TEST 9: VisionAgent (Visual Geometry & Coordinate Action Target Resolution)
-  console.log('\n▶ TEST 9: Testing Vision & Visual Geometry Fallback Agent...');
+  console.log('\n▶ TEST 9: Testing deterministic DOM geometry fallback...');
   try {
     if (VISUAL_INSPECTOR_SCRIPT.includes('inspectVisualGeometry') && VISUAL_INSPECTOR_SCRIPT.includes('elementFromPoint') && VISUAL_INSPECTOR_SCRIPT.includes('primaryActionButton')) {
-      console.log('   ✅ TEST 9 PASSED: Vision Agent geometry analysis and coordinate click contracts verified!');
+      console.log('   ✅ TEST 9 PASSED: DOM geometry analysis and coordinate click contracts verified!');
       passed++;
     } else {
-      console.log('   ❌ TEST 9 FAILED: Vision Agent inspector script contract missing coordinate detection.');
+      console.log('   ❌ TEST 9 FAILED: DOM geometry script contract missing coordinate detection.');
       failed++;
     }
   } catch (e) {

@@ -125,7 +125,7 @@ export class VisionAgent {
 
         ProcessLogger.log({
           level: 'INFO',
-          source: 'Vision Agent',
+          source: 'DOM Geometry Agent',
           message: `Inspected screen visual geometry: ${result.interactiveElements.length} elements detected`,
           detail: result.primaryActionButton ? `Primary action detected: "${result.primaryActionButton.text}" at (${result.primaryActionButton.x}, ${result.primaryActionButton.y})` : undefined,
           metadata: {
@@ -146,4 +146,5 @@ export class VisionAgent {
       };
     }
   }
+
 }

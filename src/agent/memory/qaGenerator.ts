@@ -32,7 +32,7 @@ export const COMPREHENSIVE_SCREENING_MATRIX: ScreeningQuestionTemplate[] = [
   { question: "Tell us about a time you had to adapt quickly to ambiguous requirements or changing deadlines.", category: "behavioral", chunkHint: "summary" },
 
   // 4. Logistics & Compensation
-  { question: "What are your desired base salary compensation expectations in USD?", category: "screening" },
+  { question: "What are your desired base salary compensation expectations in INR (₹ LPA)?", category: "screening" },
   { question: "What is your notice period or earliest available start date?", category: "screening" },
   { question: "Are you comfortable working in a hybrid or remote environment?", category: "screening" },
   { question: "Are you willing to relocate for this position if required?", category: "screening" },

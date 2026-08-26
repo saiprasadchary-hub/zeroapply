@@ -260,7 +260,8 @@ export function parseLlmAnswer(
   rawLlmOutput: string,
   question: string,
   persona: PersonaData,
-  availableOptions?: string[]
+  availableOptions?: string[],
+  errorMessage?: string
 ): ParsedAnswer | null {
   // 0. Priority Memory Bank Check: Check if user saved a custom answer for this question
   const savedAnswer = QuestionMemoryBank.findSavedAnswer(question);
@@ -476,6 +477,20 @@ export function parseLlmAnswer(
     const expectsNumber = /how many|years of|salary|wage|rate|compensation|percentage|scale/i.test(qLower);
     const expectsBoolean = /^are you|^will you|^do you|^have you|^can you|^is your|agree|certify|acknowledge/i.test(qLower);
 
+    const isDecimalConstraint = Boolean(errorMessage && /decimal|larger than|0\.0|number/i.test(errorMessage));
+    if (isDecimalConstraint) {
+      const matchDigits = candidate.match(/\b\d+(?:\.\d+)?\b/);
+      if (matchDigits) {
+        const val = parseFloat(matchDigits[0]);
+        if (val > 0) {
+          return { answer: matchDigits[0], confidence: 0.95 };
+        }
+      }
+      // If candidate did not produce a positive decimal, fallback to persona salary
+      const fallbackSalary = (persona.minSalary ? (persona.minSalary >= 1000 ? persona.minSalary : persona.minSalary * 100000) : 3300);
+      return { answer: String(fallbackSalary), confidence: 0.9 };
+    }
+
     let valid = true;
     if (expectsNumber && !/\d/.test(candidate)) {
       valid = false; // Expected number but LLM returned text without digits
@@ -607,14 +622,37 @@ export function parseLlmAnswer(
     }
   }
 
-  // Salary expectation questions
-  if (qLower.includes('salary') || qLower.includes('compensation') || qLower.includes('pay')) {
-    const salaryVal = persona.minSalary > 0 ? `$${persona.minSalary},000` : '';
+  // Salary / Last Drawn / Compensation expectation questions
+  if (
+    qLower.includes('salary') ||
+    qLower.includes('compensation') ||
+    qLower.includes('last drawn') ||
+    qLower.includes('current ctc') ||
+    qLower.includes('expected ctc') ||
+    qLower.includes('drawn') ||
+    qLower.includes('pay') ||
+    qLower.includes('ctc') ||
+    qLower.includes('lpa') ||
+    qLower.includes('stipend')
+  ) {
+    const isDecimalOrNumericRequired = Boolean(errorMessage && /decimal|number|larger than|0\.0/i.test(errorMessage));
+    const numericSalary = persona.minSalary ? (persona.minSalary >= 1000 ? persona.minSalary : persona.minSalary * 100000) : 3300;
+
+    if (isDecimalOrNumericRequired || /last drawn|drawn|enter a number/i.test(qLower)) {
+      const numStr = String(numericSalary > 0 ? numericSalary : (persona.minSalary || 3000));
+      if (availableOptions && availableOptions.length > 0) {
+        const mappedOpt = matchDropdownOption(numStr, availableOptions, question, persona);
+        if (mappedOpt) return mappedOpt;
+      }
+      return { answer: numStr, confidence: 0.95 };
+    }
+
+    const salaryVal = persona.minSalary > 0 ? `₹${persona.minSalary} LPA` : String(numericSalary);
     if (availableOptions && availableOptions.length > 0) {
       const mappedOpt = matchDropdownOption(salaryVal, availableOptions, question, persona);
       if (mappedOpt) return mappedOpt;
     }
-    return salaryVal ? { answer: salaryVal, confidence: 0.9 } : null;
+    return { answer: salaryVal, confidence: 0.9 };
   }
 
   // Relocation / Remote / Work arrangement preferences

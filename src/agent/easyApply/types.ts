@@ -5,10 +5,11 @@ export type EasyApplyOutcome = 'submitted' | 'paused' | 'stopped' | 'max_steps';
 
 export interface EasyApplyWorkflowOptions {
   maxSteps: number;
+  allowSubmit: boolean;
   isActive: () => boolean;
   wait: (milliseconds: number) => Promise<boolean>;
   fillCurrentStep: () => Promise<AgentRunResult>;
-  advanceStep: () => Promise<ApplicationStepResult>;
+  advanceStep: (allowSubmit: boolean) => Promise<ApplicationStepResult>;
   executeScript: <T>(script: string) => Promise<T>;
   onStatus: (message: string, type?: 'info' | 'success' | 'error' | 'warning') => void;
 }

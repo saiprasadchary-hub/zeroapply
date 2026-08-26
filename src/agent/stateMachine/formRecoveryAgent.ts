@@ -118,12 +118,32 @@ export const SCAN_AND_HEAL_FORM_SCRIPT = `
       }
     }
 
-    // 5. Numeric / Experience healing
-    else if (inputType === 'number' || errorText.toLowerCase().includes('number') || errorText.toLowerCase().includes('numeric') || errorText.toLowerCase().includes('valid decimal')) {
+    // 5. Numeric / Decimal / Compensation healing
+    else if (
+      inputType === 'number' ||
+      errorText.toLowerCase().includes('number') ||
+      errorText.toLowerCase().includes('numeric') ||
+      errorText.toLowerCase().includes('decimal') ||
+      errorText.toLowerCase().includes('larger than') ||
+      /salary|drawn|ctc|compensation|rate|pay|experience/i.test(labelText)
+    ) {
       const val = input.value || '';
       const numDigits = val.replace(/[^0-9.]/g, '');
-      const fixedNum = numDigits || '1';
-      input.value = fixedNum;
+      const parsedFloat = parseFloat(numDigits);
+      let fixedNum = '1';
+      if (/salary|drawn|ctc|compensation|remuneration/i.test(labelText) || /larger than 0\\.0|decimal/i.test(errorText)) {
+        fixedNum = (parsedFloat && parsedFloat > 0) ? String(parsedFloat) : '3300';
+      } else if (parsedFloat && parsedFloat >= 0) {
+        fixedNum = String(parsedFloat);
+      }
+
+      try {
+        const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (valueSetter) valueSetter.call(input, fixedNum);
+        else input.value = fixedNum;
+      } catch {
+        input.value = fixedNum;
+      }
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
       input.dispatchEvent(new Event('blur', { bubbles: true }));
@@ -134,14 +154,23 @@ export const SCAN_AND_HEAL_FORM_SCRIPT = `
     // 6. Generic missing text healing
     else if (['INPUT', 'TEXTAREA'].includes(tagName)) {
       if (!input.value || input.value.trim() === '') {
-        const fallbackValue = labelText.toLowerCase().includes('summary') || labelText.toLowerCase().includes('pitch') || labelText.toLowerCase().includes('why')
-          ? 'Experienced professional eager to contribute high-impact technical expertise.'
-          : 'N/A';
-        input.value = fallbackValue;
+        const isDecimalErr = /decimal|larger than|0\\.0|number/i.test(errorText);
+        const fallbackValue = isDecimalErr
+          ? '3300'
+          : (labelText.toLowerCase().includes('summary') || labelText.toLowerCase().includes('pitch') || labelText.toLowerCase().includes('why')
+            ? 'Experienced professional eager to contribute high-impact technical expertise.'
+            : 'N/A');
+        try {
+          const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+          if (valueSetter) valueSetter.call(input, fallbackValue);
+          else input.value = fallbackValue;
+        } catch {
+          input.value = fallbackValue;
+        }
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
         input.dispatchEvent(new Event('blur', { bubbles: true }));
-        fixedFields.push(\`Text '\${labelText}': Injected default response\`);
+        fixedFields.push(\`Text '\${labelText}': Injected default response '\${fallbackValue}'\`);
         action = 'retype_value';
       }
     }

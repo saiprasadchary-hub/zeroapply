@@ -10,7 +10,7 @@ let inMemoryResumeCache: SavedResumeFile | null = null;
 export function saveResumeFileToStorage(file: SavedResumeFile): void {
   inMemoryResumeCache = file;
   try {
-    localStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(file));
+    setSecureItem(RESUME_STORAGE_KEY, JSON.stringify(file));
   } catch (e) {
     console.warn('LocalStorage quota reached or storage restricted; keeping resume in runtime memory cache:', e);
   }
@@ -21,7 +21,7 @@ export function getSavedResumeFileFromStorage(): SavedResumeFile | null {
     return inMemoryResumeCache;
   }
   try {
-    const raw = localStorage.getItem(RESUME_STORAGE_KEY);
+    const raw = getSecureItem(RESUME_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       inMemoryResumeCache = parsed;
@@ -36,7 +36,7 @@ export function getSavedResumeFileFromStorage(): SavedResumeFile | null {
 export function clearSavedResumeFileFromStorage(): void {
   inMemoryResumeCache = null;
   try {
-    localStorage.removeItem(RESUME_STORAGE_KEY);
+    removeSecureItem(RESUME_STORAGE_KEY);
   } catch (error) {
     console.error('Failed to clear saved resume file:', error);
   }
@@ -240,3 +240,4 @@ export function generateSmartResumeHandlerScript(fileName: string, mimeType: str
 })();
 `;
 }
+import { getSecureItem, removeSecureItem, setSecureItem } from '../../services/secureStorage';

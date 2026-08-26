@@ -26,25 +26,24 @@ export class SalaryOptimizerAgent {
     if (!text) return null;
 
     // Pattern 1: $120,000 - $160,000 or $120k - $160k (Annual/General)
-    const annualRangeRegex = /(?:(\$|€|£|₹)\s*(\d{1,3}(?:,\d{3})*|\d+)\s*(?:k|kilo)?)\s*(?:-|to|–)\s*(?:(?:\$|€|£|₹)?\s*(\d{1,3}(?:,\d{3})*|\d+)\s*(k|kilo)?)/i;
+    const annualRangeRegex = /(?:(\$|€|£|₹)\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*(k|kilo)?)\s*(?:-|to|–)\s*(?:(?:\$|€|£|₹)?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*(k|kilo)?)/i;
     const match = text.match(annualRangeRegex);
 
     if (match) {
       const currency = match[1] || '$';
-      let minRaw = match[2].replace(/,/g, '');
-      let maxRaw = match[3].replace(/,/g, '');
-      const hasK = !!match[4] || text.includes('k') || text.includes('K');
+      const minRaw = match[2].replace(/,/g, '');
+      const maxRaw = match[4].replace(/,/g, '');
+      const hasK = Boolean(match[3] || match[5]);
 
       let min = parseFloat(minRaw);
       let max = parseFloat(maxRaw);
 
-      if (hasK || (min < 1000 && max < 1000 && min > 20)) {
+      const isHourly = /hr|hour|\/hr/i.test(text.slice(match.index || 0, (match.index || 0) + 80));
+      if (!isHourly && (hasK || (min < 1000 && max < 1000 && min > 20))) {
         if (min < 1000) min *= 1000;
         if (max < 1000) max *= 1000;
       }
 
-      // Check if hourly
-      const isHourly = /hr|hour|\/hr/i.test(text.slice(match.index || 0, (match.index || 0) + 40));
       const period = isHourly ? 'hourly' : 'annual';
 
       return {
@@ -79,19 +78,19 @@ export class SalaryOptimizerAgent {
    */
   public static calculateOptimalCompensation(
     fieldLabel: string,
-    minSalaryK: number = 80, // e.g. 80k from persona
+    minSalaryLpa: number = 12,
     jobPostingText: string = ''
   ): CompensationResult {
     const isHourlyField = /hour|hr|hourly/i.test(fieldLabel);
     const requiresNumericOnly = /number|numeric|digits/i.test(fieldLabel);
 
     const detectedRange = this.extractSalaryRange(jobPostingText);
-    const candidateMinAnnual = (minSalaryK || 80) * 1000;
+    const candidateMinAnnual = (minSalaryLpa || 12) * 100000;
     const candidateMinHourly = Math.round(candidateMinAnnual / 2080);
 
     let optimalNumeric = 0;
     let period: 'hourly' | 'annual' | 'monthly' = isHourlyField ? 'hourly' : 'annual';
-    let currency = '$';
+    let currency = '₹';
     let source: CompensationResult['source'] = 'persona_minimum';
     let rationale = '';
 
@@ -105,29 +104,29 @@ export class SalaryOptimizerAgent {
         
         // Target 75th percentile of posted range
         const target = Math.round(postedMin + (postedMax - postedMin) * 0.75);
-        optimalNumeric = Math.max(target, candidateMinHourly);
+        optimalNumeric = detectedRange.currency === '₹' ? Math.max(target, candidateMinHourly) : target;
         source = 'job_posting_optimized';
-        rationale = `Optimized to 75th percentile ($${optimalNumeric}/hr) from posted range $${postedMin}-$${postedMax}/hr`;
+        rationale = `Optimized to 75th percentile (${currency}${optimalNumeric}/hr) from posted range ${currency}${postedMin}-${currency}${postedMax}/hr`;
       } else {
         const postedMin = detectedRange.min;
         const postedMax = detectedRange.max;
         
         // Target 75th percentile of posted range
         const target = Math.round(postedMin + (postedMax - postedMin) * 0.75);
-        optimalNumeric = Math.max(target, candidateMinAnnual);
+        optimalNumeric = detectedRange.currency === '₹' ? Math.max(target, candidateMinAnnual) : target;
         source = 'job_posting_optimized';
-        rationale = `Optimized to 75th percentile ($${optimalNumeric.toLocaleString()}) from posted range $${postedMin.toLocaleString()}-$${postedMax.toLocaleString()}`;
+        rationale = `Optimized to 75th percentile (${currency}${optimalNumeric.toLocaleString()}) from posted range ${currency}${postedMin.toLocaleString()}-${currency}${postedMax.toLocaleString()}`;
       }
     } else {
       // No range posted in description -> target candidate min + 10% market buffer
       if (period === 'hourly') {
         optimalNumeric = Math.round(candidateMinHourly * 1.1);
         source = 'persona_market_target';
-        rationale = `Calculated market hourly rate ($${optimalNumeric}/hr) based on $${minSalaryK}k minimum`;
+        rationale = `Calculated market hourly rate (${currency}${optimalNumeric}/hr) based on ₹${minSalaryLpa} LPA minimum`;
       } else {
         optimalNumeric = Math.round(candidateMinAnnual * 1.1);
         source = 'persona_market_target';
-        rationale = `Calculated market annual target ($${optimalNumeric.toLocaleString()}) based on $${minSalaryK}k minimum`;
+        rationale = `Calculated market annual target (${currency}${optimalNumeric.toLocaleString()}) based on ₹${minSalaryLpa} LPA minimum`;
       }
     }
 

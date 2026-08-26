@@ -136,7 +136,12 @@ export async function runEasyApplyWorkflow(options: EasyApplyWorkflowOptions): P
     });
 
     options.onStatus(`Easy Apply step ${step}: advancing...`);
-    const action = await options.advanceStep();
+    const action = await options.advanceStep(options.allowSubmit);
+
+    if (action.requiresConfirmation || (action.action === 'submit' && !options.allowSubmit)) {
+      options.onStatus('Easy Apply is filled and ready. Final submission was not authorized for this run.', 'warning');
+      return { outcome: 'paused', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
+    }
 
     // 1. Direct Submit Action
     if (action.action === 'submit') {
@@ -149,7 +154,11 @@ export async function runEasyApplyWorkflow(options: EasyApplyWorkflowOptions): P
       });
 
       await options.wait(2000);
-      await checkSubmissionConfirmed(options, 4);
+      const confirmed = await checkSubmissionConfirmed(options, 4);
+      if (!confirmed) {
+        options.onStatus('Submission was clicked, but the portal did not provide a positive confirmation. Please review it manually.', 'warning');
+        return { outcome: 'paused', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
+      }
 
       liveTelemetry.emit({
         type: 'validate',
@@ -173,7 +182,11 @@ export async function runEasyApplyWorkflow(options: EasyApplyWorkflowOptions): P
       if (!await options.wait(1200)) return { outcome: 'stopped', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
       
       // Look for the final submit button on the review page
-      const submitAction = await options.advanceStep();
+      const submitAction = await options.advanceStep(options.allowSubmit);
+      if (submitAction.requiresConfirmation || !options.allowSubmit) {
+        options.onStatus('Review is complete and the application is ready for your final submission.', 'warning');
+        return { outcome: 'paused', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
+      }
       if (submitAction.success && submitAction.action === 'submit') {
         options.onStatus('Easy Apply: final submission triggered!');
         liveTelemetry.emit({
@@ -184,7 +197,11 @@ export async function runEasyApplyWorkflow(options: EasyApplyWorkflowOptions): P
         });
         
         await options.wait(2000);
-        await checkSubmissionConfirmed(options, 4);
+        const confirmed = await checkSubmissionConfirmed(options, 4);
+        if (!confirmed) {
+          options.onStatus('Final submission could not be positively confirmed by the portal.', 'warning');
+          return { outcome: 'paused', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
+        }
 
         liveTelemetry.emit({
           type: 'validate',
@@ -225,9 +242,8 @@ export async function runEasyApplyWorkflow(options: EasyApplyWorkflowOptions): P
 
     const nextModal = await options.executeScript<ModalState>(EASY_APPLY_MODAL_STATE_SCRIPT).catch(() => ({ isOpen: false, hasForm: false }));
     if (!nextModal.isOpen || !nextModal.hasForm) {
-      // If modal closed and no errors present, treat as successful submission
-      options.onStatus('Easy Apply: modal closed smoothly after step completion.');
-      return { outcome: 'submitted', fieldsFilled, stepsCompleted: step };
+      options.onStatus('The application dialog closed without a positive submission confirmation. Please verify manually.', 'warning');
+      return { outcome: 'paused', fieldsFilled, stepsCompleted: step, qaPairs: accumulatedQaPairs };
     }
 
     step++;

@@ -3,14 +3,15 @@ import { HierarchicalMemory } from '../memory/hierarchicalMemory';
 import { parseStudentProfile } from './answerParser';
 
 /**
- * Advanced Prompt Engineering Architecture for Compact Local LLMs (qwen2.5:3b):
+ * Advanced Prompt Engineering Architecture for the compact local Qwen2.5 1.5B model:
  * Employs Few-Shot In-Context Exemplar Learning, Dynamic RAG Snippet Grounding, and Strict Format Constraints
- * to elevate small local models to 70B-grade reasoning precision.
+ * to elevate compact local models to 70B-grade reasoning precision.
  */
 export async function buildQuestionPrompt(
   question: string,
   persona: PersonaData,
-  availableOptions?: string[]
+  availableOptions?: string[],
+  errorMessage?: string
 ): Promise<string> {
   const memoryContext = await HierarchicalMemory.retrieveMemoryForQuestion(question, persona);
   const studentProf = parseStudentProfile(persona);
@@ -24,7 +25,7 @@ export async function buildQuestionPrompt(
     `Academic Standing & CGPA: ${studentProf.gpaOrScore || 'Top Academic Standing / First Class with Distinction'}`,
     `Relevant Coursework: ${studentProf.relevantCourses.join(', ')}`,
     `Experience: ${memoryContext.personaFacts.yearsOfExperience} years (Hands-on Projects & Technical Work)`,
-    `Desired Compensation: $${Math.round(memoryContext.personaFacts.desiredSalary / 1000)}k / competitive entry-level rate`,
+    `Desired Compensation: ₹${memoryContext.personaFacts.desiredSalary ? Math.round(memoryContext.personaFacts.desiredSalary / 100000) : (persona.minSalary || 12)} LPA / competitive rate`,
     `Core Skills: ${memoryContext.personaFacts.skills.join(', ')}`,
     `Work Preference: ${persona.workPreference || 'Remote / Hybrid'}`,
     `Full-Time Availability: ${studentProf.availabilityStatement}`,
@@ -81,11 +82,21 @@ export async function buildQuestionPrompt(
       .join('\n\n') || `Question: "Why are you interested in joining our team?"\nAnswer: I am drawn to your team's high engineering standards, rapid product iteration, and focus on delivering scalable, high-impact software. My solid technical foundation and hands-on project experience directly align with your engineering mission.`;
   }
 
+  let validationErrorSection = '';
+  if (errorMessage && errorMessage.trim().length > 0) {
+    validationErrorSection = `\n### CRITICAL FORM VALIDATION ERROR CORRECTION:
+The portal rejected the previous input with this exact error message: "${errorMessage.trim()}".
+You MUST output an answer that strictly satisfies this requirement:
+- If the error states "Enter a decimal number larger than 0.0" or requires a number, you MUST output ONLY a positive decimal or numeric value strictly greater than 0 (such as 25000, 3500, or 12.0). NEVER output text words, "N/A", "None", "0", or negative numbers.
+- If the error states "Enter a whole number", output a valid positive integer.
+- Output ONLY the final raw number or value with NO conversational words.\n`;
+  }
+
   return `System: You are an expert autonomous employment agent representing a qualified engineering applicant / university student (${studentProf.degreeName} in ${studentProf.majorBranch}).
 ${studentProf.isStudentOrRecentGrad ? 'Adopt the candidate persona of a dedicated, high-achieving student/graduate: eager to learn, equipped with all standard computing amenities, solid in computer science fundamentals, and fully available for internships or full-time roles upon graduation.' : ''}
 Assume the candidate is fully equipped with all standard computing and development facilities (laptop, high-speed internet, headphones, quiet workspace).
 ${taskRule}
-
+${validationErrorSection}
 ${contextLines.join('\n')}
 ${ragSection}
 ### Few-Shot Exemplars:

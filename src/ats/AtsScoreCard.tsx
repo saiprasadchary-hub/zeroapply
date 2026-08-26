@@ -15,7 +15,8 @@ import {
   Sliders,
   CheckCircle,
   X,
-  Target
+  Target,
+  FileText,
 } from 'lucide-react';
 
 interface AtsScoreCardProps {
@@ -23,13 +24,15 @@ interface AtsScoreCardProps {
   resumeText?: string;
   resumeChunks?: PersonaData['resumeChunks'];
   fileName?: string;
+  onNavigateToResume?: () => void;
 }
 
 export const AtsScoreCard: React.FC<AtsScoreCardProps> = ({
   persona,
   resumeText,
   resumeChunks,
-  fileName
+  fileName,
+  onNavigateToResume,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<'actionPlan' | 'violations' | 'roles' | 'skills' | 'metrics' | 'verbs' | 'pillars' | 'strengths'>('actionPlan');
@@ -138,14 +141,28 @@ export const AtsScoreCard: React.FC<AtsScoreCardProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsExpanded(true)}
-          className="px-3.5 py-1.5 bg-white border border-outline-variant hover:border-cyan-500 rounded-lg text-xs font-bold text-primary flex items-center gap-1.5 transition-all shadow-xs hover:bg-cyan-50/50 hover:shadow-sm cursor-pointer"
-        >
-          <span>View Full Report</span>
-          <ChevronDown size={14} className="text-cyan-600" />
-        </button>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+          {onNavigateToResume && (
+            <button
+              type="button"
+              onClick={onNavigateToResume}
+              className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow-md cursor-pointer"
+              title="Switch to ATS Resume Studio"
+            >
+              <FileText size={13} />
+              <span>Create Resume</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsExpanded(true)}
+            className="px-3.5 py-1.5 bg-white border border-outline-variant hover:border-cyan-500 rounded-lg text-xs font-bold text-primary flex items-center gap-1.5 transition-all shadow-xs hover:bg-cyan-50/50 hover:shadow-sm cursor-pointer"
+          >
+            <span>View Full Report</span>
+            <ChevronDown size={14} className="text-cyan-600" />
+          </button>
+        </div>
       </div>
 
       {/* ========================================== */}

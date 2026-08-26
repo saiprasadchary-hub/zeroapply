@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { checkOllamaStatus, type OllamaStatus } from '../llm/ollamaClient';
-import { Cpu, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Cpu, CheckCircle2, Sparkles } from 'lucide-react';
 
 export const OllamaStatusIndicator: React.FC = () => {
   const [status, setStatus] = useState<OllamaStatus>({
     online: false,
     modelAvailable: false,
-    modelName: 'qwen2.5:3b',
+    modelName: 'qwen2.5:1.5b',
   });
   const [loading, setLoading] = useState(true);
+  const isReady = status.online && status.modelAvailable;
 
   useEffect(() => {
     let mounted = true;
@@ -31,19 +32,25 @@ export const OllamaStatusIndicator: React.FC = () => {
   return (
     <div
       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-semibold border transition-all ${
-        status.online
+        isReady
           ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-          : 'bg-amber-50 text-amber-700 border-amber-300'
+          : 'bg-zinc-100 text-zinc-600 border-zinc-300'
       }`}
-      title={
-        status.online
-          ? `Local Ollama connected (${status.modelName}, ${status.latencyMs}ms)`
-          : status.error || 'Ollama server offline at http://localhost:11434 (using heuristic fallback)'
-      }
+      title={isReady ? 'qwen2.5:1.5b is connected and active' : 'qwen2.5:1.5b is unavailable; deterministic fallback is active'}
     >
-      <Cpu size={12} className={status.online ? 'text-emerald-600 animate-pulse' : 'text-amber-600'} />
-      <span>{loading ? 'Ollama...' : status.online ? `Ollama (${status.modelName})` : 'Ollama Offline'}</span>
-      {status.online ? <CheckCircle2 size={11} /> : <AlertCircle size={11} />}
+      <Cpu size={12} className={isReady ? 'text-emerald-600 animate-pulse' : 'text-zinc-500'} />
+      <span>
+        {loading
+          ? 'Connecting AI...'
+          : isReady
+          ? 'Qwen 1.5B: Active'
+          : 'AI Engine: Standby'}
+      </span>
+      {isReady ? (
+        <CheckCircle2 size={11} className="text-emerald-600" />
+      ) : (
+        <Sparkles size={11} className="text-zinc-400" />
+      )}
     </div>
   );
 };

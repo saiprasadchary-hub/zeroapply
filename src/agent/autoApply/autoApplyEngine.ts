@@ -3,7 +3,7 @@ import { AgentEngine } from '../orchestrator/agentEngine';
 import { ApplicationLogger } from '../tracker/applicationLogger';
 import { QALogger } from '../tracker/qaLogger';
 import { runEasyApplyWorkflow } from '../easyApply';
-import { POST_SUBMISSION_CLEANUP_SCRIPT, DISCARD_APPLICATION_SCRIPT } from '../easyApply/scripts';
+import { POST_SUBMISSION_CLEANUP_SCRIPT, DISCARD_APPLICATION_SCRIPT, HANDLE_SAFETY_REMINDER_SCRIPT } from '../easyApply/scripts';
 import { getSavedResumeFileFromStorage } from '../autofill/resumeInjector';
 import { liveTelemetry } from '../telemetry/liveTelemetry';
 import { ChimeNotifier } from '../audio/chimeNotifier';
@@ -21,6 +21,17 @@ const DEFAULT_CONFIG: AutoApplyConfig = {
   maxStepsPerApplication: 15,
   actionRetryCount: 4,
 };
+
+export const MAX_APPLICATIONS_PER_RUN = 50;
+
+export function isExpectedPortalUrl(value: string, expectedHost: string): boolean {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === expectedHost || hostname.endsWith(`.${expectedHost}`);
+  } catch {
+    return false;
+  }
+}
 
 
 const JOB_EXTRACTOR_SCRIPT = `
@@ -142,7 +153,7 @@ export class AutoApplyEngine {
     });
   }
 
-  public async startBatchApply(webview: any, persona: PersonaData, platformName: string = 'LinkedIn') {
+  public async startBatchApply(webview: any, persona: PersonaData, platformName: string = 'LinkedIn', allowSubmit: boolean = false) {
     if (this.isRunning) return;
     this.isRunning = true;
     
@@ -190,7 +201,7 @@ export class AutoApplyEngine {
       return;
     }
 
-    const runLimit = Math.max(1, Math.min(500, Math.floor(persona.applicationLimit ?? this.config.maxJobsPerRun)));
+    const runLimit = Math.max(1, Math.min(MAX_APPLICATIONS_PER_RUN, Math.floor(persona.applicationLimit ?? this.config.maxJobsPerRun)));
 
     const pageUrl = await webview.executeJavaScript('window.location.href').catch(() => '');
     const expectedHosts: Record<string, string> = {
@@ -201,7 +212,7 @@ export class AutoApplyEngine {
       Unstop: 'unstop.com',
     };
     const expectedHost = expectedHosts[platformName];
-    if (expectedHost && !String(pageUrl).toLowerCase().includes(expectedHost)) {
+    if (expectedHost && !isExpectedPortalUrl(String(pageUrl), expectedHost)) {
       this.updateStatus(`Open a ${platformName} job-results page before starting Fill & Apply.`, 'warning');
       this.isRunning = false;
       return;
@@ -385,7 +396,7 @@ export class AutoApplyEngine {
               return { type: 'applied', text: appliedStatus.innerText.trim() };
             }
 
-            if (window.location.href.includes('linkedin.com')) {
+            if (window.location.hostname === 'linkedin.com' || window.location.hostname.endsWith('.linkedin.com')) {
               const linkedinBtn = document.querySelector('.jobs-apply-button, [data-job-id] .jobs-apply-button');
               if (linkedinBtn && linkedinBtn.offsetParent !== null) {
                 const text = (linkedinBtn.innerText || linkedinBtn.textContent || '').toLowerCase().trim();
@@ -459,7 +470,7 @@ export class AutoApplyEngine {
             
             let targetBtn = null;
             
-            if (window.location.href.includes('linkedin.com')) {
+            if (window.location.hostname === 'linkedin.com' || window.location.hostname.endsWith('.linkedin.com')) {
                const linkedinBtn = document.querySelector('.jobs-apply-button, [data-job-id] .jobs-apply-button');
                if (linkedinBtn && linkedinBtn.offsetParent !== null) {
                   const text = (linkedinBtn.innerText || linkedinBtn.textContent || '').toLowerCase();
@@ -507,12 +518,22 @@ export class AutoApplyEngine {
 
         if (!this.isRunning || !await this.wait(1500)) break; // Wait for modal to pop up
 
+        // Automatically detect and click "Continue applying" on LinkedIn Job search safety reminder dialogs
+        try {
+          const safetyResult: any = await webview.executeJavaScript(HANDLE_SAFETY_REMINDER_SCRIPT);
+          if (safetyResult && safetyResult.handled) {
+            this.updateStatus(`[Job ${i + 1}] Handled LinkedIn safety reminder: clicked "Continue applying".`, 'info');
+            if (!this.isRunning || !await this.wait(1200)) break;
+          }
+        } catch {}
+
         const workflow = await runEasyApplyWorkflow({
           maxSteps: this.config.maxStepsPerApplication,
+          allowSubmit,
           isActive: () => this.isRunning,
           wait: (milliseconds) => this.wait(milliseconds),
           fillCurrentStep: () => this.agentEngine.autoFillCurrentPage(webview, persona, platformName, false),
-          advanceStep: () => this.agentEngine.advanceApplicationStep(webview),
+          advanceStep: (submissionAllowed) => this.agentEngine.advanceApplicationStep(webview, submissionAllowed),
           executeScript: <T>(script: string) => webview.executeJavaScript(script).catch((err: any) => {
             console.warn('executeScript non-fatal warning:', err);
             return null as any;
@@ -567,9 +588,9 @@ export class AutoApplyEngine {
         }
 
         if ((workflow.outcome === 'paused' || workflow.outcome === 'max_steps')) {
-          this.updateStatus(`[Job ${i + 1}] Skipping incomplete application... discarding draft to continue batch.`, 'warning');
-          await webview.executeJavaScript(DISCARD_APPLICATION_SCRIPT).catch(() => {});
-          await this.wait(1500); // Give the modal time to close cleanly
+          this.updateStatus(`[Job ${i + 1}] Paused with the completed draft left open for your review.`, 'warning');
+          this.isRunning = false;
+          break;
         }
         
         if (!await this.wait(1500)) break; // Brief pause before advancing to next job listing

@@ -1,3 +1,6 @@
+import { FirebaseCloudSync } from '../../services/firebase/cloudSyncService';
+import { getSecureItem, setSecureItem } from '../../services/secureStorage';
+
 export interface QuestionMemoryEntry {
   id: string;
   questionPattern: string; // e.g. "Why do you want to work here?"
@@ -63,7 +66,7 @@ const DEFAULT_MEMORY_ENTRIES: QuestionMemoryEntry[] = [
 export class QuestionMemoryBank {
   public static getEntries(): QuestionMemoryEntry[] {
     try {
-      const raw = localStorage.getItem(MEMORY_BANK_STORAGE_KEY);
+      const raw = getSecureItem(MEMORY_BANK_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -91,7 +94,7 @@ export class QuestionMemoryBank {
 
   public static saveEntries(entries: QuestionMemoryEntry[]): void {
     try {
-      localStorage.setItem(MEMORY_BANK_STORAGE_KEY, JSON.stringify(entries));
+      setSecureItem(MEMORY_BANK_STORAGE_KEY, JSON.stringify(entries));
     } catch (e) {
       console.error('Failed to save memory bank:', e);
     }
@@ -107,6 +110,7 @@ export class QuestionMemoryBank {
       entries[existingIndex].answerText = answerText.trim();
       entries[existingIndex].category = category;
       this.saveEntries(entries);
+      FirebaseCloudSync.saveQuestionMemory(questionPattern, answerText).catch(() => {});
       return entries[existingIndex];
     }
 
@@ -119,6 +123,7 @@ export class QuestionMemoryBank {
     };
     entries.unshift(newEntry);
     this.saveEntries(entries);
+    FirebaseCloudSync.saveQuestionMemory(questionPattern, answerText).catch(() => {});
     return newEntry;
   }
 

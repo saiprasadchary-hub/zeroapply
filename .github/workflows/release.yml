@@ -1,0 +1,69 @@
+name: Signed Windows Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - name: Import signing certificate
+        id: certificate
+        shell: pwsh
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
+        run: |
+          if (-not $env:CERTIFICATE_BASE64 -or -not $env:CERTIFICATE_PASSWORD) { throw 'Windows signing secrets are required.' }
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'zeroapply-signing.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+          $password = ConvertTo-SecureString $env:CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
+          Remove-Item -LiteralPath $pfxPath -Force
+      - name: Build signed installer
+        shell: pwsh
+        env:
+          ZEROAPPLY_SIGN_CERT_SHA1: ${{ steps.certificate.outputs.thumbprint }}
+          ZEROAPPLY_REQUIRE_SIGNING: '1'
+        run: node scripts/buildAll.cjs
+      - name: Smoke test packaged desktop app
+        shell: pwsh
+        run: |
+          $executable = Get-ChildItem -LiteralPath . -Filter ZeroApply.exe -Recurse | Where-Object { $_.FullName -match 'release_exe_v' } | Select-Object -First 1
+          if (-not $executable) { throw 'Packaged executable was not found.' }
+          $process = Start-Process -FilePath $executable.FullName -ArgumentList '--smoke-test' -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Desktop smoke test failed with exit code $($process.ExitCode)." }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZeroApply-Windows-${{ github.ref_name }}
+          path: |
+            release_exe_v*/ZeroApply-win32-x64/**
+            release_setup_v*/ZeroApply-Setup.exe
+          if-no-files-found: error
+      - name: Publish signed installer to GitHub Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = Get-ChildItem -LiteralPath . -Filter ZeroApply-Setup.exe -Recurse | Where-Object { $_.FullName -match 'release_setup_v' } | Select-Object -First 1
+          if (-not $installer) { throw 'Signed installer was not found.' }
+          if (gh release view '${{ github.ref_name }}' --json tagName 2>$null) {
+            gh release upload '${{ github.ref_name }}' $installer.FullName --clobber
+          } else {
+            gh release create '${{ github.ref_name }}' $installer.FullName --verify-tag --generate-notes --title 'ZeroApply ${{ github.ref_name }}'
+          }

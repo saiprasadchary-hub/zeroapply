@@ -143,12 +143,9 @@ export const AgentLiveHUD: React.FC<AgentLiveHUDProps> = ({
       <div className="absolute bottom-3 right-4 z-40 animate-fadeIn">
         <button
           onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/95 backdrop-blur-xl border border-zinc-300 text-zinc-900 text-xs font-semibold shadow-[0_8px_25px_rgba(0,0,0,0.15)] hover:scale-105 transition-all hover:border-cyan-500"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/95 backdrop-blur-xl border border-zinc-300 text-zinc-900 text-xs font-semibold shadow-2xs hover:scale-105 transition-all hover:border-zinc-400 cursor-pointer"
         >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-500 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-600"></span>
-          </span>
+          <span className="w-2 h-2 rounded-full bg-cyan-600"></span>
           <span>Live Agent Status</span>
           <Maximize2 size={12} className="text-zinc-500 ml-1" />
         </button>

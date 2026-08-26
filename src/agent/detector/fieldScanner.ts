@@ -8,6 +8,7 @@ export interface ScannedField {
   required: boolean;
   options?: string[]; // For select, radio, or custom dropdowns
   value?: string;
+  errorMessage?: string; // Active inline validation error from the form (e.g. "Enter a decimal number larger than 0.0")
 }
 
 /**
@@ -213,6 +214,46 @@ export const DOM_SCANNER_SCRIPT = `
       }
     }
 
+    // Extract active inline error message (e.g. LinkedIn red validation error "Enter a decimal number larger than 0.0")
+    let errorMessage = '';
+    try {
+      const ariaDescribed = el.getAttribute('aria-describedby') || el.getAttribute('aria-errormessage');
+      if (ariaDescribed) {
+        const ids = ariaDescribed.split(/\\s+/);
+        for (const i of ids) {
+          const errEl = document.getElementById(i);
+          if (errEl && errEl.innerText.trim()) {
+            const txt = errEl.innerText.trim();
+            if (/error|enter|larger|decimal|number|valid|required|select/i.test(txt)) {
+              errorMessage = cleanQuestionText(txt);
+              break;
+            }
+          }
+        }
+      }
+
+      if (!errorMessage) {
+        const parentBlock = el.closest('.fb-form-element, .artdeco-form-element, .jobs-easy-apply-form-section__grouping, .display-flex, .form-group, div');
+        if (parentBlock) {
+          const errEl = parentBlock.querySelector('.artdeco-inline-feedback--error, .fb-form-element__error-text, [data-test-form-element-error-message], .error-message, .invalid-feedback, [role="alert"]');
+          if (errEl && errEl.innerText.trim()) {
+            errorMessage = cleanQuestionText(errEl.innerText);
+          }
+        }
+      }
+
+      if (!errorMessage) {
+        let sib = el.nextElementSibling;
+        while (sib) {
+          if (sib.classList && (sib.classList.contains('artdeco-inline-feedback') || sib.classList.contains('error-message') || sib.getAttribute('role') === 'alert')) {
+            errorMessage = cleanQuestionText(sib.innerText);
+            break;
+          }
+          sib = sib.nextElementSibling;
+        }
+      }
+    } catch {}
+
     fields.push({
       id: id,
       elementSelector: '#' + CSS.escape(id),
@@ -223,6 +264,7 @@ export const DOM_SCANNER_SCRIPT = `
       required: el.required || el.getAttribute('aria-required') === 'true',
       options: options,
       value: el.value || '',
+      errorMessage: errorMessage || undefined,
     });
   });
 
