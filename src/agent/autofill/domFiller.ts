@@ -5,6 +5,8 @@ export interface FillResult {
   filledCount: number;
   skippedCount: number;
   totalTargeted: number;
+  preservedCount: number;
+  failedFields: string[];
 }
 
 /**
@@ -15,7 +17,7 @@ export async function executeDomAutofill(
   instructions: FieldFillInstruction[]
 ): Promise<FillResult> {
   if (!instructions || instructions.length === 0) {
-    return { filledCount: 0, skippedCount: 0, totalTargeted: 0 };
+    return { filledCount: 0, skippedCount: 0, totalTargeted: 0, preservedCount: 0, failedFields: [] };
   }
 
   const instructionsJson = JSON.stringify(instructions);
@@ -25,7 +27,7 @@ export async function executeDomAutofill(
   try {
     let result: any;
     if (!webview || typeof webview.executeJavaScript !== 'function') {
-      return { filledCount: 0, skippedCount: instructions.length, totalTargeted: instructions.length };
+      return { filledCount: 0, skippedCount: instructions.length, totalTargeted: instructions.length, preservedCount: 0, failedFields: [] };
     }
     result = await webview.executeJavaScript(script).catch((err: any) => {
       console.warn('DOM autofill execution non-fatal catch:', err);
@@ -36,9 +38,11 @@ export async function executeDomAutofill(
       filledCount: result?.filledCount || 0,
       skippedCount: result?.skippedCount || 0,
       totalTargeted: instructions.length,
+      preservedCount: result?.preservedCount || 0,
+      failedFields: Array.isArray(result?.failedFields) ? result.failedFields.slice(0, 20) : [],
     };
   } catch (err) {
     console.error('Error executing DOM autofill script:', err);
-    return { filledCount: 0, skippedCount: instructions.length, totalTargeted: instructions.length };
+    return { filledCount: 0, skippedCount: instructions.length, totalTargeted: instructions.length, preservedCount: 0, failedFields: [] };
   }
 }

@@ -123,7 +123,26 @@ export async function solveScreeningQuestion(
     return { ...heuristicAnswer, source: 'heuristic' };
   }
 
-  const prompt = await buildQuestionPrompt(questionText, persona, availableOptions, errorMessage);
+  let prompt = '';
+  try {
+    prompt = await buildQuestionPrompt(questionText, persona, availableOptions, errorMessage);
+  } catch (error) {
+    const answer = heuristicAnswer?.answer || '';
+    const confidence = heuristicAnswer?.confidence || 0.5;
+    ErrorLogger.log({
+      source: 'Ollama LLM Client',
+      message: `Prompt construction failed; workflow continued with the deterministic fallback for "${questionText}": ${String(error)}`,
+      severity: 'INFO',
+    });
+    thinkingAction.complete({
+      title: answer ? `Recovered with deterministic answer: "${answer}"` : 'LLM step skipped safely',
+      detail: 'The workflow will continue and re-check the field during validation.',
+      source: 'heuristic',
+      value: answer,
+      confidence,
+    });
+    return { answer, confidence, source: 'heuristic' };
+  }
 
   // Attempt generation against primary and fallback Ollama endpoints
   const endpointsToTry = [cachedBaseUrl, ...OLLAMA_ENDPOINTS.filter(e => e !== cachedBaseUrl)];

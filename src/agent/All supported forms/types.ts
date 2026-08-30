@@ -1,4 +1,5 @@
 import type { AgentRunResult } from '../orchestrator/agentEngine';
+import type { WorkflowCheckpoint } from '../recovery/workflowRecovery';
 
 export type StandardFormOutcome = 'submitted' | 'review_ready' | 'needs_human' | 'stopped' | 'max_steps';
 
@@ -37,6 +38,8 @@ export interface StandardFormWorkflowOptions {
   advanceStep: (allowSubmit: boolean) => Promise<StandardFormStepResult>;
   executeScript: <T>(script: string) => Promise<T>;
   onStatus: (message: string, type?: 'info' | 'success' | 'error' | 'warning') => void;
+  checkpointKey?: string;
+  resumeCheckpoint?: WorkflowCheckpoint;
 }
 
 export interface StandardFormWorkflowResult {
@@ -45,4 +48,7 @@ export interface StandardFormWorkflowResult {
   stepsCompleted: number;
   evidence?: string;
   qaPairs?: { question: string; answer: string }[];
+  checkpoint?: WorkflowCheckpoint;
+  recoveryCount?: number;
+  haltBatch?: boolean;
 }

@@ -290,6 +290,7 @@ export const STANDARD_FORM_VALIDATION_SCRIPT = `
     return score(b) - score(a);
   })[0] || document;
   const required = Array.from(root.querySelectorAll('[required], [aria-required="true"]')).filter(visible);
+  const fields = Array.from(root.querySelectorAll('input, textarea, select')).filter(visible);
   const groups = new Set();
   const empty = required.filter((field) => {
     if (field.disabled || field.readOnly) return false;
@@ -311,17 +312,26 @@ export const STANDARD_FORM_VALIDATION_SCRIPT = `
       return element.getAttribute('aria-invalid') === 'true'
         || /(?:^|\\b)(?:error|required|invalid|missing|must|please (?:enter|select|choose|provide))(?:\\b|$)/i.test(text);
     });
+  const browserInvalid = fields.filter((field) => {
+    if (field.disabled || field.readOnly || typeof field.checkValidity !== 'function') return false;
+    return !field.checkValidity();
+  });
   const messages = [
     ...empty.map((field) => {
       const label = field.id ? root.querySelector('label[for="' + CSS.escape(field.id) + '"]') : null;
       return String(label?.innerText || field.getAttribute('aria-label') || field.getAttribute('name') || field.id || 'Required field').trim().slice(0, 160);
     }),
     ...errors.map((element) => String(element.innerText || element.getAttribute('aria-label') || 'Validation error').trim().slice(0, 160)),
+    ...browserInvalid.map((field) => {
+      const label = field.id ? root.querySelector('label[for="' + CSS.escape(field.id) + '"]') : null;
+      const identity = String(label?.innerText || field.getAttribute('placeholder') || field.getAttribute('name') || field.id || 'Invalid field').trim();
+      return (identity + ': ' + String(field.validationMessage || 'invalid value')).slice(0, 160);
+    }),
   ].filter(Boolean);
   return {
-    isValid: empty.length === 0 && errors.length === 0,
+    isValid: empty.length === 0 && errors.length === 0 && browserInvalid.length === 0,
     emptyCount: empty.length,
-    errorCount: errors.length,
+    errorCount: new Set([...errors, ...browserInvalid]).size,
     messages: Array.from(new Set(messages)).slice(0, 5),
   };
 })();

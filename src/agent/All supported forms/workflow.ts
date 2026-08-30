@@ -10,6 +10,7 @@ import type {
   StandardFormWorkflowOptions,
   StandardFormWorkflowResult,
 } from './types';
+import { runRecoverableOperation, WorkflowCheckpointJournal } from '../recovery/workflowRecovery';
 
 async function confirmSubmission(options: StandardFormWorkflowOptions, attempts = 5): Promise<StandardFormConfirmation> {
   for (let attempt = 0; attempt < attempts; attempt++) {
@@ -33,83 +34,136 @@ function addQaPairs(
   }
 }
 
-async function fillWithRecovery(options: StandardFormWorkflowOptions): Promise<AgentRunResult> {
-  let latest: AgentRunResult = {
-    success: false,
-    detectedCount: 0,
-    filledCount: 0,
-    message: 'Field filling failed',
-  };
-
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    latest = await options.fillCurrentStep().catch((error) => ({
-      success: false,
-      detectedCount: 0,
-      filledCount: 0,
-      message: error instanceof Error ? error.message : 'Field filling failed',
-    }));
-    if (SECURITY_MESSAGE.test(latest.message)
-      || latest.success
-      || latest.detectedCount > 0
-      || !TRANSIENT_FILL_MESSAGE.test(latest.message)
-      || attempt === 3) {
-      return latest;
-    }
-    options.onStatus('The page changed while scanning. Recovering DOM state (attempt ' + (attempt + 1) + '/3)...', 'warning');
-    if (!await options.wait(attempt * 450)) return latest;
-  }
-  return latest;
+async function fillWithRecovery(
+  options: StandardFormWorkflowOptions,
+  journal: WorkflowCheckpointJournal,
+  step: number,
+): Promise<AgentRunResult> {
+  return runRecoverableOperation(
+    async () => {
+      const result = await options.fillCurrentStep();
+      if (!result || typeof result.filledCount !== 'number') throw new Error('Field filling returned an invalid result.');
+      if (!result.success && result.detectedCount === 0 && TRANSIENT_FILL_MESSAGE.test(result.message)) {
+        throw new Error(result.message);
+      }
+      return result;
+    },
+    {
+      label: 'Standard form autofill',
+      maxAttempts: 5,
+      retryAllErrors: true,
+      isActive: options.isActive,
+      wait: options.wait,
+      onRetry: (attempt, maxAttempts, error) => {
+        journal.recovered('Autofill interrupted: ' + String(error));
+        options.onStatus(`The page changed while filling. Resuming saved step ${step} (${attempt}/${maxAttempts})...`, 'warning');
+      },
+    },
+  );
 }
 
 async function readValidation(
   options: StandardFormWorkflowOptions,
+  journal: WorkflowCheckpointJournal,
+  step: number,
   attempts = 3,
 ): Promise<StandardFormValidationResult | null> {
-  for (let attempt = 1; attempt <= attempts; attempt++) {
-    try {
+  try {
+    return await runRecoverableOperation(
+      async () => {
       const result = await options.executeScript<StandardFormValidationResult>(STANDARD_FORM_VALIDATION_SCRIPT);
-      if (result && typeof result.isValid === 'boolean') return result;
-    } catch {
-      // A navigation can briefly destroy the execution context; retry after the new DOM settles.
-    }
-    if (attempt < attempts) {
-      options.onStatus('Validation inspection was interrupted. Reconnecting to the form (attempt ' + (attempt + 1) + '/' + attempts + ')...', 'warning');
-      if (!await options.wait(attempt * 350)) return null;
-    }
+        if (!result || typeof result.isValid !== 'boolean') throw new Error('Validation execution context was unavailable.');
+        return result;
+      },
+      {
+        label: 'Standard form validation',
+        maxAttempts: attempts,
+        retryAllErrors: true,
+        isActive: options.isActive,
+        wait: options.wait,
+        onRetry: (attempt, maxAttempts, error) => {
+          journal.recovered('Validation interrupted: ' + String(error));
+          options.onStatus(`Validation was interrupted. Reconnecting to saved step ${step} (${attempt}/${maxAttempts})...`, 'warning');
+        },
+      },
+    );
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export async function runStandardFormWorkflow(options: StandardFormWorkflowOptions): Promise<StandardFormWorkflowResult> {
-  let fieldsFilled = 0;
+  const journal = new WorkflowCheckpointJournal('standard_form', options.checkpointKey || 'standard_form:active', options.resumeCheckpoint);
+  const savedCheckpoint = journal.current();
+  let fieldsFilled = savedCheckpoint.fieldsFilled || 0;
   const qaPairs: { question: string; answer: string }[] = [];
 
-  for (let step = 1; step <= options.maxSteps; step++) {
-    if (!options.isActive()) return { outcome: 'stopped', fieldsFilled, stepsCompleted: step - 1, qaPairs };
+  const finish = (
+    outcome: StandardFormWorkflowResult['outcome'],
+    stepsCompleted: number,
+    extra: { evidence?: string; haltBatch?: boolean; totalFields?: number } = {},
+  ): StandardFormWorkflowResult => {
+    if (typeof extra.totalFields === 'number') fieldsFilled = Math.max(fieldsFilled, extra.totalFields);
+    if (outcome === 'submitted') journal.mark(Math.max(1, stepsCompleted), 'completed', fieldsFilled, 'Submission positively confirmed.');
+    const checkpoint = journal.current();
+    journal.clear();
+    return {
+      outcome,
+      fieldsFilled,
+      stepsCompleted,
+      evidence: extra.evidence,
+      qaPairs,
+      checkpoint,
+      recoveryCount: checkpoint.recoveryCount,
+      haltBatch: Boolean(extra.haltBatch),
+    };
+  };
+
+  if (savedCheckpoint.phase === 'advancing' || savedCheckpoint.phase === 'submitting' || savedCheckpoint.phase === 'confirming') {
+    options.onStatus('Recovered an interrupted action. Checking for submission confirmation before resuming...', 'warning');
+    const confirmation = await confirmSubmission(options, 6);
+    if (confirmation.confirmed) return finish('submitted', savedCheckpoint.step, { evidence: confirmation.evidence });
+    options.onStatus('The previous action cannot be proven safe to repeat. This application is open for manual review.', 'warning');
+    return finish('needs_human', Math.max(0, savedCheckpoint.step - 1), { haltBatch: true });
+  }
+
+  const startStep = Math.max(1, Math.min(options.maxSteps, savedCheckpoint.step || 1));
+
+  for (let step = startStep; step <= options.maxSteps; step++) {
+    if (!options.isActive()) return finish('stopped', step - 1);
+    journal.mark(step, 'scanning', fieldsFilled, 'Scanning the current standard-form step.');
 
     const existingConfirmation = await confirmSubmission(options, 1);
     if (existingConfirmation.confirmed) {
-      return { outcome: 'submitted', fieldsFilled, stepsCompleted: step - 1, evidence: existingConfirmation.evidence, qaPairs };
+      return finish('submitted', step - 1, { evidence: existingConfirmation.evidence });
     }
 
     options.onStatus('Standard form step ' + step + ': scanning and filling...');
-    const fill = await fillWithRecovery(options);
+    journal.mark(step, 'filling', fieldsFilled, 'Mapping persona and LLM answers to visible controls.');
+    let fill: AgentRunResult;
+    try {
+      fill = await fillWithRecovery(options, journal, step);
+    } catch {
+      options.onStatus('Automatic field recovery was exhausted on this application. It will be skipped without clicking Next or Submit.', 'warning');
+      return finish('review_ready', step - 1);
+    }
     let stepFilled = fill.filledCount;
     addQaPairs(qaPairs, fill.qaPairs);
 
     if (SECURITY_MESSAGE.test(fill.message)) {
       options.onStatus(fill.message + ' Complete the check manually, then restart this run.', 'warning');
-      return { outcome: 'needs_human', fieldsFilled: fieldsFilled + stepFilled, stepsCompleted: step - 1, qaPairs };
+      return finish('needs_human', step - 1, { haltBatch: true, totalFields: fieldsFilled + stepFilled });
     }
 
     if (!await options.wait(500)) {
-      return { outcome: 'stopped', fieldsFilled: fieldsFilled + stepFilled, stepsCompleted: step - 1, qaPairs };
+      return finish('stopped', step - 1, { totalFields: fieldsFilled + stepFilled });
     }
 
-    let validation = await readValidation(options);
+    journal.mark(step, 'validating', fieldsFilled + stepFilled, 'Verifying required controls and website validation.');
+    let validation = await readValidation(options, journal, step, 5);
     if (!validation) {
       options.onStatus('The form could not be validated after 3 attempts. Paused before any Next or Submit action.', 'warning');
-      return { outcome: 'needs_human', fieldsFilled: fieldsFilled + stepFilled, stepsCompleted: step - 1, qaPairs };
+      return finish('needs_human', step - 1, { totalFields: fieldsFilled + stepFilled });
     }
 
     for (let recovery = 1; !validation.isValid && recovery <= 2; recovery++) {
@@ -121,20 +175,20 @@ export async function runStandardFormWorkflow(options: StandardFormWorkflowOptio
           + (details ? ' (' + details + ')' : '') + '.',
         'warning',
       );
-      const retry = await fillWithRecovery(options);
+      const retry = await fillWithRecovery(options, journal, step);
       stepFilled = Math.max(stepFilled, retry.filledCount);
       addQaPairs(qaPairs, retry.qaPairs);
       if (SECURITY_MESSAGE.test(retry.message)) {
         options.onStatus(retry.message + ' Complete the check manually, then restart this run.', 'warning');
-        return { outcome: 'needs_human', fieldsFilled: fieldsFilled + stepFilled, stepsCompleted: step - 1, qaPairs };
+        return finish('needs_human', step - 1, { haltBatch: true, totalFields: fieldsFilled + stepFilled });
       }
       if (!await options.wait(450)) {
-        return { outcome: 'stopped', fieldsFilled: fieldsFilled + stepFilled, stepsCompleted: step - 1, qaPairs };
+        return finish('stopped', step - 1, { totalFields: fieldsFilled + stepFilled });
       }
-      const recoveredValidation = await readValidation(options);
+      const recoveredValidation = await readValidation(options, journal, step, 5);
       if (!recoveredValidation) {
         options.onStatus('The page stopped responding during validation recovery. Paused before advancing.', 'warning');
-        return { outcome: 'needs_human', fieldsFilled: fieldsFilled + stepFilled, stepsCompleted: step - 1, qaPairs };
+        return finish('needs_human', step - 1, { totalFields: fieldsFilled + stepFilled });
       }
       validation = recoveredValidation;
     }
@@ -148,65 +202,69 @@ export async function runStandardFormWorkflow(options: StandardFormWorkflowOptio
           + (details ? ' (' + details + ')' : '') + '.',
         'warning',
       );
-      return { outcome: 'review_ready', fieldsFilled, stepsCompleted: step - 1, qaPairs };
+      return finish('review_ready', step - 1);
     }
 
     let action: StandardFormStepResult;
+    journal.mark(step, 'advancing', fieldsFilled, 'Clicking the next safe workflow control.');
     try {
       action = await options.advanceStep(options.allowSubmit);
     } catch {
       const confirmation = await confirmSubmission(options, 3);
       if (confirmation.confirmed) {
-        return { outcome: 'submitted', fieldsFilled, stepsCompleted: step, evidence: confirmation.evidence, qaPairs };
+        return finish('submitted', step, { evidence: confirmation.evidence });
       }
       options.onStatus('The browser changed during the action click. Paused because retrying could duplicate a submission.', 'warning');
-      return { outcome: 'needs_human', fieldsFilled, stepsCompleted: step, qaPairs };
+      return finish('needs_human', step, { haltBatch: true });
     }
     if (action.requiresConfirmation || (action.action === 'submit' && !options.allowSubmit)) {
       options.onStatus('The form is filled and ready. Final submission was not authorized for this run.', 'warning');
-      return { outcome: 'review_ready', fieldsFilled, stepsCompleted: step, qaPairs };
+      return finish('review_ready', step);
     }
 
     if (!action.success) {
       const confirmation = await confirmSubmission(options, 2);
       if (confirmation.confirmed) {
-        return { outcome: 'submitted', fieldsFilled, stepsCompleted: step, evidence: confirmation.evidence, qaPairs };
+        return finish('submitted', step, { evidence: confirmation.evidence });
       }
       options.onStatus('The action button is not ready yet. Re-scanning controls once...', 'warning');
-      if (!await options.wait(650)) return { outcome: 'stopped', fieldsFilled, stepsCompleted: step, qaPairs };
+      if (!await options.wait(650)) return finish('stopped', step);
       try {
         action = await options.advanceStep(options.allowSubmit);
       } catch {
         const recoveredConfirmation = await confirmSubmission(options, 3);
         if (recoveredConfirmation.confirmed) {
-          return { outcome: 'submitted', fieldsFilled, stepsCompleted: step, evidence: recoveredConfirmation.evidence, qaPairs };
+          return finish('submitted', step, { evidence: recoveredConfirmation.evidence });
         }
         options.onStatus('The browser changed during action recovery. Paused to prevent a duplicate click.', 'warning');
-        return { outcome: 'needs_human', fieldsFilled, stepsCompleted: step, qaPairs };
+        return finish('needs_human', step, { haltBatch: true });
       }
       if (action.requiresConfirmation || (action.action === 'submit' && !options.allowSubmit)) {
         options.onStatus('The form is filled and ready. Final submission was not authorized for this run.', 'warning');
-        return { outcome: 'review_ready', fieldsFilled, stepsCompleted: step, qaPairs };
+        return finish('review_ready', step);
       }
       if (!action.success) {
         options.onStatus('No safe Next or Submit action was found after recovery. The completed form is open for review.', 'warning');
-        return { outcome: 'review_ready', fieldsFilled, stepsCompleted: step, qaPairs };
+        return finish('review_ready', step);
       }
     }
 
     if (!await options.wait(action.action === 'submit' ? 1800 : 1000)) {
-      return { outcome: 'stopped', fieldsFilled, stepsCompleted: step, qaPairs };
+      return finish('stopped', step);
     }
 
     if (action.action === 'submit') {
+      journal.mark(step, 'confirming', fieldsFilled, 'Submit was clicked; waiting for positive confirmation.');
       const confirmation = await confirmSubmission(options);
       if (!confirmation.confirmed) {
         options.onStatus('Submit was clicked, but the site did not provide positive confirmation. Paused to prevent a duplicate application.', 'warning');
-        return { outcome: 'needs_human', fieldsFilled, stepsCompleted: step, qaPairs };
+        return finish('needs_human', step, { haltBatch: true });
       }
-      return { outcome: 'submitted', fieldsFilled, stepsCompleted: step, evidence: confirmation.evidence, qaPairs };
+      return finish('submitted', step, { evidence: confirmation.evidence });
     }
+
+    journal.mark(step + 1, 'scanning', fieldsFilled, 'Previous step advanced successfully.');
   }
 
-  return { outcome: options.isActive() ? 'max_steps' : 'stopped', fieldsFilled, stepsCompleted: options.maxSteps, qaPairs };
+  return finish(options.isActive() ? 'max_steps' : 'stopped', options.maxSteps);
 }

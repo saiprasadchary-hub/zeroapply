@@ -281,6 +281,15 @@ export class StandardFormsEngine {
       this.updateStatus('Desktop browser is unavailable.', 'error');
       return;
     }
+    const missingContact = [
+      !persona.fullName?.trim() && 'full name',
+      !persona.email?.trim() && 'email',
+      !persona.phone?.trim() && 'phone number',
+    ].filter(Boolean);
+    if (missingContact.length > 0) {
+      this.updateStatus(`Complete your ${missingContact.join(', ')} in Basic Info before filling external forms.`, 'warning');
+      return;
+    }
     const adapter = getStandardSiteAdapter(platformId);
     if (!adapter) {
       this.updateStatus('Choose LinkedIn, Indeed, Glassdoor, Naukri, or Unstop for an all-forms run.', 'warning');
@@ -364,6 +373,7 @@ export class StandardFormsEngine {
           advanceStep: (submissionAllowed) => entry.webview.executeJavaScript(createStandardStepScript(submissionAllowed)),
           executeScript: <T>(script: string) => entry.webview.executeJavaScript(script) as Promise<T>,
           onStatus: (message, type = 'info') => this.updateStatus(`[${index + 1}/${jobs.length}] ${message}`, type),
+          checkpointKey: `standard_form:${adapter.id}:${job.url}`,
         });
 
         if (workflow.outcome === 'submitted') {
@@ -395,13 +405,19 @@ export class StandardFormsEngine {
           });
           this.updateStatus(`Paused on ${job.title}. It was not recorded as applied because confirmation was not proven.`, 'warning');
         }
+        if (allowSubmit && !workflow.haltBatch) {
+          this.updateStatus(`Skipping only ${job.title} after bounded recovery and continuing with the next job.`, 'warning');
+          if (!await this.wait(900)) break;
+          continue;
+        }
         this.isRunning = false;
         break;
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.updateStatus('Run stopped safely after an unexpected browser error: ' + message, 'error');
+      this.updateStatus('Run interrupted by an unexpected browser error: ' + message + '. The browser controller may restart this batch automatically.', 'error');
       this.isRunning = false;
+      throw error;
     } finally {
       const completedNaturally = this.isRunning;
       this.isRunning = false;

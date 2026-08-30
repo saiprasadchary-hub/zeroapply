@@ -157,7 +157,7 @@ export async function mapPersonaToFields(
         });
         fillValue = solved.answer;
       }
-    } else if (category !== 'ignore') {
+    } else if (category !== 'ignore' && category !== 'manualConfirmation') {
       fillValue = extractResumeDetail(category, persona);
       // If it's a dropdown with explicit options, refine value to best matching option
       if ((field.type === 'select' || field.type === 'custom_dropdown' || field.type === 'radio') && field.options && field.options.length > 0) {

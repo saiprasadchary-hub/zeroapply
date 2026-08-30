@@ -156,8 +156,8 @@ export class AutoApplyEngine {
   public async startBatchApply(webview: any, persona: PersonaData, platformName: string = 'LinkedIn', allowSubmit: boolean = false) {
     if (this.isRunning) return;
     this.isRunning = true;
-    
-    this.updateStatus('Scanning page for job listings...');
+    try {
+      this.updateStatus('Scanning page for job listings...');
     
     if (!webview || typeof webview.executeJavaScript !== 'function') {
       this.updateStatus('Error: Webview not available.', 'error');
@@ -539,6 +539,7 @@ export class AutoApplyEngine {
             return null as any;
           }) as Promise<T>,
           onStatus: (message, type = 'info') => this.updateStatus(`[Job ${i + 1}] ${message}`, type),
+          checkpointKey: `easy_apply:${platformName}:${job.title}:${job.company}`,
         });
 
         if (workflow.outcome === 'submitted') {
@@ -588,6 +589,13 @@ export class AutoApplyEngine {
         }
 
         if ((workflow.outcome === 'paused' || workflow.outcome === 'max_steps')) {
+          if (allowSubmit && !workflow.haltBatch) {
+            this.updateStatus(`[Job ${i + 1}] Automatic recovery was exhausted for this job. Discarding only this draft and continuing to the next listing.`, 'warning');
+            this.recordOutcome(platformName, job, workflow.fieldsFilled, 'PARTIAL', webview.src || '');
+            await webview.executeJavaScript(DISCARD_APPLICATION_SCRIPT).catch(() => {});
+            if (!await this.wait(900)) break;
+            continue;
+          }
           this.updateStatus(`[Job ${i + 1}] Paused with the completed draft left open for your review.`, 'warning');
           this.isRunning = false;
           break;
@@ -637,6 +645,15 @@ export class AutoApplyEngine {
         `Successfully applied to ${appliedCount} / ${runLimit} jobs!`
       );
       this.updateStatus(`Batch Apply Complete! Successfully applied to ${appliedCount} / ${runLimit} jobs (Application Limit: ${runLimit}).`, 'success');
+    }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.updateStatus('Unexpected browser interruption: ' + message, 'error');
+      throw error;
+    } finally {
+      this.isRunning = false;
+      this.pendingWaits.forEach((cancel) => cancel());
+      this.pendingWaits.clear();
     }
   }
 }

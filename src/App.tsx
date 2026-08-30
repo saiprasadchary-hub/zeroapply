@@ -29,6 +29,7 @@ const DEFAULT_PERSONA: PersonaData = {
   techStack: [],
   targetRoles: [],
   applyMode: 'easy',
+  browserMode: 'own',
   applicationLimit: 5,
   verified: false,
 };

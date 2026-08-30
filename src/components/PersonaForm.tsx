@@ -25,6 +25,7 @@ import { HierarchicalMemory } from '../agent/memory/hierarchicalMemory';
 import type { PlatformId } from '../agent/ui/AgentControlBar';
 import { AtsScoreCard } from '../ats';
 import { stealthEngine, type StealthSpeedMode } from '../agent/stealth';
+import { BrowserSelector, normalizeBrowserMode } from '../browserSelect';
 
 const REQUIRED_AUTOAPPLY_CHUNKS = [
   { key: 'summary', title: 'Executive Summary', desc: 'Professional pitch & background overview' },
@@ -1083,6 +1084,12 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
             </div>
           )}
         </div>
+
+        {/* Start AutoApply Action Button */}
+        <BrowserSelector
+          value={normalizeBrowserMode(persona.browserMode)}
+          onChange={(browserMode) => handleInputChange('browserMode', browserMode)}
+        />
 
         {/* Start AutoApply Action Button */}
         <div className="pt-2">

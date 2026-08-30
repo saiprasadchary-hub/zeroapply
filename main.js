@@ -3,8 +3,10 @@ import path from 'path';
 import fs from 'fs';
 import http from 'http';
 import https from 'https';
+import net from 'net';
 import { execFile, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
+import WebSocket from 'ws';
 import { isDeferredPopupUrl, isLinkedInSafetyUrl, isLinkedInTrackerUrl, normalizeGestureCandidates, resolveGestureDestination, resolvePopupDestination } from './AgentBrowser/browser-navigation.js';
 import { browserCommandForInput, isExternalProtocol, parseWebDestination, sanitizedPageFilename } from './AgentBrowser/electron-browser-features.js';
 
@@ -17,6 +19,9 @@ let updateCheckTimer = null;
 let rendererUrlInUse = null;
 let unresponsiveDialogOpen = false;
 let handlingFatalError = false;
+let chromeAgentProcess = null;
+let chromeAgentPort = null;
+let chromeAgentConnection = null;
 const isSmokeTest = process.argv.includes('--smoke-test');
 
 const PRELOAD_POPUP_PATH = path.join(__dirname, 'preload-popup.cjs');
@@ -31,6 +36,7 @@ const webviewRecoveryState = new WeakMap();
 const BROWSER_CACHE_SCHEMA = 'native-chromium-v1';
 const RELEASE_API_URL = 'https://api.github.com/repos/saiprasadchary-hub/zeroapply/releases/latest';
 const RELEASES_URL_PREFIX = 'https://github.com/saiprasadchary-hub/zeroapply/releases/';
+const CHROME_AGENT_PROFILE_PATH = path.join(app.getPath('appData'), 'ZeroApply_Chrome_Agent_Profile');
 
 app.name = 'ZeroApply';
 
@@ -41,6 +47,184 @@ function describeError(value) {
   } catch {
     return 'Unknown error';
   }
+}
+
+function isSafeChromeAgentUrl(value) {
+  if (typeof value !== 'string' || value.length > 4096) return false;
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === 'https:' || parsed.protocol === 'http:')
+      && !parsed.username
+      && !parsed.password;
+  } catch {
+    return false;
+  }
+}
+
+function findChromeExecutable() {
+  const candidates = process.platform === 'win32'
+    ? [
+      process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      process.env['PROGRAMFILES(X86)'] && path.join(process.env['PROGRAMFILES(X86)'], 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    ]
+    : process.platform === 'darwin'
+      ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']
+      : ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/snap/bin/chromium'];
+  return candidates.filter(Boolean).find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function reserveLoopbackPort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      server.close((error) => error ? reject(error) : resolve(port));
+    });
+  });
+}
+
+function readLocalJson(port, pathname) {
+  return new Promise((resolve, reject) => {
+    const request = http.get({ hostname: '127.0.0.1', port, path: pathname, timeout: 1500 }, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => {
+        body += chunk;
+        if (body.length > 2_000_000) request.destroy(new Error('Chrome response was too large.'));
+      });
+      response.on('end', () => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`Chrome debugging endpoint returned ${response.statusCode || 'an error'}.`));
+          return;
+        }
+        try { resolve(JSON.parse(body)); } catch { reject(new Error('Chrome returned invalid debugging data.')); }
+      });
+    });
+    request.on('error', reject);
+    request.on('timeout', () => request.destroy(new Error('Chrome debugging connection timed out.')));
+  });
+}
+
+class ChromeDevToolsConnection {
+  constructor(webSocketUrl) {
+    this.socket = new WebSocket(webSocketUrl, { origin: 'http://127.0.0.1' });
+    this.pending = new Map();
+    this.nextId = 1;
+    this.ready = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Chrome automation connection timed out.')), 5000);
+      this.socket.addEventListener('open', () => {
+        clearTimeout(timeout);
+        resolve();
+      }, { once: true });
+      this.socket.addEventListener('error', () => {
+        clearTimeout(timeout);
+        reject(new Error('Chrome automation connection failed.'));
+      }, { once: true });
+    });
+    this.socket.addEventListener('message', (event) => {
+      let message;
+      try { message = JSON.parse(String(event.data)); } catch { return; }
+      if (!message.id) return;
+      const pending = this.pending.get(message.id);
+      if (!pending) return;
+      this.pending.delete(message.id);
+      if (message.error) pending.reject(new Error(message.error.message || 'Chrome rejected an automation command.'));
+      else pending.resolve(message.result || {});
+    });
+    this.socket.addEventListener('close', () => {
+      for (const pending of this.pending.values()) pending.reject(new Error('Chrome automation connection closed.'));
+      this.pending.clear();
+    });
+  }
+
+  async call(method, params = {}) {
+    await this.ready;
+    if (this.socket.readyState !== WebSocket.OPEN) throw new Error('Chrome automation is not connected.');
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`Chrome command ${method} timed out.`));
+      }, 30_000);
+      this.pending.set(id, {
+        resolve: (value) => { clearTimeout(timeout); resolve(value); },
+        reject: (error) => { clearTimeout(timeout); reject(error); },
+      });
+      this.socket.send(JSON.stringify({ id, method, params }));
+    });
+  }
+
+  close() {
+    try { this.socket.close(); } catch {}
+  }
+}
+
+async function connectChromeAgentTarget(preferredUrl = '') {
+  if (!chromeAgentPort) throw new Error('Chrome agent is not running.');
+  const targets = await readLocalJson(chromeAgentPort, '/json/list');
+  const pages = Array.isArray(targets)
+    ? targets.filter((target) => target?.type === 'page' && typeof target.webSocketDebuggerUrl === 'string')
+    : [];
+  const preferred = pages.find((target) => preferredUrl && target.url === preferredUrl)
+    || pages.find((target) => !String(target.url || '').startsWith('chrome://'))
+    || pages[0];
+  if (!preferred) throw new Error('Chrome opened, but no controllable page was found.');
+  chromeAgentConnection?.close();
+  chromeAgentConnection = new ChromeDevToolsConnection(preferred.webSocketDebuggerUrl);
+  await chromeAgentConnection.ready;
+  await chromeAgentConnection.call('Runtime.enable');
+  await chromeAgentConnection.call('Page.enable');
+  await chromeAgentConnection.call('Page.bringToFront');
+  return preferred;
+}
+
+async function launchChromeAgent(startUrl) {
+  if (!isSafeChromeAgentUrl(startUrl)) throw new Error('Chrome agent received an unsafe address.');
+  const chromeExecutable = findChromeExecutable();
+  if (!chromeExecutable) throw new Error('Google Chrome is not installed in a supported location.');
+
+  if (chromeAgentConnection) {
+    await chromeAgentConnection.call('Page.navigate', { url: startUrl });
+    await chromeAgentConnection.call('Page.bringToFront');
+    return { ok: true, url: startUrl };
+  }
+
+  fs.mkdirSync(CHROME_AGENT_PROFILE_PATH, { recursive: true });
+  chromeAgentPort = await reserveLoopbackPort();
+  chromeAgentProcess = spawn(chromeExecutable, [
+    `--remote-debugging-port=${chromeAgentPort}`,
+    '--remote-debugging-address=127.0.0.1',
+    '--remote-allow-origins=http://127.0.0.1',
+    `--user-data-dir=${CHROME_AGENT_PROFILE_PATH}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-background-mode',
+    '--new-window',
+    startUrl,
+  ], { stdio: 'ignore', windowsHide: false });
+  chromeAgentProcess.once('exit', () => {
+    chromeAgentProcess = null;
+    chromeAgentPort = null;
+    chromeAgentConnection?.close();
+    chromeAgentConnection = null;
+  });
+
+  let lastError = null;
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    try {
+      const target = await connectChromeAgentTarget(startUrl);
+      return { ok: true, url: target.url || startUrl };
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  throw lastError || new Error('Google Chrome did not become ready for automation.');
 }
 
 process.on('unhandledRejection', (reason) => {
@@ -1100,6 +1284,52 @@ ipcMain.on('zeroapply-linkedin-apply-click', (event, payload) => {
   applyClickTimers.set(event.sender, timer);
 });
 
+ipcMain.handle('chrome-agent-launch', async (event, startUrl) => {
+  requireTrustedIpcSender(event);
+  try {
+    return await launchChromeAgent(startUrl);
+  } catch (error) {
+    console.error('Chrome agent launch failed:', describeError(error));
+    return { ok: false, error: error instanceof Error ? error.message : 'Google Chrome could not be started.' };
+  }
+});
+
+ipcMain.handle('chrome-agent-navigate', async (event, targetUrl) => {
+  requireTrustedIpcSender(event);
+  if (!isSafeChromeAgentUrl(targetUrl)) throw new Error('Blocked an unsafe Chrome navigation address.');
+  if (!chromeAgentConnection) throw new Error('Chrome agent is not connected.');
+  await chromeAgentConnection.call('Page.navigate', { url: targetUrl });
+  await chromeAgentConnection.call('Page.bringToFront');
+  return true;
+});
+
+ipcMain.handle('chrome-agent-evaluate', async (event, script) => {
+  requireTrustedIpcSender(event);
+  if (typeof script !== 'string' || !script.trim() || Buffer.byteLength(script, 'utf8') > 2 * 1024 * 1024) {
+    throw new Error('Chrome automation script is invalid or too large.');
+  }
+  if (!chromeAgentConnection) throw new Error('Chrome agent is not connected.');
+  const evaluation = await chromeAgentConnection.call('Runtime.evaluate', {
+    expression: script,
+    awaitPromise: true,
+    returnByValue: true,
+    userGesture: true,
+  });
+  if (evaluation.exceptionDetails) {
+    const detail = evaluation.exceptionDetails.exception?.description
+      || evaluation.exceptionDetails.text
+      || 'The website rejected an automation action.';
+    throw new Error(String(detail).slice(0, 1000));
+  }
+  return evaluation.result?.value;
+});
+
+ipcMain.handle('chrome-agent-select-active-target', async (event) => {
+  requireTrustedIpcSender(event);
+  await connectChromeAgentTarget();
+  return true;
+});
+
 ipcMain.on('secure-storage-get', (event, key) => {
   try {
     requireTrustedIpcSender(event);
@@ -1272,6 +1502,10 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', async () => {
   if (updateCheckTimer) clearTimeout(updateCheckTimer);
+  if (chromeAgentConnection) {
+    void chromeAgentConnection.call('Browser.close').catch(() => {});
+    chromeAgentConnection = null;
+  }
   for (const authWindow of topLevelAuthWindows) {
     if (!authWindow.isDestroyed()) authWindow.close();
   }

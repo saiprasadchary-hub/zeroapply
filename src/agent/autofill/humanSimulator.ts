@@ -1,3 +1,103 @@
+export function normalizePhoneForField(value: string, maxLength = 0, pattern = ''): string {
+  const digits = String(value || '').replace(/\D/g, '');
+  const quantifiedLengths = Array.from(pattern.matchAll(/\{(\d+)\}/g), (match) => Number(match[1]));
+  const patternLength = quantifiedLengths.length > 0 ? quantifiedLengths.reduce((total, length) => total + length, 0) : 0;
+  const expectedLength = maxLength > 0 ? maxLength : patternLength;
+  if (expectedLength > 0 && digits.length > expectedLength) return digits.slice(-expectedLength);
+  return digits;
+}
+
+export interface ChoiceCandidate {
+  text: string;
+  value?: string;
+  disabled?: boolean;
+}
+
+export interface ChoiceResolution {
+  index: number;
+  score: number;
+  margin: number;
+  ambiguous: boolean;
+}
+
+export function normalizeChoiceText(value: string): string {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9+]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function scoreOptionMatch(optionText: string, optionValue: string, targetValue: string): number {
+  const target = normalizeChoiceText(targetValue);
+  const optText = normalizeChoiceText(optionText);
+  const optVal = normalizeChoiceText(optionValue);
+  if (!target || (!optText && !optVal)) return -1;
+  if (/^(?:select|please select|choose|select an option|select one|choose an option|options?)$/.test(optText)) return -1;
+
+  if (optText === target || optVal === target) return 100;
+
+  const targetDial = String(targetValue || '').match(/\+(\d{1,4})/);
+  const optionDial = String(optionText || optionValue || '').match(/\+(\d{1,4})/);
+  if (targetDial && optionDial && targetDial[1] === optionDial[1]) return 100;
+
+  const yesWords = new Set(['yes', 'true', '1']);
+  const noWords = new Set(['no', 'false', '0']);
+  if (yesWords.has(target) && (yesWords.has(optText) || yesWords.has(optVal))) return 98;
+  if (noWords.has(target) && (noWords.has(optText) || noWords.has(optVal))) return 98;
+
+  const aliases: Array<[RegExp, RegExp]> = [
+    [/\b(?:india|indian)\b/, /\b(?:india|indian)\b/],
+    [/\b(?:united states|usa|us)\b/, /\b(?:united states|usa|us)\b/],
+    [/\b(?:united kingdom|uk|great britain)\b/, /\b(?:united kingdom|uk|great britain)\b/],
+    [/\b(?:remote|work from home|virtual)\b/, /\b(?:remote|work from home|virtual)\b/],
+    [/\b(?:on site|onsite|in office)\b/, /\b(?:on site|onsite|in office)\b/],
+    [/\b(?:bachelor|undergraduate|b tech|b e|b s|b a|bca)\b/, /\b(?:bachelor|undergraduate|b tech|b e|b s|b a|bca)\b/],
+    [/\b(?:master|postgraduate|m tech|m e|m s|mba|mca)\b/, /\b(?:master|postgraduate|m tech|m e|m s|mba|mca)\b/],
+    [/\b(?:doctorate|ph d|phd)\b/, /\b(?:doctorate|ph d|phd)\b/],
+    [/\b(?:prefer not|decline|do not wish)\b/, /\b(?:prefer not|decline|do not wish|choose not)\b/],
+  ];
+  for (const [targetPattern, optionPattern] of aliases) {
+    if (targetPattern.test(target) && (optionPattern.test(optText) || optionPattern.test(optVal))) return 94;
+  }
+
+  if (target.length >= 4 && (optText.includes(target) || optVal.includes(target))) return 82;
+  if (optText.length >= 4 && target.includes(optText)) return 78;
+
+  const targetTokens = new Set(target.split(' ').filter((token) => token.length > 1));
+  const optionTokens = new Set(optText.split(' ').filter((token) => token.length > 1));
+  let intersection = 0;
+  for (const token of targetTokens) if (optionTokens.has(token)) intersection++;
+  if (intersection === 0) return -1;
+  const union = new Set([...targetTokens, ...optionTokens]).size;
+  return Math.round((intersection / Math.max(union, 1)) * 70);
+}
+
+export function resolveBestChoice(
+  choices: ChoiceCandidate[],
+  targetValue: string,
+  minimumScore = 70,
+  minimumMargin = 8,
+): ChoiceResolution | null {
+  const ranked = choices
+    .map((choice, index) => ({
+      index,
+      disabled: Boolean(choice.disabled),
+      score: scoreOptionMatch(choice.text, choice.value || '', targetValue),
+    }))
+    .filter((choice) => !choice.disabled && choice.score >= 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+  if (ranked.length === 0 || ranked[0].score < minimumScore) return null;
+  const runnerUpScore = ranked[1]?.score ?? -1;
+  const margin = ranked[0].score - runnerUpScore;
+  const ambiguous = ranked[0].score < 98 && runnerUpScore >= minimumScore && margin < minimumMargin;
+  if (ambiguous) return null;
+  return { index: ranked[0].index, score: ranked[0].score, margin, ambiguous: false };
+}
+
 /**
  * Browser-injected script function to simulate realistic human behavior 
  * to bypass advanced ATS bot-detectors with real-time HUD telemetry and visual spotlight.
@@ -8,8 +108,14 @@ export function generateHumanBypassScript(instructionsJson: string): string {
   return `
 (async function simulateHumanAutofill() {
   const instructions = ${instructionsJson};
+  const normalizePhoneForField = ${normalizePhoneForField.toString()};
+  const normalizeChoiceText = ${normalizeChoiceText.toString()};
+  const scoreOptionMatch = ${scoreOptionMatch.toString()};
+  const resolveBestChoice = ${resolveBestChoice.toString()};
   let filledCount = 0;
   let skippedCount = 0;
+  let preservedCount = 0;
+  const failedFields = [];
 
   // Helper to sleep for X milliseconds
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -101,6 +207,58 @@ export function generateHumanBypassScript(instructionsJson: string): string {
     });
   }
 
+  function isElementVisible(element) {
+    if (!element || !element.isConnected) return false;
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function dispatchSingleClick(element) {
+    const rect = element.getBoundingClientRect();
+    const init = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      button: 0,
+      buttons: 1,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    };
+    element.dispatchEvent(new PointerEvent('pointerdown', init));
+    element.dispatchEvent(new MouseEvent('mousedown', init));
+    element.dispatchEvent(new PointerEvent('pointerup', { ...init, buttons: 0 }));
+    element.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+    element.click();
+  }
+
+  function controlIsChecked(element) {
+    if ('checked' in element) return Boolean(element.checked);
+    return element.getAttribute('aria-checked') === 'true' || element.getAttribute('data-state') === 'checked';
+  }
+
+  function optionDisplayText(element) {
+    if (!element) return '';
+    return String(
+      element.getAttribute('aria-label') ||
+      element.getAttribute('data-value') ||
+      element.innerText ||
+      element.textContent ||
+      element.getAttribute('value') ||
+      '',
+    ).replace(/\\s+/g, ' ').trim();
+  }
+
+  function selectedCustomValue(element) {
+    const activeId = element.getAttribute('aria-activedescendant');
+    const active = activeId ? document.getElementById(activeId) : null;
+    const controlsId = element.getAttribute('aria-controls') || element.getAttribute('aria-owns');
+    const controlled = controlsId ? document.getElementById(controlsId.split(/\\s+/)[0]) : null;
+    const selected = active || controlled?.querySelector('[role="option"][aria-selected="true"]');
+    return optionDisplayText(selected) || String(element.value || element.getAttribute('data-value') || element.innerText || '').trim();
+  }
+
   function setNativeValue(element, value) {
     let prototype = window.HTMLInputElement.prototype;
     if (element.tagName.toLowerCase() === 'textarea') {
@@ -116,18 +274,33 @@ export function generateHumanBypassScript(instructionsJson: string): string {
     }
   }
 
+  function normalizedComparable(element, value, category) {
+    const raw = String(value ?? '').trim();
+    if (category === 'phone') return normalizePhoneForField(raw, element.maxLength > 0 ? element.maxLength : 0, element.getAttribute('pattern') || '');
+    if (element.type === 'email') return raw.toLowerCase();
+    return raw.replace(/\\s+/g, ' ');
+  }
+
+  function valueMatches(element, expected, category) {
+    const actual = normalizedComparable(element, element.value, category);
+    const target = normalizedComparable(element, expected, category);
+    return Boolean(target) && actual === target;
+  }
+
   // Simulate human typing character by character
-  async function simulateTyping(element, text) {
+  async function simulateTyping(element, text, category) {
     element.focus();
     
     // Clear existing
     setNativeValue(element, '');
     element.dispatchEvent(new Event('input', { bubbles: true }));
     
+    let typed = '';
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
-      element.value += char;
-      element.dispatchEvent(new Event('input', { bubbles: true }));
+      typed += char;
+      setNativeValue(element, typed);
+      element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: char }));
       
       // Random keystroke delay: average 35-85ms
       await sleep(randomDelay(30, 90));
@@ -139,8 +312,18 @@ export function generateHumanBypassScript(instructionsJson: string): string {
     }
     
     element.dispatchEvent(new Event('change', { bubbles: true }));
-    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text.slice(-1) }));
     element.dispatchEvent(new Event('blur', { bubbles: true }));
+    await sleep(40);
+
+    if (!valueMatches(element, text, category)) {
+      element.focus();
+      setNativeValue(element, text);
+      element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertReplacementText', data: text }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      element.dispatchEvent(new Event('blur', { bubbles: true }));
+      await sleep(40);
+    }
+    return valueMatches(element, text, category);
   }
 
   // Autonomous Canvas Signature Pad Vector Signer
@@ -209,7 +392,7 @@ export function generateHumanBypassScript(instructionsJson: string): string {
     }
   }
 
-  function scoreOptionMatch(optionText, optionValue, targetValue) {
+  function legacyScoreOptionMatch(optionText, optionValue, targetValue) {
     if (!targetValue || (!optionText && !optionValue)) return -1;
     const target = String(targetValue).toLowerCase().trim();
     const optText = String(optionText || '').toLowerCase().trim();
@@ -294,6 +477,28 @@ export function generateHumanBypassScript(instructionsJson: string): string {
         continue;
       }
 
+      let intendedValue = String(inst.value ?? '');
+      if (inst.category === 'phone') {
+        intendedValue = normalizePhoneForField(
+          intendedValue,
+          el.maxLength > 0 ? el.maxLength : 0,
+          el.getAttribute('pattern') || '',
+        );
+      }
+
+      if (!['select', 'radio', 'checkbox', 'custom_dropdown', 'file', 'signature'].includes(inst.type)
+        && valueMatches(el, intendedValue, inst.category)) {
+        preservedCount++;
+        filledCount++;
+        emitTelemetry({
+          type: 'status',
+          title: 'Already correct: ' + fieldLabel,
+          target: fieldLabel,
+          status: 'completed'
+        });
+        continue;
+      }
+
       // Broadcast live HUD action
       emitTelemetry({
         type: 'type',
@@ -317,22 +522,22 @@ export function generateHumanBypassScript(instructionsJson: string): string {
 
       if (inst.type === 'select') {
         const options = Array.from(el.options);
-        let bestMatch = null;
-        let bestScore = -1;
-        options.forEach(o => {
-          const score = scoreOptionMatch(o.text, o.value, inst.value);
-          if (score > bestScore) {
-            bestScore = score;
-            bestMatch = o;
+        const resolution = resolveBestChoice(options.map(o => ({
+          text: o.text || o.label || '',
+          value: o.value || '',
+          disabled: o.disabled || o.hidden,
+        })), inst.value);
+        const bestMatch = resolution ? options[resolution.index] : null;
+
+        if (bestMatch) {
+          const currentOption = el.options[el.selectedIndex];
+          if (currentOption && scoreOptionMatch(currentOption.text, currentOption.value, inst.value) >= 70) {
+            preservedCount++;
+            filledCount++;
+            continue;
           }
-        });
-        
-        if (bestMatch && bestScore >= 20) {
           el.focus();
           await sleep(randomDelay(100, 200));
-          bestMatch.selected = true;
-          el.selectedIndex = options.indexOf(bestMatch);
-          
           try {
             // Reset React internal value tracker so React detects the selection change
             const tracker = el._valueTracker;
@@ -351,72 +556,55 @@ export function generateHumanBypassScript(instructionsJson: string): string {
 
           el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
           el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-          el.dispatchEvent(new CustomEvent('change', { bubbles: true, detail: { value: bestMatch.value } }));
           el.dispatchEvent(new Event('blur', { bubbles: true }));
-          filledCount++;
-          emitTelemetry({
-            type: 'click',
-            title: 'Selected dropdown: ' + (bestMatch.text || bestMatch.value).trim(),
-            target: fieldLabel,
-            status: 'completed'
-          });
-        } else {
-          // Robust Fallback: If no option met score threshold but field is required, pick first valid non-placeholder option
-          const fallbackOpt = options.find(o => o.value && !/^(?:select|choose|--|select an option|select one)/i.test((o.text || '').trim()));
-          if (fallbackOpt) {
-            el.focus();
-            fallbackOpt.selected = true;
-            el.selectedIndex = options.indexOf(fallbackOpt);
-            try {
-              const tracker = el._valueTracker;
-              if (tracker && typeof tracker.setValue === 'function') tracker.setValue('');
-              const selectValueSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
-              if (selectValueSetter) selectValueSetter.call(el, fallbackOpt.value);
-              else el.value = fallbackOpt.value;
-            } catch {
-              el.value = fallbackOpt.value;
-            }
-            el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-            el.dispatchEvent(new Event('blur', { bubbles: true }));
+          await sleep(60);
+          const selectedOption = el.options[el.selectedIndex];
+          const verified = Boolean(selectedOption) && scoreOptionMatch(selectedOption.text, selectedOption.value, inst.value) >= 70;
+          if (verified) {
             filledCount++;
+            emitTelemetry({
+              type: 'click',
+              title: 'Selected dropdown: ' + (selectedOption.text || selectedOption.value).trim(),
+              target: fieldLabel,
+              status: 'completed'
+            });
           } else {
+            failedFields.push(fieldLabel);
             skippedCount++;
           }
+        } else {
+          failedFields.push(fieldLabel + ' (no confident dropdown match)');
+          skippedCount++;
         }
       } else if (inst.type === 'radio') {
-        const radios = Array.from(document.querySelectorAll(inst.selector));
-        let bestRadio = null;
-        let bestScore = 0;
-        for (let j = 0; j < radios.length; j++) {
-          const r = radios[j];
-          let lbl = '';
+        const radios = Array.from(document.querySelectorAll(inst.selector)).filter(isElementVisible);
+        const radioChoices = radios.map(r => {
+          let label = optionDisplayText(r);
           if (r.id) {
-            const l = document.querySelector('label[for="' + CSS.escape(r.id) + '"]');
-            if (l) lbl = l.innerText.trim();
+            const associated = document.querySelector('label[for="' + CSS.escape(r.id) + '"]');
+            if (associated) label = optionDisplayText(associated);
           }
-          if (!lbl && r.closest('label')) lbl = r.closest('label').innerText.trim();
-          if (!lbl) lbl = r.value || '';
-          
-          const score = scoreOptionMatch(lbl, r.value, inst.value);
-          if (score > bestScore) {
-            bestScore = score;
-            bestRadio = r;
-          }
-        }
+          if ((!label || label === r.value) && r.closest('label')) label = optionDisplayText(r.closest('label'));
+          return { text: label, value: r.value || r.getAttribute('data-value') || '', disabled: r.disabled || r.getAttribute('aria-disabled') === 'true' };
+        });
+        const resolution = resolveBestChoice(radioChoices, inst.value);
+        const bestRadio = resolution ? radios[resolution.index] : null;
 
-        if (bestRadio && bestScore >= 40) {
-          simulateMouse(bestRadio);
-          await sleep(randomDelay(80, 200));
-          bestRadio.click();
-          if (bestRadio.id) {
-            const l = document.querySelector('label[for="' + CSS.escape(bestRadio.id) + '"]');
-            if (l) l.click();
-          } else if (bestRadio.closest('label')) {
-            bestRadio.closest('label').click();
+        if (bestRadio) {
+          if (controlIsChecked(bestRadio)) {
+            preservedCount++;
+            filledCount++;
+            continue;
           }
-          bestRadio.dispatchEvent(new Event('change', { bubbles: true }));
-          filledCount++;
+          await animateVirtualMouse(bestRadio);
+          await sleep(randomDelay(80, 160));
+          dispatchSingleClick(bestRadio);
+          await sleep(60);
+          if (controlIsChecked(bestRadio)) filledCount++;
+          else {
+            failedFields.push(fieldLabel);
+            skippedCount++;
+          }
           emitTelemetry({
             type: 'click',
             title: 'Selected radio option',
@@ -424,6 +612,7 @@ export function generateHumanBypassScript(instructionsJson: string): string {
             status: 'completed'
           });
         } else {
+          failedFields.push(fieldLabel + ' (no confident radio match)');
           skippedCount++;
         }
       } else if (inst.type === 'checkbox') {
@@ -433,102 +622,89 @@ export function generateHumanBypassScript(instructionsJson: string): string {
           if (l) lbl = l.innerText.trim();
         }
         if (!lbl && el.closest('label')) lbl = el.closest('label').innerText.trim();
+        if (!lbl) lbl = optionDisplayText(el);
         const labelLower = (lbl || '').toLowerCase();
-        
-        const valLower = (inst.value || '').toLowerCase();
-        const shouldCheck = 
-          valLower === 'yes' || 
-          valLower === 'true' || 
-          valLower === '1' ||
-          /agree|acknowledge|certify|terms|privacy|confirm|above 18|authorized|consent|eligible|willing|comfortable|i agree/i.test(labelLower);
+
+        const valLower = normalizeChoiceText(inst.value || '');
+        const affirmative = new Set(['yes', 'true', '1', 'checked', 'check']);
+        const negative = new Set(['no', 'false', '0', 'unchecked', 'uncheck']);
+        const desiredState = affirmative.has(valLower) ? true : negative.has(valLower) ? false : null;
 
         const isFollowCompany = /follow\\s+.*to stay up to date|follow company|follow this employer/i.test(labelLower);
 
-        if (isFollowCompany && el.checked) {
-          simulateMouse(el);
-          await sleep(randomDelay(80, 200));
-          el.click();
-          if (el.id) {
-            const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
-            if (l) l.click();
-          } else if (el.closest('label')) {
-            el.closest('label').click();
-          }
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          emitTelemetry({
-            type: 'click',
-            title: 'Unchecked Follow Company box',
-            target: fieldLabel,
-            status: 'completed'
-          });
-        } else if (shouldCheck && !el.checked) {
-          simulateMouse(el);
-          await sleep(randomDelay(80, 200));
-          el.click();
-          if (el.id) {
-            const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
-            if (l) l.click();
-          } else if (el.closest('label')) {
-            el.closest('label').click();
-          }
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          filledCount++;
-          emitTelemetry({
-            type: 'click',
-            title: 'Checked agreement box',
-            target: fieldLabel,
-            status: 'completed'
-          });
-        } else {
+        const targetState = isFollowCompany ? false : desiredState;
+        if (targetState === null) {
+          failedFields.push(fieldLabel + ' (checkbox answer was not explicit)');
           skippedCount++;
+        } else if (controlIsChecked(el) === targetState) {
+          preservedCount++;
+          filledCount++;
+        } else {
+          await animateVirtualMouse(el);
+          await sleep(randomDelay(80, 160));
+          dispatchSingleClick(el);
+          await sleep(60);
+          if (controlIsChecked(el) === targetState) {
+            filledCount++;
+            emitTelemetry({
+              type: 'click',
+              title: (targetState ? 'Checked: ' : 'Unchecked: ') + fieldLabel,
+              target: fieldLabel,
+              status: 'completed'
+            });
+          } else {
+            failedFields.push(fieldLabel);
+            skippedCount++;
+          }
         }
       } else if (inst.type === 'custom_dropdown') {
         const isInput = el.tagName.toLowerCase() === 'input' || el.tagName.toLowerCase() === 'textarea';
+        if (scoreOptionMatch(selectedCustomValue(el), el.value || '', inst.value) >= 70) {
+          preservedCount++;
+          filledCount++;
+          continue;
+        }
         if (isInput) {
-          await simulateTyping(el, inst.value);
+          await simulateTyping(el, intendedValue, inst.category);
         } else {
-          simulateMouse(el);
+          await animateVirtualMouse(el);
           await sleep(80);
           el.focus();
-          el.click();
+          dispatchSingleClick(el);
         }
 
         let clickedOption = false;
+        let clickedOptionText = '';
         // Adaptive polling loop: wait for suggestions to render over network
         for (let pollAttempt = 0; pollAttempt < 6; pollAttempt++) {
           await sleep(150);
 
-          const dropdownContainers = Array.from(document.querySelectorAll('[role="listbox"], [role="menu"], .dropdown-menu, .typeahead-options, .artdeco-dropdown__content, .Select-menu-outer, .MuiAutocomplete-listbox, .ant-select-dropdown, .fb-dropdown__select-dropdown, ul[class*="dropdown"]'))
+          const controlledIds = String(el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\\s+/).filter(Boolean);
+          const controlledContainers = controlledIds.map(id => document.getElementById(id)).filter(Boolean);
+          const dropdownContainers = controlledContainers
+            .concat(Array.from(document.querySelectorAll('[role="listbox"], [role="menu"], .dropdown-menu, .typeahead-options, .artdeco-dropdown__content, .Select-menu-outer, .MuiAutocomplete-listbox, .ant-select-dropdown, .fb-dropdown__select-dropdown, ul[class*="dropdown"]')))
             .concat(el.closest('.search-basic-typeahead, [class*="typeahead"], [class*="dropdown"], .fb-dropdown, .artdeco-dropdown') || []);
             
           for (const container of dropdownContainers) {
-            if (!container) continue;
-            const options = Array.from(container.querySelectorAll('[role="option"], [role="menuitem"], .artdeco-dropdown__item, li, .option, .item, button'));
-            let bestMatch = null;
-            let bestScore = -1;
-            for (const opt of options) {
-              const text = (opt.innerText || opt.textContent || '').trim();
-              const score = scoreOptionMatch(text, '', inst.value);
-              if (score > bestScore) {
-                bestScore = score;
-                bestMatch = opt;
-              }
-            }
-            if (bestMatch && bestScore >= 20) {
-              simulateMouse(bestMatch);
+            if (!container || !isElementVisible(container)) continue;
+            const options = Array.from(container.querySelectorAll('[role="option"], [role="menuitemradio"], [role="menuitem"], .artdeco-dropdown__item, li, .option, .item, button'))
+              .filter(option => isElementVisible(option));
+            const resolution = resolveBestChoice(options.map(option => ({
+              text: optionDisplayText(option),
+              value: option.getAttribute('data-value') || option.getAttribute('value') || '',
+              disabled: option.getAttribute('aria-disabled') === 'true' || option.disabled,
+            })), inst.value);
+            const bestMatch = resolution ? options[resolution.index] : null;
+            if (bestMatch) {
+              clickedOptionText = optionDisplayText(bestMatch);
+              await animateVirtualMouse(bestMatch);
               await sleep(80);
-              bestMatch.click();
-              bestMatch.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-              bestMatch.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-              bestMatch.dispatchEvent(new Event('click', { bubbles: true }));
-              clickedOption = true;
-              filledCount++;
-              emitTelemetry({
-                type: 'click',
-                title: 'Selected custom dropdown: ' + (bestMatch.innerText || '').trim(),
-                target: fieldLabel,
-                status: 'completed'
-              });
+              dispatchSingleClick(bestMatch);
+              await sleep(80);
+              const selectedValue = selectedCustomValue(el);
+              clickedOption = scoreOptionMatch(selectedValue, el.value || '', inst.value) >= 70 ||
+                bestMatch.getAttribute('aria-selected') === 'true' ||
+                scoreOptionMatch(clickedOptionText, bestMatch.getAttribute('data-value') || '', inst.value) >= 98;
               break;
             }
           }
@@ -536,23 +712,18 @@ export function generateHumanBypassScript(instructionsJson: string): string {
         }
 
         // Check for underlying hidden select element in parent wrapper
-        const parentContainer = el.closest('.fb-dropdown, .artdeco-dropdown, [class*="dropdown"]') || el.parentElement;
-        if (parentContainer) {
+        const parentContainer = el.closest('.fb-dropdown, .artdeco-dropdown, [class*="dropdown"], [class*="select"]');
+        if (!clickedOption && parentContainer) {
           const hiddenSelect = parentContainer.querySelector('select');
           if (hiddenSelect && hiddenSelect.options) {
             const opts = Array.from(hiddenSelect.options);
-            let bestHiddenMatch = null;
-            let bestHiddenScore = -1;
-            opts.forEach(o => {
-              const s = scoreOptionMatch(o.text, o.value, inst.value);
-              if (s > bestHiddenScore) {
-                bestHiddenScore = s;
-                bestHiddenMatch = o;
-              }
-            });
-            if (bestHiddenMatch && bestHiddenScore >= 20) {
-              bestHiddenMatch.selected = true;
-              hiddenSelect.selectedIndex = opts.indexOf(bestHiddenMatch);
+            const resolution = resolveBestChoice(opts.map(option => ({
+              text: option.text || option.label || '',
+              value: option.value || '',
+              disabled: option.disabled || option.hidden,
+            })), inst.value);
+            const bestHiddenMatch = resolution ? opts[resolution.index] : null;
+            if (bestHiddenMatch) {
               try {
                 const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
                 if (setter) setter.call(hiddenSelect, bestHiddenMatch.value);
@@ -563,10 +734,9 @@ export function generateHumanBypassScript(instructionsJson: string): string {
               hiddenSelect.dispatchEvent(new Event('input', { bubbles: true }));
               hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
               hiddenSelect.dispatchEvent(new Event('blur', { bubbles: true }));
-              if (!clickedOption) {
-                clickedOption = true;
-                filledCount++;
-              }
+              const selected = hiddenSelect.options[hiddenSelect.selectedIndex];
+              clickedOption = Boolean(selected) && scoreOptionMatch(selected.text, selected.value, inst.value) >= 70;
+              clickedOptionText = selected ? selected.text : '';
             }
           }
         }
@@ -575,7 +745,21 @@ export function generateHumanBypassScript(instructionsJson: string): string {
           el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 }));
           await sleep(80);
           el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter', keyCode: 13 }));
+          await sleep(80);
+          clickedOption = scoreOptionMatch(selectedCustomValue(el), el.value || '', inst.value) >= 70;
+        }
+
+        if (clickedOption) {
           filledCount++;
+          emitTelemetry({
+            type: 'click',
+            title: 'Selected custom dropdown: ' + (clickedOptionText || inst.value),
+            target: fieldLabel,
+            status: 'completed'
+          });
+        } else {
+          failedFields.push(fieldLabel + ' (custom dropdown selection was not verified)');
+          skippedCount++;
         }
       } else if (el.tagName.toLowerCase() === 'canvas' || inst.type === 'signature') {
         await simulateCanvasSignature(el, inst.value);
@@ -587,9 +771,11 @@ export function generateHumanBypassScript(instructionsJson: string): string {
           status: 'completed'
         });
       } else if (inst.type !== 'file' && inst.value !== '[ATTACH_RESUME]') {
-        let textToType = inst.value;
+        let textToType = intendedValue;
         const isNumericInput = el.type === 'number' || el.getAttribute('inputmode') === 'numeric' || (el.getAttribute('pattern') && el.getAttribute('pattern').includes('[0-9]'));
-        if (isNumericInput) {
+        if (inst.category === 'phone') {
+          textToType = normalizePhoneForField(textToType, el.maxLength > 0 ? el.maxLength : 0, el.getAttribute('pattern') || '');
+        } else if (isNumericInput) {
           const numDigits = textToType.match(/\\b[0-9]+(?:\\.[0-9]+)?\\b/);
           if (numDigits) {
             textToType = numDigits[0];
@@ -598,14 +784,19 @@ export function generateHumanBypassScript(instructionsJson: string): string {
             textToType = maxVal || '10';
           }
         }
-        await simulateTyping(el, textToType);
-        filledCount++;
+        const typed = await simulateTyping(el, textToType, inst.category);
+        if (typed) filledCount++;
+        else {
+          failedFields.push(fieldLabel);
+          skippedCount++;
+        }
       }
 
       await sleep(randomDelay(150, 350));
 
     } catch (e) {
       console.warn('Field fill error for selector ' + inst.selector, e);
+      failedFields.push(fieldLabel);
       skippedCount++;
     }
   }
@@ -617,7 +808,7 @@ export function generateHumanBypassScript(instructionsJson: string): string {
     status: 'completed'
   });
 
-  return { filledCount, skippedCount };
+  return { filledCount, skippedCount, preservedCount, failedFields };
 })();
 `;
 }

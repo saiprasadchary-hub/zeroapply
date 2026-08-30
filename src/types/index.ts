@@ -1,6 +1,7 @@
 export type PersonaTone = 'Confident' | 'Minimalist' | 'Detailed';
 export type WorkLocation = 'Remote' | 'Hybrid' | 'On-site';
 export type ApplyMode = 'easy' | 'normal';
+import type { BrowserMode } from '../browserSelect/types';
 
 export interface ProfessionalReference {
   name: string;
@@ -26,6 +27,7 @@ export interface PersonaData {
   techStack: string[];
   targetRoles: string[];
   applyMode: ApplyMode;
+  browserMode?: BrowserMode;
   applicationLimit?: number;
   verified: boolean;
   resumeText?: string;

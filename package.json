@@ -14,7 +14,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint --ignore-pattern release_exe/** --ignore-pattern release_setup/** --ignore-pattern dist/**",
-    "test": "tsx test/ats_detection.test.ts && tsx test/auth_policy.test.ts && tsx test/security_policy.test.ts && tsx test/browser_navigation.test.ts && tsx test/browser_core.test.ts && tsx test/electron_browser_features.test.ts && tsx test/easy_apply_safety.test.ts && tsx test/standard_forms_safety.test.ts && tsx test/single_model_policy.test.ts && tsx test/production_regressions.test.ts",
+    "test": "tsx test/ats_detection.test.ts && tsx test/auth_policy.test.ts && tsx test/security_policy.test.ts && tsx test/browser_navigation.test.ts && tsx test/browser_core.test.ts && tsx test/browser_select.test.ts && tsx test/contact_autofill.test.ts && tsx test/web_control_accuracy.test.ts && tsx test/workflow_recovery.test.ts && tsx test/electron_browser_features.test.ts && tsx test/easy_apply_safety.test.ts && tsx test/standard_forms_safety.test.ts && tsx test/single_model_policy.test.ts && tsx test/production_regressions.test.ts",
     "test:integration": "tsx test/agent_integration.test.ts",
     "verify": "npm run lint && npm run build && npm test",
     "preview": "vite preview",
@@ -70,7 +70,8 @@
     "lucide-react": "^1.26.0",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

@@ -22,6 +22,7 @@ export interface AgentRunResult {
   resumeAttached?: boolean;
   message: string;
   qaPairs?: { question: string; answer: string }[];
+  failedFields?: string[];
 }
 
 export class AgentEngine {
@@ -170,7 +171,10 @@ export class AgentEngine {
       }
     }
 
-    this.stateMachine.transition('REVIEW_READY', 'Successfully auto-filled ' + fillResult.filledCount + ' fields', {
+    const fillMessage = fillResult.failedFields.length > 0
+      ? `Filled ${fillResult.filledCount} fields; ${fillResult.failedFields.length} field(s) did not retain the intended value`
+      : `Verified ${fillResult.filledCount} correctly filled fields`;
+    this.stateMachine.transition('REVIEW_READY', fillMessage, {
       filledFieldsCount: fillResult.filledCount,
     });
 
@@ -212,12 +216,13 @@ export class AgentEngine {
     }
 
     return {
-      success: fillResult.filledCount > 0,
+      success: fillResult.filledCount > 0 && fillResult.failedFields.length === 0,
       detectedCount: scannedFields.length,
       filledCount: fillResult.filledCount,
       resumeFieldDetected,
       resumeAttached,
-      message: 'Auto-filled ' + fillResult.filledCount + ' of ' + scannedFields.length + ' fields',
+      message: fillMessage,
+      failedFields: fillResult.failedFields,
       qaPairs,
     };
   }

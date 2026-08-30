@@ -23,13 +23,15 @@ import {
 } from 'lucide-react';
 import type { PersonaData } from '../src/types';
 import { AgentEngine } from '../src/agent/orchestrator/agentEngine';
-import { searchAndNavigate } from '../src/agent/searchAgent';
+import { buildSearchUrl, searchAndNavigate } from '../src/agent/searchAgent';
 import type { StateMachineContext } from '../src/agent/stateMachine/appStateMachine';
 import { AutoApplyEngine } from '../src/agent/autoApply/autoApplyEngine';
 import { StandardFormsEngine } from '../src/agent/All supported forms';
 import { AgentLiveHUD } from '../src/agent/ui/AgentLiveHUD';
 import { QuestionMemoryBank } from '../src/agent/memory/questionMemory';
+import { launchChromeAgentPage, normalizeBrowserMode, type ChromeAgentPage } from '../src/browserSelect';
 import { ErrorLogger } from '../src/agent/tracker/errorLogger';
+import { isRecoverableWorkflowError } from '../src/agent/recovery/workflowRecovery';
 import {
   DEFAULT_HOME_URL,
   MAX_BROWSER_TABS,
@@ -254,6 +256,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
   );
 
   const actionsRef = useRef({ handleSearchAndApply: () => {}, handleAutoFillAndApply: () => {} });
+  const chromeAgentPageRef = useRef<ChromeAgentPage | null>(null);
 
   useEffect(() => {
     tabsRef.current = tabs;
@@ -464,9 +467,97 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
     setAddress(platform.loginUrl);
   }, [updateTab]);
 
+  const runChromeAgentAction = useCallback(async (
+    action: 'search' | 'fillApply' | 'autoApply',
+    platformId: PlatformId,
+  ) => {
+    if (window.zeroApply?.isDesktop !== true) {
+      onSaveToast('Real Chrome Agent Browser is available only in the ZeroApply desktop app.');
+      return;
+    }
+    const platform = PLATFORMS.find((item) => item.id === platformId);
+    if (!platform) {
+      onSaveToast('Choose a supported job platform before launching Chrome.');
+      return;
+    }
+    const roleKeyword = persona.targetRoles?.[0]?.trim() || '';
+    if ((action === 'search' || action === 'autoApply') && !roleKeyword) {
+      onSaveToast('Please add at least one Target Role before starting AutoApply.');
+      return;
+    }
+
+    try {
+      onSaveToast('Opening real Google Chrome with the dedicated ZeroApply agent profile...');
+      let page = await launchChromeAgentPage(platform.loginUrl);
+      chromeAgentPageRef.current = page;
+
+      let searchUrl = platform.loginUrl;
+      if (action === 'search' || action === 'autoApply') {
+        searchUrl = buildSearchUrl(platformId, roleKeyword, persona.location || '', persona.applyMode);
+        await page.navigate(searchUrl);
+        onSaveToast(`Chrome Agent is searching ${platform.label} for “${roleKeyword}”.`);
+      }
+      if (action === 'search') return;
+
+      if (action === 'autoApply') {
+        await new Promise((resolve) => setTimeout(resolve, 3500));
+      }
+      isAutoApplyingRef.current = true;
+      setIsAutoApplying(true);
+      const allowSubmit = window.confirm(
+        `Allow ZeroApply to submit up to ${persona.applicationLimit ?? 5} ${platform.label} applications in real Chrome?\n\nSelect Cancel to fill forms without final submission.`,
+      );
+      for (let restart = 1; restart <= 3; restart++) {
+        try {
+          if (persona.applyMode === 'normal') {
+            await standardFormsEngineRef.current.startBatchApply(
+              page,
+              persona,
+              platformId,
+              allowSubmit,
+              async (target) => {
+                if (target) await page.navigate(target);
+                else await page.refreshTarget();
+                return page;
+              },
+            );
+          } else {
+            await autoApplyEngineRef.current.startBatchApply(page, persona, platform.label, allowSubmit);
+          }
+          break;
+        } catch (error) {
+          if (restart >= 3 || !isRecoverableWorkflowError(error) || !isAutoApplyingRef.current) throw error;
+          onSaveToast(`Chrome connection interrupted. Auto-restarting from confirmed application history (${restart + 1}/3)...`);
+          page = await launchChromeAgentPage(searchUrl);
+          chromeAgentPageRef.current = page;
+          if (searchUrl !== platform.loginUrl) await page.navigate(searchUrl);
+          await new Promise((resolve) => setTimeout(resolve, 2200 * restart));
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Real Chrome automation failed.';
+      ErrorLogger.log({
+        source: 'ChromeAgentBrowser',
+        message,
+        stack: error instanceof Error ? error.stack : undefined,
+        portal: platform?.label,
+        severity: 'CRITICAL',
+        resolved: false,
+      });
+      onSaveToast(`Chrome Agent stopped safely: ${message.slice(0, 180)}`);
+    } finally {
+      isAutoApplyingRef.current = false;
+      setIsAutoApplying(false);
+    }
+  }, [onSaveToast, persona]);
+
   useEffect(() => {
     if (!pendingAction) return;
     const { action, platform } = pendingAction;
+    if (normalizeBrowserMode(persona.browserMode) === 'agent') {
+      void runChromeAgentAction(action, platform);
+      return;
+    }
     selectPlatform(platform);
 
     const timer = setTimeout(async () => {
@@ -484,7 +575,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [pendingAction, onSaveToast, selectPlatform]);
+  }, [pendingAction, onSaveToast, persona.browserMode, runChromeAgentAction, selectPlatform]);
 
   useEffect(() => {
     setIsElectron(window.zeroApply?.isDesktop === true);
@@ -827,22 +918,43 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
     const platformLabel = PLATFORMS.find((p) => p.id === selectedPlatform)?.label || selectedPlatform;
     
     try {
+      let allowSubmit = false;
       if (persona.applyMode === 'normal') {
-        const allowSubmit = window.confirm(
+        allowSubmit = window.confirm(
           `Allow ZeroApply to submit up to ${persona.applicationLimit ?? 5} ${platformLabel} standard-form applications in this run?\n\nEach application advances only after the site positively confirms submission. Select Cancel to fill one form for your review without final submission.`,
         );
-        await standardFormsEngineRef.current.startBatchApply(
-          view,
-          persona,
-          selectedPlatform,
-          allowSubmit,
-          (target) => openAutomationTab(target, selectedPlatform),
-        );
       } else {
-        const allowSubmit = window.confirm(
+        allowSubmit = window.confirm(
           `Allow ZeroApply to submit up to ${persona.applicationLimit ?? 5} ${platformLabel} Easy Apply applications in this run?\n\nSelect Cancel to fill forms without final submission.`,
         );
-        await autoApplyEngineRef.current.startBatchApply(view, persona, platformLabel, allowSubmit);
+      }
+
+      for (let restart = 1; restart <= 3; restart++) {
+        try {
+          if (persona.applyMode === 'normal') {
+            await standardFormsEngineRef.current.startBatchApply(
+              view,
+              persona,
+              selectedPlatform,
+              allowSubmit,
+              (target) => openAutomationTab(target, selectedPlatform),
+            );
+          } else {
+            await autoApplyEngineRef.current.startBatchApply(view, persona, platformLabel, allowSubmit);
+          }
+          break;
+        } catch (error) {
+          if (restart >= 3 || !isRecoverableWorkflowError(error) || !isAutoApplyingRef.current) throw error;
+          onSaveToast(`Browser interruption detected. Auto-restarting from saved application logs (${restart + 1}/3)...`);
+          await searchAndNavigate(
+            view,
+            selectedPlatform,
+            persona.targetRoles?.[0] || '',
+            persona.location || '',
+            persona.applyMode,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 1800 * restart));
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown automation error';

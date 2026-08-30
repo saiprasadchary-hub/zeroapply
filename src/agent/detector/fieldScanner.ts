@@ -22,7 +22,13 @@ export const DOM_SCANNER_SCRIPT = `
   let fieldIdx = 0;
 
   // 1. Identify active application modal container if open
-  const isVisible = (el) => el && el.offsetParent !== null;
+  const isVisible = (el) => {
+    if (!el || !el.isConnected) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  };
   const modals = Array.from(document.querySelectorAll('[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal, .jobs-apply-form')).filter(isVisible);
   const root = modals.find(m => /easy apply|application|contact info|resume/i.test(String(m.innerText || ''))) || modals[0] || document.body;
 
@@ -131,13 +137,27 @@ export const DOM_SCANNER_SCRIPT = `
     return cleanQuestionText(el.name || '');
   }
 
-  const selector = 'input, textarea, select, canvas, [role="combobox"], [role="listbox"], button[aria-haspopup="listbox"], button[data-test-fb-dropdown-trigger], .artdeco-dropdown__trigger';
+  function getOptionText(el) {
+    if (el.id) {
+      const associated = root.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+      if (associated) return cleanQuestionText(associated.innerText || associated.textContent);
+    }
+    const ariaLabel = el.getAttribute('aria-label');
+    if (ariaLabel) return cleanQuestionText(ariaLabel);
+    const wrapped = el.closest('label');
+    if (wrapped) return cleanQuestionText(wrapped.innerText || wrapped.textContent);
+    const ownText = cleanQuestionText(el.innerText || el.textContent || el.value || el.getAttribute('data-value') || '');
+    return ownText;
+  }
+
+  const selector = 'input, textarea, select, canvas, [role="combobox"], [role="radio"], [role="checkbox"], button[aria-haspopup="listbox"], button[data-test-fb-dropdown-trigger], .artdeco-dropdown__trigger';
   const elements = Array.from(root.querySelectorAll(selector));
 
   elements.forEach((el) => {
     const isDropdownTrigger = el.getAttribute('role') === 'combobox' || el.getAttribute('aria-haspopup') === 'listbox' || el.classList.contains('artdeco-dropdown__trigger');
+    const isAriaChoice = el.getAttribute('role') === 'radio' || el.getAttribute('role') === 'checkbox';
     if ((el.type === 'hidden' || el.type === 'submit' || el.type === 'image') && !isDropdownTrigger) return;
-    if (el.type === 'button' && !isDropdownTrigger) return;
+    if (el.type === 'button' && !isDropdownTrigger && !isAriaChoice) return;
     
     // When scanning document root without modal, ignore global search boxes and result lists
     if (root === document.body) {
@@ -157,27 +177,41 @@ export const DOM_SCANNER_SCRIPT = `
 
     const tag = el.tagName.toLowerCase();
     
-    if (el.type === 'radio') {
-      const name = el.name || el.getAttribute('name');
+    if (el.type === 'radio' || el.getAttribute('role') === 'radio') {
+      const radioContainer = el.closest('[role="radiogroup"], fieldset, .form-group, .fb-form-element');
+      let containerKey = radioContainer?.getAttribute('data-za-radio-container') || '';
+      if (radioContainer && !containerKey) {
+        containerKey = 'aria_radio_' + fieldIdx;
+        radioContainer.setAttribute('data-za-radio-container', containerKey);
+      }
+      const name = el.name || el.getAttribute('name') || radioContainer?.id || radioContainer?.getAttribute('aria-label') || containerKey || ('aria_radio_' + fieldIdx);
       if (name) {
-        if (!radioGroups[name]) {
+        const groupKey = String(name).replace(/[^a-zA-Z0-9_-]/g, '_');
+        if (!el.name) el.setAttribute('data-za-radio-group', groupKey);
+        if (!radioGroups[groupKey]) {
           const qText = getRadioQuestionText(el);
-          radioGroups[name] = {
-            id: 'group_' + name,
-            elementSelector: 'input[type="radio"][name="' + CSS.escape(name) + '"]',
+          radioGroups[groupKey] = {
+            id: 'group_' + groupKey,
+            elementSelector: el.name
+              ? 'input[type="radio"][name="' + CSS.escape(el.name) + '"]'
+              : '[role="radio"][data-za-radio-group="' + CSS.escape(groupKey) + '"]',
             type: 'radio',
             label: qText || name,
             name: name,
             placeholder: '',
-            required: el.required || false,
+            required: el.required || el.getAttribute('aria-required') === 'true' || radioContainer?.getAttribute('aria-required') === 'true',
             options: [],
             value: ''
           };
-          fields.push(radioGroups[name]);
+          fields.push(radioGroups[groupKey]);
         }
-        const optText = getLabelText(el);
-        if (optText && !radioGroups[name].options.includes(optText)) {
-          radioGroups[name].options.push(optText);
+        radioGroups[groupKey].required = radioGroups[groupKey].required || el.required || el.getAttribute('aria-required') === 'true';
+        const optText = getOptionText(el);
+        if (optText && !radioGroups[groupKey].options.includes(optText)) {
+          radioGroups[groupKey].options.push(optText);
+        }
+        if (el.checked || el.getAttribute('aria-checked') === 'true') {
+          radioGroups[groupKey].value = optText || el.value || el.getAttribute('data-value') || '';
         }
         return; // Handled by group
       }
@@ -188,7 +222,7 @@ export const DOM_SCANNER_SCRIPT = `
     else if (tag === 'select') fieldType = 'select';
     else if (tag === 'canvas' || el.classList.contains('signature-pad') || /sign/i.test(el.id || el.className)) fieldType = 'signature';
     else if (el.type === 'file') fieldType = 'file';
-    else if (el.type === 'checkbox') fieldType = 'checkbox';
+    else if (el.type === 'checkbox' || el.getAttribute('role') === 'checkbox') fieldType = 'checkbox';
     else if (el.type === 'email') fieldType = 'email';
     else if (el.type === 'tel') fieldType = 'tel';
     else if (el.type === 'number') fieldType = 'number';
@@ -202,9 +236,15 @@ export const DOM_SCANNER_SCRIPT = `
         .map(o => (o.text || o.value || '').trim())
         .filter(t => t && !isGenericPlaceholder(t));
     } else if (fieldType === 'custom_dropdown') {
+      const controlledIds = String(el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\\s+/).filter(Boolean);
+      const controlledOptions = controlledIds.flatMap(controlledId => {
+        const controlled = document.getElementById(controlledId);
+        return controlled ? Array.from(controlled.querySelectorAll('[role="option"], [role="menuitemradio"], [role="menuitem"], option')) : [];
+      });
+      options = controlledOptions.map(getOptionText).filter(t => t && !isGenericPlaceholder(t));
       // Check for hidden select or sibling option elements
-      const parentContainer = el.closest('.fb-dropdown, .artdeco-dropdown, [class*="dropdown"]') || el.parentElement;
-      if (parentContainer) {
+      const parentContainer = el.closest('.fb-dropdown, .artdeco-dropdown, [class*="dropdown"], [class*="select"]');
+      if (options.length === 0 && parentContainer) {
         const hiddenSelect = parentContainer.querySelector('select');
         if (hiddenSelect && hiddenSelect.options) {
           options = Array.from(hiddenSelect.options)
@@ -263,7 +303,9 @@ export const DOM_SCANNER_SCRIPT = `
       placeholder: el.placeholder || '',
       required: el.required || el.getAttribute('aria-required') === 'true',
       options: options,
-      value: el.value || '',
+      value: el.type === 'checkbox' || el.getAttribute('role') === 'checkbox'
+        ? String(el.checked || el.getAttribute('aria-checked') === 'true')
+        : (el.value || el.getAttribute('data-value') || ''),
       errorMessage: errorMessage || undefined,
     });
   });

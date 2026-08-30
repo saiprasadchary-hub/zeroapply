@@ -30,6 +30,7 @@ export type FieldCategory =
   | 'resume'
   | 'signature'
   | 'references'
+  | 'manualConfirmation'
   | 'ignore'
   | 'screeningQuestion';
 
@@ -44,6 +45,18 @@ export interface ClassifiedField {
  */
 export function classifyField(field: ScannedField): ClassifiedField {
   const label = (field.label + ' ' + field.name + ' ' + field.placeholder).toLowerCase();
+  const fieldSignals = [field.label, field.name, field.placeholder]
+    .map((value) => String(value || '').toLowerCase().replace(/[*:]+/g, '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+  if (field.type === 'checkbox') {
+    if (!field.required || label.includes('optional') || /follow (?:the )?(?:company|employer)|job alerts?|marketing|newsletter/i.test(label)) {
+      return { field, category: 'ignore', confidence: 1.0 };
+    }
+    if (/\bi (?:agree|acknowledge|certify|attest|confirm|verify|authorize|consent|have joined|am at least|accept)\b|terms(?: of (?:use|service))?|privacy policy|background check|receive (?:official )?communications?|whatsapp (?:community|group)/i.test(label)) {
+      return { field, category: 'manualConfirmation', confidence: 1.0 };
+    }
+  }
 
   if (field.type === 'signature' || label.includes('signature') || label.includes('sign here') || label.includes('drawn signature')) {
     return { field, category: 'signature', confidence: 0.95 };
@@ -60,7 +73,7 @@ export function classifyField(field: ScannedField): ClassifiedField {
   // Question sentences (e.g. "Are you comfortable reaching out...", "Do you have experience...", "Will you require...")
   const isQuestionSentence = /^(?:are you|do you|have you|will you|can you|would you|is it|is your|should you|please confirm|how comfortable|comfortable with|are you comfortable|willing to|do you agree|open to|able to|describe|tell us)/i.test(label) || label.includes('?');
 
-  const isDropdownOrRadio = field.type === 'select' || field.type === 'custom_dropdown' || field.type === 'radio';
+  const isDropdownOrRadio = field.type === 'select' || field.type === 'custom_dropdown' || field.type === 'radio' || field.type === 'checkbox';
 
   // If it's a question sentence or dropdown, contact profile fields (email, linkedIn, gitHub, phone, name) MUST NOT hijack it
   if (!isQuestionSentence && !isDropdownOrRadio) {
@@ -72,7 +85,7 @@ export function classifyField(field: ScannedField): ClassifiedField {
       if (label.includes('last name') || label.includes('surname') || label.includes('family name') || label.includes('lname')) {
         return { field, category: 'lastName', confidence: 0.95 };
       }
-      if (label.includes('full name') || label.includes('candidate name') || label.includes('your name') || /^name$/.test(label.trim())) {
+      if (label.includes('full name') || label.includes('candidate name') || label.includes('your name') || fieldSignals.includes('name')) {
         return { field, category: 'fullName', confidence: 0.9 };
       }
     }

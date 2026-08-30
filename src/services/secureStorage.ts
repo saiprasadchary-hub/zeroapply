@@ -3,6 +3,10 @@ interface ZeroApplyDesktopBridge {
   autoInstallLLM?: boolean;
   installOllama?: () => Promise<unknown>;
   startOllama?: () => Promise<boolean>;
+  launchChromeAgent?: (url: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
+  chromeAgentNavigate?: (url: string) => Promise<boolean>;
+  chromeAgentEvaluate?: <T = unknown>(script: string) => Promise<T>;
+  chromeAgentSelectActiveTarget?: () => Promise<boolean>;
   secureGet?: (key: string) => string | null;
   secureSet?: (key: string, value: string) => Promise<boolean>;
   secureRemove?: (key: string) => Promise<boolean>;
