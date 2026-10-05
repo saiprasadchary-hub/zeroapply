@@ -2,6 +2,13 @@
   "appId": "com.zeroapply.app.android",
   "appName": "ZeroApply",
   "webDir": "dist",
-  "server": { "androidScheme": "https", "cleartext": false },
-  "android": { "allowMixedContent": false, "webContentsDebuggingEnabled": false }
+  "server": {
+    "androidScheme": "https",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "loggingBehavior": "none"
 }
