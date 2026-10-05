@@ -15,6 +15,10 @@ export interface ProfessionalReference {
 export interface PersonaData {
   fullName: string;
   location: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
   email: string;
   phone: string;
   linkedIn: string;
@@ -26,6 +30,16 @@ export interface PersonaData {
   tone: PersonaTone;
   techStack: string[];
   targetRoles: string[];
+  employmentStatus?: 'fresher' | 'currently_working';
+  currentCompany?: string;
+  currentCtcLpa?: number; // in LPA / Lakhs Per Annum (0 for fresher, e.g., 8 = ₹8 LPA)
+  noticePeriodDays?: number; // in days (0 for immediate/fresher, 15, 30, etc.)
+  skills?: string[];
+  customSkills?: string[];
+  linkedinUrl?: string;
+  gitHubUrl?: string;
+  githubUrl?: string;
+  portfolioUrl?: string;
   applyMode: ApplyMode;
   browserMode?: BrowserMode;
   applicationLimit?: number;

@@ -1,5 +1,5 @@
 {
-  "name": "zeeroaaply",
+  "name": "zeroapply",
   "private": true,
   "version": "1.0.0",
   "description": "ZeroApply High-Output Persona Management Desktop App",
@@ -12,24 +12,49 @@
   "main": "main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint --ignore-pattern release_exe/** --ignore-pattern release_setup/** --ignore-pattern dist/**",
-    "test": "tsx test/ats_detection.test.ts && tsx test/auth_policy.test.ts && tsx test/security_policy.test.ts && tsx test/browser_navigation.test.ts && tsx test/browser_core.test.ts && tsx test/browser_select.test.ts && tsx test/contact_autofill.test.ts && tsx test/web_control_accuracy.test.ts && tsx test/workflow_recovery.test.ts && tsx test/electron_browser_features.test.ts && tsx test/easy_apply_safety.test.ts && tsx test/standard_forms_safety.test.ts && tsx test/single_model_policy.test.ts && tsx test/production_regressions.test.ts",
+    "model:build": "node scripts/create_zeroapply_model.mjs",
+    "predev": "tsx scripts/free_port.ts",
+    "login": "tsx scripts/login_save_chrome.ts",
+    "login:save": "tsx scripts/login_save_chrome.ts",
+    "demo": "tsx scripts/demo_linkedin_chrome.ts",
+    "demo:linkedin": "tsx scripts/demo_linkedin_chrome.ts",
+    "agent:live": "tsx scripts/run_real_chrome_agent.ts",
+    "agent:real": "tsx scripts/run_real_chrome_agent.ts",
+    "verify:scroll": "tsx scripts/verify_scrolling_feature.ts",
+    "build": "vite build",
+    "typecheck": "tsc -b",
+    "deploy": "node scripts/deploy-firebase.cjs",
+    "deploy:hosting": "node scripts/deploy-firebase.cjs --only hosting",
+    "deploy:firestore": "node scripts/deploy-firebase.cjs --only firestore",
+    "firebase:login": "npx --yes firebase-tools login",
+    "firebase:logout": "npx --yes firebase-tools logout",
+    "firebase:login:reauth": "npx --yes firebase-tools login --reauth",
+    "firebase:projects": "npx --yes firebase-tools projects:list",
+    "firebase:create": "npx --yes firebase-tools projects:create",
+    "firebase:use": "npx --yes firebase-tools use",
+    "lint": "oxlint --ignore-pattern \"release_exe/**\" --ignore-pattern \"release_setup/**\" --ignore-pattern \"dist/**\"",
+    "test": "tsx test/ats_detection.test.ts && tsx test/auth_policy.test.ts && tsx test/security_policy.test.ts && tsx test/site_access.test.ts && tsx test/browser_navigation.test.ts && tsx test/browser_core.test.ts && tsx test/browser_select.test.ts && tsx test/chrome_launch_lifecycle.test.ts && tsx test/chrome_agent_startup.test.ts && tsx test/browser_refresh_recovery.test.ts && tsx test/renderer_refresh_recovery.test.ts && tsx test/autoapply_startup_readiness.test.ts && tsx test/autoapply_click_dispatch.test.ts && tsx test/browser_login_compatibility.test.ts && tsx test/contact_autofill.test.ts && tsx test/web_control_accuracy.test.ts && tsx test/workflow_recovery.test.ts && tsx test/electron_browser_features.test.ts && tsx test/easy_apply_safety.test.ts && tsx test/standard_forms_safety.test.ts && tsx test/single_model_policy.test.ts && tsx test/production_regressions.test.ts && tsx test/autoapply_architecture.test.ts && tsx test/autoapply_workflow_execution.test.ts && tsx test/scrolling_feature.test.ts && tsx test/geo_intelligence.test.ts && tsx test/whatsapp_link_detection_and_skip.test.ts && tsx test/embedded_model.test.ts && node --test test/desktop_updates.test.mjs",
     "test:integration": "tsx test/agent_integration.test.ts",
     "verify": "npm run lint && npm run build && npm test",
     "preview": "vite preview",
     "electron": "electron .",
+    "preelectron:dev": "tsx scripts/free_port.ts",
     "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron . --dev\"",
-    "pack:exe:unsigned": "npm run build && npx --no-install @electron/packager . ZeroApply --platform=win32 --arch=x64 --icon=public/logo.ico --out=release_exe_dev --overwrite --prune=true --asar --ignore=\"^(/(release|release_exe.*|release_setup.*|release_build|dist_desktop|dist_exe|dist_portable|scripts|node_modules|src|test|\\.git|\\.firebase|\\.agents)|/AgentBrowser/.*\\.(tsx|ts)$|/(README\\.md|build-exe\\.bat|run-desktop-app\\.bat|firebase\\.json|firestore\\..*|tsconfig.*\\.json|vite\\.config\\.ts|\\.oxlintrc\\.json|package-lock\\.json)$)\"",
+    "pack:exe:unsigned": "npm run model:download && npm run build && electron-builder --win --x64 --dir",
     "dist:exe": "npm run dist:setup",
-    "dist:setup": "set ZEROAPPLY_REQUIRE_SIGNING=1&& node scripts/buildAll.cjs",
+    "dist:setup": "node scripts/buildAll.cjs --signed",
     "dist:setup:unsigned": "node scripts/buildAll.cjs",
-    "dist:portable": "npm run build && electron-builder --win portable",
-    "dist:installer": "npm run dist:setup"
+    "dist:portable": "npm run model:download && npm run build && electron-builder --win portable",
+    "dist:installer": "npm run dist:setup",
+    "model:download": "node scripts/download-model.mjs",
+    "test:embedded-llm": "node --import tsx test/embedded_model.test.ts",
+    "test:embedded-llm:inference": "node scripts/verify-embedded-model.mjs",
+    "dist:mac": "node scripts/buildAll.cjs",
+    "test:updates": "node --test test/desktop_updates.test.mjs"
   },
   "build": {
     "appId": "com.zeroapply.app",
-    "productName": "ZeroApply Desktop",
+    "productName": "ZeroApply",
     "npmRebuild": false,
     "directories": {
       "output": "release_build"
@@ -41,13 +66,13 @@
       "AgentBrowser/electron-browser-features.js",
       "preload-popup.cjs",
       "AgentBrowser/preload-webview.cjs",
-      "package.json"
+      "package.json",
+      "desktop/**/*"
     ],
     "win": {
       "icon": "public/logo.ico",
       "target": [
-        "nsis",
-        "portable"
+        "nsis"
       ]
     },
     "nsis": {
@@ -57,21 +82,55 @@
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
       "shortcutName": "ZeroApply",
-      "artifactName": "ZeroApply-Setup.exe",
+      "artifactName": "ZeroApply-${version}-Setup-${arch}.exe",
       "installerIcon": "public/logo.ico",
       "uninstallerIcon": "public/logo.ico",
       "installerHeaderIcon": "public/logo.ico",
       "runAfterFinish": true
+    },
+    "executableName": "ZeroApply",
+    "asarUnpack": [
+      "node_modules/node-llama-cpp/bins",
+      "node_modules/node-llama-cpp/llama/localBuilds",
+      "node_modules/@node-llama-cpp/*"
+    ],
+    "extraResources": [
+      {
+        "from": "public/models/zeroapply",
+        "to": "models",
+        "filter": [
+          "*.gguf"
+        ]
+      }
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "saiprasadchary-hub",
+      "repo": "zeroapply",
+      "releaseType": "draft"
+    },
+    "mac": {
+      "icon": "public/logo.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "artifactName": "ZeroApply-${version}-${arch}.${ext}"
     }
   },
   "dependencies": {
+    "camoufox-js": "^0.12.0",
     "firebase": "^12.18.0",
     "jszip": "^3.10.1",
     "lucide-react": "^1.26.0",
     "pdfjs-dist": "^6.2.108",
+    "playwright-core": "~1.60.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "ws": "^8.21.3"
+    "ws": "^8.21.3",
+    "node-llama-cpp": "3.22.1",
+    "electron-updater": "^6.8.0"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
@@ -91,5 +150,8 @@
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "wait-on": "^8.0.2"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.6"
   }
 }

@@ -15,14 +15,14 @@ const OPTIONS: Array<{
 }> = [
   {
     value: 'own',
-    title: 'Own browser',
+    title: 'In-app browser',
     description: 'Uses the ZeroApply Agent Browser inside this app.',
     icon: Monitor,
   },
   {
     value: 'agent',
-    title: 'Agent browser',
-    description: 'Opens real Google Chrome and runs AutoApply there.',
+    title: 'Real Chrome (recommended)',
+    description: 'Opens installed Google Chrome with a dedicated ZeroApply Chrome profile and saved logins.',
     icon: Bot,
   },
 ];
@@ -63,7 +63,7 @@ export const BrowserSelector: React.FC<BrowserSelectorProps> = ({ value, onChang
       })}
     </div>
     <p className="text-[10px] leading-4 text-zinc-400">
-      Chrome mode uses a dedicated ZeroApply Chrome profile, so your normal Chrome profile remains separate.
+      Chrome opens in its own window. Its saved logins are separate from the in-app browser and your personal Chrome profile.
     </p>
   </fieldset>
 );

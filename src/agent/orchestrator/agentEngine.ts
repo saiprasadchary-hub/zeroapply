@@ -1,312 +1,358 @@
+import { AppStateMachine } from '../stateMachine/appStateMachine';
 import type { PersonaData } from '../../types';
-import { DOM_SCANNER_SCRIPT, type ScannedField } from '../detector/fieldScanner';
-import { classifyAllFields } from '../detector/fieldClassifier';
-import { mapPersonaToFields } from '../autofill/personaMapper';
-import { executeDomAutofill, type FillResult } from '../autofill/domFiller';
-import { getSavedResumeFileFromStorage, generateSmartResumeHandlerScript } from '../autofill/resumeInjector';
-import { ApplicationStateMachine } from '../stateMachine/appStateMachine';
-import { createStepNavigatorScript, type ApplicationStepResult } from '../stateMachine/stepNavigator';
-import { ApplicationLogger } from '../tracker/applicationLogger';
-import { QALogger, type QAPair } from '../tracker/qaLogger';
+import { QuestionMemoryBank } from '../memory/questionMemory';
 import { ErrorLogger } from '../tracker/errorLogger';
-import { SecurityGuardian } from '../security/securityGuardian';
-import { FormRecoveryAgent } from '../stateMachine/formRecoveryAgent';
-import { VisionAgent } from '../vision/visionAgent';
-import { liveTelemetry } from '../telemetry/liveTelemetry';
+import { ensureVisualCursor } from '../stealth/agentCursor';
+import type { WebviewTarget } from '../domScanner/injectedScanner';
+import { scanFormFields } from '../domScanner/injectedScanner';
+import { classifyFields } from '../domScanner/fieldClassifier';
+import { resolveQuestion } from '../localLlm/questionResolver';
+import { fillField } from '../formFiller/formFiller';
+import { stepNavigator } from '../navigation/wizardStepNavigator';
+import { attachResumeFile } from '../fileUpload/fileUploadBridge';
+import { getStoredResume } from '../fileUpload/resumeFileAdapter';
+import { processTracker } from '../tracker/processTracker';
+import { auditFormFields } from '../formFiller/formAuditor';
 
-export interface AgentRunResult {
+export interface AutoFillResult {
   success: boolean;
-  detectedCount: number;
-  filledCount: number;
-  resumeFieldDetected?: boolean;
-  resumeAttached?: boolean;
-  message: string;
-  qaPairs?: { question: string; answer: string }[];
-  failedFields?: string[];
+  fieldsFilled?: number;
+  filledCount?: number;
+  totalFields?: number;
+  detectedCount?: number;
+  message?: string;
+  error?: string;
 }
 
 export class AgentEngine {
-  private stateMachine: ApplicationStateMachine;
-  private securityGuardian: SecurityGuardian;
+  private stateMachine: AppStateMachine = new AppStateMachine();
+  private isRunning = false;
 
-  constructor() {
-    this.stateMachine = new ApplicationStateMachine();
-    this.securityGuardian = new SecurityGuardian();
-  }
-
-  public getStateMachine() {
+  public getStateMachine(): AppStateMachine {
     return this.stateMachine;
   }
 
-  /**
-   * Scans current webview DOM, classifies fields, matches with Persona & Ollama LLM,
-   * and executes synthetic React state bypass autofill.
-   */
   public async autoFillCurrentPage(
-    webview: any,
+    view: WebviewTarget,
     persona: PersonaData,
-    portalName: string = 'Job Portal',
-    logAttempt: boolean = true
-  ): Promise<AgentRunResult> {
-    this.stateMachine.transition('SCANNING', 'Scanning page for form fields...');
-    liveTelemetry.emit({
-      type: 'scan',
-      title: 'Scanning page for form fields',
-      detail: `Target portal: ${portalName}`,
-      status: 'running',
+    platformLabel = 'Portal'
+  ): Promise<AutoFillResult> {
+    this.isRunning = true;
+    this.stateMachine.transition('SCANNING', {
+      thought: `Scanning ${platformLabel} page for application form fields with 3D Visual Cursor & Local Qwen...`,
     });
 
-    let scannedFields: ScannedField[] = [];
-    let pageTitle = '';
     try {
-      if (!webview || typeof webview.executeJavaScript !== 'function') {
-        throw new Error('The desktop browser is not available.');
-      }
+      // Seed memory bank with persona
+      QuestionMemoryBank.getInstance().seedFromPersona(persona);
 
-      // 1. Perform Security & CAPTCHA inspection
-      pageTitle = await webview.executeJavaScript('document.title || ""').catch(() => '');
-      const domText = await webview.executeJavaScript('document.body ? document.body.innerText : ""').catch(() => '');
-      
-      const secStatus = await this.securityGuardian.diagnoseScreenSecurity(pageTitle, domText);
-      if (secStatus.blocked) {
-        console.warn('[SecurityGuardian] Block triggered:', secStatus);
-        this.stateMachine.transition('ERROR', 'Security block: ' + (secStatus.reason || 'Verification required'));
-        liveTelemetry.emit({
-          type: 'security',
-          title: 'Security checkpoint detected',
-          detail: secStatus.reason || 'Manual verification requested',
-          status: 'warning',
+      // Initialize 3D Purple Visual Cursor on page
+      await ensureVisualCursor(view);
+
+      // 1. Scan Form Fields with injected scanner
+      const scannedFields = await scanFormFields(view);
+      const classified = classifyFields(scannedFields, persona);
+
+      let filledCount = 0;
+
+      if (classified.length > 0) {
+        this.stateMachine.transition('FILLING', {
+          detectedCount: classified.length,
+          thought: `Classified ${classified.length} fields. Filling with 3D Purple Visual Cursor & Local Qwen 2.5...`,
         });
-        ErrorLogger.log({
-          source: 'Security Guardian',
-          portal: portalName,
-          message: `Security Checkpoint: ${secStatus.reason || 'Verification required'}`,
-          severity: 'SECURITY',
-        });
-        return { success: false, detectedCount: 0, filledCount: 0, message: 'Security checkpoint: ' + secStatus.reason };
-      }
 
-      // Run DOM scanning. Webview telemetry is provided by the isolated preload.
-      scannedFields = await webview.executeJavaScript(DOM_SCANNER_SCRIPT);
-    } catch (err) {
-      console.error('DOM scanner error:', err);
-      this.stateMachine.transition('ERROR', 'Could not scan webpage DOM');
-      liveTelemetry.emit({
-        type: 'scan',
-        title: 'DOM scan failed',
-        detail: String(err),
-        status: 'error',
-      });
-      ErrorLogger.log({
-        source: 'DOM Scanner',
-        portal: portalName,
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-        severity: 'CRITICAL',
-      });
-      return { success: false, detectedCount: 0, filledCount: 0, message: 'DOM scan failed' };
-    }
+        for (const field of classified) {
+          if (!this.isRunning) break;
 
-    if (!scannedFields || scannedFields.length === 0) {
-      this.stateMachine.transition('IDLE', 'No form fields found on this page');
-      liveTelemetry.emit({
-        type: 'scan',
-        title: 'No input fields detected',
-        detail: 'Page has no unfilled form controls',
-        status: 'completed',
-      });
-      return { success: true, detectedCount: 0, filledCount: 0, message: 'No input fields detected on page' };
-    }
+          let answerVal = field.mappedValue;
+          let sourceVal: 'persona' | 'resume' | 'memory' | 'llm' | 'fallback' = 'persona';
+          if (!answerVal) {
+            const res = await resolveQuestion(field, persona);
+            answerVal = res.answer;
+            sourceVal = res.source;
+          }
 
-    this.stateMachine.transition('MATCHING', 'Classifying ' + scannedFields.length + ' fields & solving questions...', {
-      detectedFieldsCount: scannedFields.length,
-    });
-    liveTelemetry.emit({
-      type: 'scan',
-      title: `Detected ${scannedFields.length} interactive fields`,
-      detail: `Classifying inputs & mapping persona credentials`,
-      status: 'completed',
-    });
+          if (!answerVal && (field.inputType === 'radio' || (field.options && field.options.length > 0))) {
+            if (field.options && field.options.length > 0) {
+              const affirmative = field.options.find(o => /^(yes|agree|confirm|true)$/i.test(o.trim()))
+                || field.options.find(o => /yes|agree|confirm|true/i.test(o.trim()))
+                || field.options[0];
+              answerVal = affirmative;
+            } else {
+              answerVal = 'Yes';
+            }
+            sourceVal = 'fallback';
+          }
 
-    const classified = classifyAllFields(scannedFields);
-    const instructions = await mapPersonaToFields(classified, persona);
-
-    this.stateMachine.transition('FILLING', 'Injecting values into ' + instructions.length + ' form fields...');
-
-    const fillResult: FillResult = await executeDomAutofill(webview, instructions);
-
-    const savedResume = getSavedResumeFileFromStorage();
-
-    const resumeFieldDetected = scannedFields.some((field) => field.type === 'file');
-    let resumeAttached = false;
-    if (savedResume && resumeFieldDetected) {
-      liveTelemetry.emit({
-        type: 'attach',
-        title: `Attaching Resume: ${savedResume.name}`,
-        detail: `Size: ${Math.round((savedResume.base64Data?.length || 0) * 0.75 / 1024)} KB | Format: ${savedResume.type || 'application/pdf'}`,
-        status: 'running',
-      });
-
-      try {
-        if (webview && typeof webview.executeJavaScript === 'function') {
-          const smartScript = generateSmartResumeHandlerScript(savedResume.name, savedResume.type, savedResume.base64Data);
-          const result = await webview.executeJavaScript(smartScript);
-          console.log('[AgentEngine] Smart resume handler result:', result);
-
-          if (result?.action === 'skip' || result?.action === 'replaced' || result?.action === 'uploaded') {
-            resumeAttached = true;
-            if (result.action !== 'skip') fillResult.filledCount += 1;
-            liveTelemetry.emit({
-              type: 'attach',
-              title: `Resume attached: ${savedResume.name}`,
-              detail: `Action: ${result.action} successfully injected into file input`,
-              status: 'completed',
-            });
-          } else if (result?.action === 'no_field') {
-            resumeAttached = true;
+          if (answerVal) {
+            const fillRes = await fillField(view, field, answerVal, persona);
+            if (fillRes.success) {
+              filledCount++;
+              processTracker.recordQuestionAnswer(
+                field.label || field.name || 'Screening Question',
+                answerVal,
+                sourceVal,
+                field.inputType
+              );
+            }
+            // Natural human reading/transition pause between fields
+            await new Promise((r) => setTimeout(r, 380 + Math.random() * 320));
           }
         }
-      } catch (e) {
-        console.warn('Smart resume handler script error:', e);
-      }
-    }
-
-    const fillMessage = fillResult.failedFields.length > 0
-      ? `Filled ${fillResult.filledCount} fields; ${fillResult.failedFields.length} field(s) did not retain the intended value`
-      : `Verified ${fillResult.filledCount} correctly filled fields`;
-    this.stateMachine.transition('REVIEW_READY', fillMessage, {
-      filledFieldsCount: fillResult.filledCount,
-    });
-
-    liveTelemetry.emit({
-      type: 'type',
-      title: `Filling ${fillResult.filledCount} form fields`,
-      detail: `Injected candidate profile data and credentials`,
-      status: 'completed',
-    });
-
-    if (logAttempt) {
-      ApplicationLogger.addLog({
-        portal: portalName,
-        jobTitle: 'Form auto-fill (not submitted)',
-        companyName: 'Manual review required',
-        fieldsFilled: fillResult.filledCount,
-        status: fillResult.filledCount > 0 ? 'PARTIAL' : 'FAILED',
-        url: webview?.src || window.location.href,
-      });
-    }
-
-    const qaPairs: QAPair[] = instructions.map(instr => ({
-      question: instr.field?.label || instr.field?.name || instr.fieldId || 'Unknown Field',
-      answer: String(instr.value),
-      category: instr.category,
-      source: instr.category === 'screeningQuestion' ? 'ollama' : 'persona',
-      confidence: instr.confidence,
-      timestamp: new Date().toISOString(),
-    }));
-
-    if (qaPairs.length > 0) {
-      QALogger.addOrUpdateActiveLog(
-        portalName,
-        pageTitle || 'Job Application Form',
-        'Live Portal Session',
-        qaPairs,
-        'IN_PROGRESS'
-      );
-    }
-
-    return {
-      success: fillResult.filledCount > 0 && fillResult.failedFields.length === 0,
-      detectedCount: scannedFields.length,
-      filledCount: fillResult.filledCount,
-      resumeFieldDetected,
-      resumeAttached,
-      message: fillMessage,
-      failedFields: fillResult.failedFields,
-      qaPairs,
-    };
-  }
-
-  /**
-   * Triggers the Next / Review step button in the webview.
-   */
-  public async advanceNextStep(webview: any): Promise<boolean> {
-    const result = await this.advanceApplicationStep(webview);
-    return result.success;
-  }
-
-  public async advanceApplicationStep(webview: any, allowSubmit: boolean = false): Promise<ApplicationStepResult> {
-    try {
-      if (webview && typeof webview.executeJavaScript !== 'function') {
-        return { success: false, action: 'none' };
       }
 
-      const navigationScript = createStepNavigatorScript(allowSubmit);
-      let result = await webview.executeJavaScript(navigationScript);
+      // Check for resume selection / picker
+      const hasResumePicker = await view.executeJavaScript(`
+        (() => {
+          const list = document.querySelector('.resume-item, #resume-selector-list, [data-resume-name]');
+          return !!(list && list.offsetParent !== null);
+        })()
+      `).catch(() => false);
 
-      if (result?.requiresConfirmation) return result;
-      
-      if (result && result.success) {
-        liveTelemetry.emit({
-          type: 'click',
-          title: `Clicked "${result.text || result.action.toUpperCase()}"`,
-          detail: `Advancing application via primary action button`,
-          status: 'completed',
-        });
-        return result;
-      }
+      const storedResume = getStoredResume();
+      const storedResumeName = (storedResume?.name || '').toLowerCase().replace(/\.[^/.]+$/, '');
+      const resumeTokens = storedResumeName.split(/[-_\s.]+/).filter((t) => t.length > 2);
+      const candidateNameParts = (persona.fullName || '').toLowerCase().split(/\s+/).filter((p) => p.length > 2);
+      const candidateRoles = (persona.targetRoles || []).map((r) => r.toLowerCase());
+      const matchTerms = Array.from(new Set([...resumeTokens, ...candidateNameParts, ...candidateRoles, 'resume', 'cv', 'swe', 'engineer']));
 
-      // 1. Self-Healing Form Recovery: If step was blocked by validation errors, heal fields and retry
-      const healingResult = await FormRecoveryAgent.executeSelfHealing(webview);
-      if (healingResult.healedCount > 0) {
-        // Wait 300ms for DOM state update and retry advance
-        await new Promise(res => setTimeout(res, 300));
-        result = await webview.executeJavaScript(navigationScript);
-        if (result?.requiresConfirmation) return result;
-        if (result && result.success) {
-          liveTelemetry.emit({
-            type: 'click',
-            title: `Advancement Recovered: Clicked "${result.text || result.action.toUpperCase()}"`,
-            detail: `Self-healing resolved blocked fields and advanced step`,
-            status: 'completed',
+      const resumeStatus = await view.executeJavaScript<{
+        hasPicker: boolean;
+        hasSelected: boolean;
+        handled: boolean;
+        selectedName: string;
+      }>(`
+        (() => {
+          const candidateTerms = ${JSON.stringify(matchTerms)};
+          const itemSelectors = [
+            'button.jobs-resume-picker__resume-btn',
+            '.jobs-resume-picker__list-item button.jobs-resume-picker__resume-btn',
+            '[data-test-resume-item]',
+            '[data-test-document-card]',
+            '.jobs-document-upload__resume-item',
+            '.resume-item[role="radio"]',
+            '.resume-item',
+            'button[aria-label*="Select resume" i]',
+            '[role="radio"][aria-label*="resume" i]',
+            '[data-resume-name]'
+          ];
+
+          const rawItems = Array.from(document.querySelectorAll(itemSelectors.join(', ')));
+          const items = rawItems.filter(el => {
+            if (el.classList.contains('jobs-document-upload') && !el.classList.contains('jobs-document-upload__resume-item')) return false;
+            if (el.classList.contains('download-icon-btn') || el.getAttribute('title')?.toLowerCase().includes('download')) return false;
+            return true;
           });
-          return result;
-        }
+
+          function isElementSelected(el) {
+            if (el.getAttribute('aria-checked') === 'true' || el.getAttribute('aria-selected') === 'true') return true;
+            if (el.classList.contains('jobs-resume-picker__resume-btn--selected') || el.classList.contains('selected') || el.classList.contains('active')) return true;
+            const btn = el.querySelector('button.jobs-resume-picker__resume-btn, [role="radio"]');
+            if (btn && (btn.getAttribute('aria-checked') === 'true' || btn.classList.contains('jobs-resume-picker__resume-btn--selected') || btn.classList.contains('selected'))) return true;
+            const radio = el.querySelector('input[type="radio"]') || (el.tagName === 'INPUT' && el.type === 'radio' ? el : null);
+            if (radio && radio.checked) return true;
+            return false;
+          }
+
+          if (items.length === 0) {
+            return { hasPicker: false, hasSelected: false, handled: false, selectedName: '' };
+          }
+
+          // 1. If any resume is ALREADY selected, preserve it! Do NOT click another resume!
+          for (const el of items) {
+            const name = (el.getAttribute('data-resume-name') || el.getAttribute('aria-label') || el.textContent || '').trim();
+            if (isElementSelected(el)) {
+              return { hasPicker: true, hasSelected: true, handled: true, selectedName: name.slice(0, 45) };
+            }
+          }
+
+          // 2. None selected yet: find candidate's best matching resume by name or terms
+          let target = null;
+          for (const el of items) {
+            const text = (el.getAttribute('data-resume-name') || el.getAttribute('aria-label') || el.textContent || '').toLowerCase();
+            if (candidateTerms.some(t => text.includes(t))) {
+              target = el;
+              break;
+            }
+          }
+
+          // Fallback to first available resume if no name match
+          if (!target && items.length > 0) {
+            target = items[0];
+          }
+
+          if (target) {
+            const name = (target.getAttribute('data-resume-name') || target.getAttribute('aria-label') || target.textContent || '').trim().slice(0, 45);
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            const radio = target.querySelector('input[type="radio"]') || (target.tagName === 'INPUT' && target.type === 'radio' ? target : null);
+            if (radio) {
+              radio.checked = true;
+              radio.dispatchEvent(new Event('input', { bubbles: true }));
+              radio.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            const selectBtn = target.tagName === 'BUTTON'
+              ? target
+              : (target.querySelector('button.jobs-resume-picker__resume-btn, button:not(.download-icon-btn):not([title*="Download" i])') || target);
+            selectBtn.focus();
+            selectBtn.click();
+            selectBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+            target.setAttribute('aria-checked', 'true');
+            target.classList.add('selected');
+
+            return { hasPicker: true, hasSelected: true, handled: true, selectedName: name };
+          }
+
+          return { hasPicker: true, hasSelected: false, handled: false, selectedName: '' };
+        })()
+      `).catch(() => ({ hasPicker: false, hasSelected: false, handled: false, selectedName: '' }));
+
+      if (resumeStatus.handled && resumeStatus.selectedName) {
+        filledCount++;
       }
 
-      // Coordinate fallback cannot reliably distinguish a final submit button.
-      if (!allowSubmit) return result || { success: false, action: 'none' };
+      // Check for resume file upload zone if no resume is selected
+      const hasUploadZone = await view.executeJavaScript(`
+        (() => {
+          const up = document.querySelector('input[type="file"], .dropzone, [data-dropzone="true"], label[for*="upload" i], button[aria-label*="Upload resume" i]');
+          return !!up;
+        })()
+      `).catch(() => false);
 
-      // 2. Deterministic DOM geometry fallback for obstructed semantic controls.
-      const visualInspection = await VisionAgent.inspectScreen(webview);
-      if (visualInspection.primaryActionButton && !visualInspection.primaryActionButton.isObstructed) {
-        const btn = visualInspection.primaryActionButton;
-        const clickCoordScript = `
-          (function() {
-            const el = document.elementFromPoint(${btn.x}, ${btn.y});
-            if (el) {
-              el.click();
+      // Upload ONLY when: upload zone exists AND picker has 0 existing resumes
+      if (hasUploadZone && !resumeStatus.hasPicker) {
+        const uploadRes = await attachResumeFile(view, undefined, persona.fullName);
+        if (uploadRes.success) filledCount++;
+      }
+
+      const total = classified.length || scannedFields.length || filledCount;
+
+      this.stateMachine.transition('REVIEW_READY', {
+        detectedCount: total,
+        filledCount,
+        thought: `Completed auto-filling: ${filledCount} of ${total} fields successfully populated.`,
+      });
+
+      return {
+        success: true,
+        fieldsFilled: filledCount,
+        filledCount,
+        totalFields: total,
+        detectedCount: total,
+        message: `Successfully filled ${filledCount} of ${total} fields using 3D Visual Cursor & Local Qwen 2.5!`,
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      ErrorLogger.log({ source: 'AgentEngine', message: msg, severity: 'HIGH' });
+      this.stateMachine.transition('ERROR', { lastError: msg, thought: `Auto-fill failed: ${msg}` });
+      return { success: false, error: msg };
+    } finally {
+      this.isRunning = false;
+    }
+  }
+
+  public async advanceNextStep(view: WebviewTarget, persona?: PersonaData): Promise<boolean> {
+    this.stateMachine.transition('ADVANCING', { thought: 'Auditing questions & advancing wizard step with 3D Visual Cursor...' });
+
+    try {
+      await ensureVisualCursor(view);
+
+      // Pre-flight check: Ensure all questions are answered before advancing
+      const audit = await auditFormFields(view);
+      if (!audit.ready && persona && (audit.missingRequired.length > 0 || (audit.unansweredQuestions && audit.unansweredQuestions.length > 0))) {
+        await this.autoFillCurrentPage(view, persona);
+      }
+
+      const advResult = await stepNavigator.advance(view);
+
+      if (advResult.success && advResult.stepChanged) {
+        const currentStep = this.stateMachine.getContext().step;
+        this.stateMachine.transition('SCANNING', {
+          step: currentStep + 1,
+          thought: `Advanced to step ${currentStep + 1} (${advResult.action}).`,
+        });
+        return true;
+      }
+
+      if (advResult.success && !advResult.hasErrors) {
+        return true;
+      }
+
+      // Fallback
+      const nextScript = `
+        (function() {
+          const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], [role="button"], a.artdeco-button'));
+
+          // Check if top choice is active, prioritize skip
+          const bodyText = (document.body?.innerText || '').toLowerCase();
+          if (/top\\s*choice|mark.*top\\s*choice|premium/.test(bodyText)) {
+            const skip = buttons.find(b => {
+              const text = (b.textContent || b.getAttribute('aria-label') || '').trim().toLowerCase();
+              return /skip|not\\s*now|no\\s*thanks|apply\\s*without|continue\\s*without/i.test(text) && !b.disabled;
+            });
+            if (skip) {
+              if (window.__zeroapplyCursor) {
+                window.__zeroapplyCursor.clickElement('#' + (skip.id || 'skip-btn'), 'Skip Top Choice');
+              }
+              skip.click();
               return true;
             }
-            return false;
-          })();
-        `;
-        const clicked = await webview.executeJavaScript(clickCoordScript);
-        if (clicked) {
-          liveTelemetry.emit({
-            type: 'click',
-            title: `DOM Geometry Clicked "${btn.text}"`,
-            detail: `Triggered at coordinates (${btn.x}, ${btn.y})`,
-            status: 'completed',
+          }
+
+          const nextBtn = buttons.find(b => {
+            const text = (b.textContent || b.value || b.getAttribute('aria-label') || '').trim().toLowerCase();
+            if (/mark.*(?:as\\s*a?\\s*)?top\\s*choice|try\\s*premium|get\\s*premium|upgrade|subscribe/i.test(text)) {
+              return false;
+            }
+            return (
+              text === 'next' ||
+              text === 'continue' ||
+              text === 'review' ||
+              text === 'submit application' ||
+              text.includes('next') ||
+              text.includes('review')
+            ) && !b.disabled;
           });
-          return { success: true, action: 'next', text: btn.text };
-        }
+
+          if (nextBtn) {
+            if (window.__zeroapplyCursor) {
+              window.__zeroapplyCursor.clickElement('#' + (nextBtn.id || 'next-btn'), 'Advance Step');
+            }
+            nextBtn.click();
+            return true;
+          }
+          return false;
+        })()
+      `;
+
+      let advanced = false;
+      if (view && typeof view.executeJavaScript === 'function') {
+        advanced = await view.executeJavaScript(nextScript, true);
       }
 
-      return result || { success: false, action: 'none' };
-    } catch (e) {
-      console.warn('Advance step failed:', e);
-      return { success: false, action: 'none' };
+      if (advanced) {
+        const currentStep = this.stateMachine.getContext().step;
+        this.stateMachine.transition('SCANNING', {
+          step: currentStep + 1,
+          thought: `Advanced to step ${currentStep + 1}.`,
+        });
+        return true;
+      }
+
+      this.stateMachine.transition('IDLE', { thought: 'No advance button found or already on final step.' });
+      return false;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.stateMachine.transition('ERROR', { lastError: msg });
+      return false;
     }
   }
+
+  public stop(): void {
+    this.isRunning = false;
+    this.stateMachine.transition('PAUSED', { thought: 'Agent operation paused by user.' });
+  }
 }
+

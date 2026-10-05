@@ -1,6 +1,21 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Native model files are installer resources, not renderer assets. Avoid duplicating
+// gigabytes into dist or publishing them with the website.
+const copyPublicAssets = {
+  name: 'zeroapply-public-assets',
+  closeBundle(): void {
+    if (!fs.existsSync('dist')) return;
+    for (const entry of fs.readdirSync('public')) {
+      if (entry === 'models') continue;
+      fs.cpSync(path.join('public', entry), path.join('dist', entry), { recursive: true });
+    }
+  },
+};
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -9,7 +24,8 @@ export default defineConfig({
   base: './',
   plugins: [
     react(),
-    tailwindcss()
+    tailwindcss(),
+    copyPublicAssets,
   ],
   server: {
     port: 5173,
@@ -19,6 +35,7 @@ export default defineConfig({
     },
   },
   build: {
+    copyPublicDir: false,
     rolldownOptions: {
       output: {
         manualChunks(id) {
@@ -31,6 +48,7 @@ export default defineConfig({
           if (id.includes('/node_modules/@firebase/firestore')) return 'firebase-firestore';
           if (id.includes('/node_modules/@firebase/storage')) return 'firebase-storage';
           if (id.includes('/node_modules/firebase') || id.includes('/node_modules/@firebase')) return 'firebase-core';
+          if (id.includes('/node_modules/@langchain') || id.includes('/node_modules/langchain')) return 'langchain';
         },
       },
     },

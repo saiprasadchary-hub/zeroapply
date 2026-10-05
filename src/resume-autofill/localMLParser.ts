@@ -1,4 +1,4 @@
-import type { PersonaData, PersonaTone, WorkLocation } from '../types';
+import type { PersonaData } from '../types';
 
 /**
  * Local NLP & Pattern Classifier
@@ -26,6 +26,9 @@ export async function runLocalMLClassification(text: string, current: PersonaDat
     return result;
   }
 
+  text = text.normalize('NFKC').replace(/\r\n?/g, '\n');
+  const contactText = text.split(/\n(?:work experience|professional experience|experience|education|projects|skills)\s*[:\n]/i)[0];
+
   // 1. Email Extraction (strict real email regex)
   const emailMatch = text.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i);
   if (emailMatch) {
@@ -36,7 +39,7 @@ export async function runLocalMLClassification(text: string, current: PersonaDat
   }
 
   // 2. Phone Extraction
-  const phoneLabelMatch = text.match(/(?:phone|mobile|tel|contact|cell)[\s:]*([+\d\s().-]{10,25})/i);
+  const phoneLabelMatch = contactText.match(/(?:phone|mobile|tel|contact|cell)[\s:]*([+\d \t().-]{10,25})/i);
   if (phoneLabelMatch) {
     const rawPhone = phoneLabelMatch[1].trim();
     const digits = rawPhone.replace(/\D/g, '');
@@ -45,7 +48,7 @@ export async function runLocalMLClassification(text: string, current: PersonaDat
     }
   }
   if (!result.phone) {
-    const phoneMatches = Array.from(text.matchAll(/(?:\+?\d{1,4}[-.\s]?)?\(?\d{2,5}\)?[-.\s]?\d{3,5}[-.\s]?\d{3,5}\b/g));
+    const phoneMatches = Array.from(contactText.matchAll(/(?:\+?\d{1,4}[-.\s]?)?\(?\d{2,5}\)?[-.\s]?\d{3,5}[-.\s]?\d{3,5}\b/g));
     for (const m of phoneMatches) {
       const rawPhone = m[0].trim();
       const digits = rawPhone.replace(/\D/g, '');
@@ -72,7 +75,7 @@ export async function runLocalMLClassification(text: string, current: PersonaDat
   }
 
   // 5. Full Name Extraction
-  const nameLabelMatch = text.match(/(?:full\s*name|candidate\s*name|name)[\s:]+([A-Za-z.\s'-]{2,40})/i);
+  const nameLabelMatch = text.match(/^(?:full[ \t]*name|candidate[ \t]*name|name)[ \t:]+([\p{L}\p{M}. \t'-]{2,60})$/imu);
   if (nameLabelMatch) {
     const candidate = nameLabelMatch[1].trim();
     if (candidate.length >= 3 && !/@|http|linkedin|github|resume|email/i.test(candidate)) {
@@ -82,15 +85,15 @@ export async function runLocalMLClassification(text: string, current: PersonaDat
 
   if (!result.fullName) {
     const lines = text.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
-    for (const rawLine of lines.slice(0, 15)) {
-      let cleanLine = rawLine.split(/[|,•–—-]/)[0].trim();
+    for (const rawLine of lines.slice(0, 4)) {
+      let cleanLine = rawLine.split(/[|,•–—]/)[0].trim();
       cleanLine = cleanLine.replace(/(?:Hyderabad|Bengaluru|Bangalore|Mumbai|Delhi|Pune|Chennai|Noida|San Francisco|New York|Seattle|Austin|Boston|London|Toronto|India|Telangana|Karnataka|Maharashtra|USA|US).*/i, '').trim();
       if (/@|http|linkedin|github|resume|curriculum|phone|email|skills|experience|education|summary|contact|profile|project|page/i.test(cleanLine)) {
         continue;
       }
       const words = cleanLine.split(/\s+/).filter(Boolean);
       if (words.length >= 2 && words.length <= 4 && cleanLine.length <= 40 && cleanLine.length >= 3) {
-        if (words.every((w) => /^[A-Za-z.-]+$/.test(w))) {
+        if (words.every((w) => /^[\p{L}\p{M}.'-]+$/u.test(w))) {
           result.fullName = words.map((w) => (w === w.toUpperCase() && w.length > 2 ? w[0] + w.slice(1).toLowerCase() : w)).join(' ');
           break;
         }
@@ -98,45 +101,45 @@ export async function runLocalMLClassification(text: string, current: PersonaDat
     }
   }
 
-  // 7. Location Detection
-  for (const city of KNOWN_CITIES) {
-    const regex = new RegExp(`\\b${city}\\b`, 'i');
-    if (regex.test(text)) {
+  // Residence must be grounded in contact lines, never an employer or school location.
+  const headerLines = contactText.split('\n').slice(0, 6).join('\n');
+  for (const city of KNOWN_CITIES.filter((value) => value !== 'Remote')) {
+    if (new RegExp(`\\b${city}\\b`, 'i').test(headerLines)) {
       result.location = city;
+      result.city = city;
+      result.state = '';
+      result.country = '';
+      result.postalCode = '';
+      if (city === 'Hyderabad') {
+        result.state = 'Telangana';
+        result.country = 'India';
+        result.location = 'Hyderabad, Telangana, India';
+      }
       break;
     }
   }
+  const postalMatch = headerLines.match(/(?:postal(?: code)?|zip(?: code)?|pincode|pin code)[ \t:]+([A-Z0-9 -]{3,10})(?=$|[|,\n])/im);
+  if (postalMatch) result.postalCode = postalMatch[1].trim();
 
-  // 8. Experience Years Calculation
-  const expMatch = text.match(/(\d{1,2})\+?\s*(?:years?|yrs?)\b(?:\s+of)?\s*(?:experience|exp)?/i);
+  // Do not mistake degree dates or project durations for employment tenure.
+  const expMatch = text.match(/\b(\d{1,2}(?:\.\d)?)\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:professional\s+|work\s+|industry\s+)?experience\b/i);
   if (expMatch) {
-    const yrs = parseInt(expMatch[1], 10);
-    if (!isNaN(yrs) && yrs >= 0 && yrs <= 30) {
-      result.experienceYears = yrs;
-    }
-  } else {
-    // Date range analysis
-    const yearMatches = Array.from(text.matchAll(/\b(20[0-2][0-9])\b/g)).map((m) => parseInt(m[1], 10));
-    if (yearMatches.length >= 2) {
-      const minYear = Math.min(...yearMatches);
-      const maxYear = Math.max(...yearMatches, new Date().getFullYear());
-      const diff = maxYear - minYear;
-      if (diff > 0 && diff <= 30) {
-        result.experienceYears = diff;
-      }
-    }
+    const years = Number(expMatch[1]);
+    if (years >= 0 && years <= 60) result.experienceYears = years;
+  } else if (/\b(?:fresher|no (?:prior |professional |work )?experience)\b/i.test(text)) {
+    result.experienceYears = 0;
   }
 
   // 9. Authentic Tech Stack Skills Extraction
-  const extractedSkills = new Set<string>(current.techStack);
+  const extractedSkills = new Set<string>();
   for (const skill of TECH_DICTIONARY) {
     const escaped = skill.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
-    const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+    const regex = new RegExp(`(?:^|[^a-z0-9_])${escaped}(?=$|[^a-z0-9_+#])`, 'i');
     if (regex.test(text)) {
       extractedSkills.add(skill);
     }
   }
-  result.techStack = Array.from(extractedSkills);
+  if (extractedSkills.size > 0) result.techStack = Array.from(extractedSkills);
 
   // 10. Target Roles Extraction
   const ROLES = ['Software Engineer', 'Full Stack Developer', 'Frontend Engineer', 'Backend Developer', 'DevOps Engineer', 'Data Scientist'];
@@ -151,17 +154,38 @@ export async function runLocalMLClassification(text: string, current: PersonaDat
     result.targetRoles = Array.from(extractedRoles);
   }
 
-  // 11. Work Preference & Tone Detection
-  if (/remote|work from home/i.test(text)) {
-    result.workPreference = 'Remote' as WorkLocation;
-  } else if (/hybrid/i.test(text)) {
-    result.workPreference = 'Hybrid' as WorkLocation;
-  } else if (/on-site|onsite|office/i.test(text)) {
-    result.workPreference = 'On-site' as WorkLocation;
+  // 12. Education Detection (Degree, Major, Institution)
+  const eduMatch = text.match(/(?:B\.?Tech|Bachelor(?:'s)?|B\.?S\.?|B\.?E\.?|M\.?Tech|Master(?:'s)?|M\.?S\.?|Ph\.?D\.?|Associate(?:'s)?)\s+(?:in\s+|of\s+)?([A-Za-z \t&]{3,80})/i);
+  if (eduMatch) {
+    result.education = eduMatch[0].trim();
+  } else {
+    const generalEdu = text.match(/(?:EDUCATION|ACADEMICS)[\s\S]{1,200}?(?:University|College|Institute|Degree|School)[^\n\r]+/i);
+    if (generalEdu) {
+      const firstLine = generalEdu[0].replace(/^(?:EDUCATION|ACADEMICS)[\s:]*/i, '').split(/[\n\r]+/)[0].trim();
+      if (firstLine.length > 5 && firstLine.length < 100) {
+        result.education = firstLine;
+      }
+    }
   }
 
-  if (/\b(architected|spearheaded|engineered|led|scaled|delivered)\b/i.test(text)) {
-    result.tone = 'Confident' as PersonaTone;
+  // 13. Experience Summary Extraction
+  const summaryMatch = text.match(/(?:SUMMARY|PROFILE|OBJECTIVE|ABOUT ME)[\s:]+([\s\S]{20,350}?)(?=\n\s*\n|[A-Z\s]{4,}:|$)/i);
+  if (summaryMatch) {
+    const cleanSummary = summaryMatch[1].replace(/\s+/g, ' ').trim();
+    if (cleanSummary.length > 20) {
+      result.experienceSummary = cleanSummary;
+    }
+  }
+
+  // 14. Current / Recent Job Title Extraction from Resume
+  const titleMatch = text.match(/(?:EXPERIENCE|EMPLOYMENT HISTORY|WORK HISTORY)[\s\S]{1,120}?\b((?:Senior\s+|Lead\s+|Staff\s+|Principal\s+|Junior\s+|Associate\s+)?(?:Software\s+Engineer|Full\s*Stack\s+Developer|Frontend\s+Engineer|Backend\s+Engineer|AI\s+Engineer|ML\s+Engineer|Data\s+Scientist|Product\s+Manager|DevOps\s+Engineer|Mobile\s+Developer|Android\s+Developer|iOS\s+Developer|Application\s+Engineer))\b/i);
+  if (titleMatch && titleMatch[1]) {
+    const extractedTitle = titleMatch[1].trim();
+    if (!result.targetRoles || result.targetRoles.length === 0) {
+      result.targetRoles = [extractedTitle];
+    } else if (!result.targetRoles.includes(extractedTitle)) {
+      result.targetRoles = [extractedTitle, ...result.targetRoles];
+    }
   }
 
   return result;

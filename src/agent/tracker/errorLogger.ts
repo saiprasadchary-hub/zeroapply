@@ -1,112 +1,91 @@
-export type ErrorSeverity = 'CRITICAL' | 'SECURITY' | 'NETWORK' | 'WARNING' | 'INFO';
-
-export interface ErrorLogRecord {
+export interface ErrorLogEntry {
   id: string;
   timestamp: string;
   source: string;
   message: string;
   stack?: string;
-  severity: ErrorSeverity;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'NETWORK';
   portal?: string;
-  resolved?: boolean;
+  resolved: boolean;
+  meta?: Record<string, unknown>;
 }
 
-const STORAGE_KEY = 'zeroapply_error_history';
-
-type ErrorListener = (errors: ErrorLogRecord[]) => void;
+const STORAGE_KEY = 'zeroapply_error_logs';
+const MAX_LOGS = 200;
 
 class ErrorLoggerService {
-  private listeners: Set<ErrorListener> = new Set();
+  private logs: ErrorLogEntry[] = [];
+  private listeners: Set<(logs: ErrorLogEntry[]) => void> = new Set();
 
-  public subscribe(listener: ErrorListener): () => void {
-    this.listeners.add(listener);
-    listener(this.getErrors());
-    return () => {
-      this.listeners.delete(listener);
-    };
+  constructor() {
+    this.loadFromStorage();
   }
 
-  private notifyListeners() {
-    const errors = this.getErrors();
-    this.listeners.forEach((listener) => {
-      try {
-        listener(errors);
-      } catch (err) {
-        console.error('[ErrorLogger] Listener error:', err);
+  private loadFromStorage(): void {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        this.logs = JSON.parse(raw);
       }
-    });
-  }
-
-  public getErrors(): ErrorLogRecord[] {
-    try {
-      const data = getSecureItem(STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      console.warn('Failed to read error logs:', error);
-      return [];
+    } catch {
+      this.logs = [];
     }
   }
 
-  private saveErrors(errors: ErrorLogRecord[]) {
+  private saveToStorage(): void {
+    if (typeof localStorage === 'undefined') return;
     try {
-      setSecureItem(STORAGE_KEY, JSON.stringify(errors.slice(0, 150)));
-    } catch (e) {
-      console.error('Failed to save error logs:', e);
-    }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.logs.slice(0, MAX_LOGS)));
+    } catch {}
   }
 
-  public log(entry: Omit<ErrorLogRecord, 'id' | 'timestamp' | 'severity'> & { severity?: ErrorSeverity }): ErrorLogRecord {
-    const errors = this.getErrors();
-    const newRecord: ErrorLogRecord = {
-      id: Math.random().toString(36).substring(2, 9),
+  public log(entry: Partial<ErrorLogEntry> & { message: string; source?: string }): ErrorLogEntry {
+    const newEntry: ErrorLogEntry = {
+      id: `err_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       timestamp: new Date().toISOString(),
-      severity: entry.severity || 'CRITICAL',
-      ...entry,
+      source: entry.source || 'General',
+      message: entry.message,
+      stack: entry.stack,
+      severity: entry.severity || 'MEDIUM',
+      resolved: entry.resolved ?? false,
+      meta: entry.meta,
     };
 
-    errors.unshift(newRecord);
-    this.saveErrors(errors);
-    this.notifyListeners();
-    return newRecord;
-  }
-
-  public deleteError(id: string): void {
-    const errors = this.getErrors().filter((e) => e.id !== id);
-    this.saveErrors(errors);
-    this.notifyListeners();
-  }
-
-  public clearErrors(): void {
-    try {
-      removeSecureItem(STORAGE_KEY);
-    } catch (error) {
-      console.warn('Failed to clear error logs:', error);
-    }
-    this.notifyListeners();
-  }
-
-  public exportAsJson(): string {
-    return JSON.stringify(this.getErrors(), null, 2);
-  }
-
-  public exportAsCsv(): string {
-    const errors = this.getErrors();
-    const rows = [['Timestamp', 'Severity', 'Source', 'Portal', 'Message', 'Stack']];
-
-    for (const err of errors) {
-      rows.push([
-        `"${new Date(err.timestamp).toLocaleString()}"`,
-        `"${err.severity}"`,
-        `"${err.source.replace(/"/g, '""')}"`,
-        `"${(err.portal || 'Global').replace(/"/g, '""')}"`,
-        `"${err.message.replace(/"/g, '""')}"`,
-        `"${(err.stack || '').replace(/"/g, '""')}"`,
-      ]);
+    this.logs.unshift(newEntry);
+    if (this.logs.length > MAX_LOGS) {
+      this.logs.length = MAX_LOGS;
     }
 
-    return rows.map((r) => r.join(',')).join('\n');
+    this.saveToStorage();
+    this.notify();
+    return newEntry;
+  }
+
+  public getLogs(): ErrorLogEntry[] {
+    return [...this.logs];
+  }
+
+  public clear(): void {
+    this.logs = [];
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public subscribe(fn: (logs: ErrorLogEntry[]) => void): () => void {
+    this.listeners.add(fn);
+    fn(this.getLogs());
+    return () => this.listeners.delete(fn);
+  }
+
+  private notify(): void {
+    const snapshot = this.getLogs();
+    this.listeners.forEach((fn) => {
+      try {
+        fn(snapshot);
+      } catch {}
+    });
   }
 }
 
 export const ErrorLogger = new ErrorLoggerService();
-import { getSecureItem, removeSecureItem, setSecureItem } from '../../services/secureStorage';

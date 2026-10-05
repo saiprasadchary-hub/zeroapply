@@ -1,61 +1,136 @@
 export type AgentState =
   | 'IDLE'
-  | 'SCANNING'
+  | 'SEARCHING'
   | 'MATCHING'
+  | 'JOB_DETECTED'
+  | 'SCANNING'
+  | 'RESOLVING'
   | 'FILLING'
-  | 'VERIFYING'
-  | 'SELF_HEALING'
-  | 'REVIEW_READY'
+  | 'AUDITING'
+  | 'ADVANCING'
+  | 'SUBMITTING'
   | 'SUBMITTED'
+  | 'REVIEW_READY'
+  | 'VERIFYING'
   | 'PAUSED'
-  | 'ERROR';
+  | 'ERROR'
+  | 'SUCCESS';
 
 export interface StateMachineContext {
+  state: AgentState;
   currentState: AgentState;
-  detectedFieldsCount: number;
-  filledFieldsCount: number;
-  errorFieldsCount: number;
+  step: number;
+  totalSteps: number;
+  confidence: number;
+  currentField: string;
+  thought: string;
   lastMessage: string;
-  stepIndex: number;
+  detectedCount: number;
+  detectedFieldsCount: number;
+  filledCount: number;
+  filledFieldsCount: number;
+  history: string[];
+  lastError?: string;
+  jobTitle?: string;
+  companyName?: string;
 }
 
-export class ApplicationStateMachine {
-  private context: StateMachineContext;
-  private listeners: Array<(ctx: StateMachineContext) => void> = [];
+export type StateSubscriber = (context: StateMachineContext) => void;
 
-  constructor() {
-    this.context = {
-      currentState: 'IDLE',
-      detectedFieldsCount: 0,
-      filledFieldsCount: 0,
-      errorFieldsCount: 0,
-      lastMessage: 'Ready to auto-fill application',
-      stepIndex: 1,
-    };
-  }
+export class AppStateMachine {
+  private context: StateMachineContext = {
+    state: 'IDLE',
+    currentState: 'IDLE',
+    step: 1,
+    totalSteps: 5,
+    confidence: 1.0,
+    currentField: '',
+    thought: 'Agent initialized in idle state.',
+    lastMessage: 'Agent ready',
+    detectedCount: 0,
+    detectedFieldsCount: 0,
+    filledCount: 0,
+    filledFieldsCount: 0,
+    history: ['Initialized'],
+  };
+
+  private subscribers: Set<StateSubscriber> = new Set();
 
   public getContext(): StateMachineContext {
     return { ...this.context };
   }
 
-  public transition(newState: AgentState, message?: string, updates?: Partial<StateMachineContext>) {
+  public getState(): AgentState {
+    return this.context.currentState;
+  }
+
+  public transition(nextState: AgentState, updates: Partial<StateMachineContext> = {}): void {
+    const timestamp = new Date().toLocaleTimeString();
+    const thought = updates.thought || updates.lastMessage || this.context.thought;
+    const historyEntry = `[${timestamp}] ${this.context.currentState} -> ${nextState}: ${thought}`;
+    
+    const detected = updates.detectedFieldsCount ?? updates.detectedCount ?? this.context.detectedCount;
+    const filled = updates.filledFieldsCount ?? updates.filledCount ?? this.context.filledCount;
+
     this.context = {
       ...this.context,
       ...updates,
-      currentState: newState,
-      lastMessage: message || `State changed to ${newState}`,
+      state: nextState,
+      currentState: nextState,
+      thought,
+      lastMessage: thought,
+      detectedCount: detected,
+      detectedFieldsCount: detected,
+      filledCount: filled,
+      filledFieldsCount: filled,
+      history: [...this.context.history.slice(-49), historyEntry],
+    };
+
+    this.notify();
+  }
+
+  public updateContext(updates: Partial<StateMachineContext>): void {
+    this.context = {
+      ...this.context,
+      ...updates,
+      currentState: updates.currentState ?? updates.state ?? this.context.currentState,
+      lastMessage: updates.lastMessage ?? updates.thought ?? this.context.lastMessage,
     };
     this.notify();
   }
 
-  public subscribe(listener: (ctx: StateMachineContext) => void): () => void {
-    this.listeners.push(listener);
+  public subscribe(subscriber: StateSubscriber): () => void {
+    this.subscribers.add(subscriber);
+    subscriber(this.getContext());
     return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
+      this.subscribers.delete(subscriber);
     };
   }
 
-  private notify() {
-    this.listeners.forEach(listener => listener(this.getContext()));
+  private notify(): void {
+    const snapshot = this.getContext();
+    this.subscribers.forEach((fn) => {
+      try {
+        fn(snapshot);
+      } catch (err) {
+        console.error('[AppStateMachine] Subscriber error:', err);
+      }
+    });
+  }
+
+  public reset(): void {
+    this.transition('IDLE', {
+      step: 1,
+      totalSteps: 5,
+      confidence: 1.0,
+      currentField: '',
+      thought: 'Ready for new application run.',
+      lastMessage: 'Ready for new application run.',
+      detectedCount: 0,
+      detectedFieldsCount: 0,
+      filledCount: 0,
+      filledFieldsCount: 0,
+      lastError: undefined,
+    });
   }
 }

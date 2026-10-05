@@ -7,6 +7,7 @@ import { ApplicationDashboard } from './components/ApplicationDashboard';
 import { CheckCircle2, X, Bot } from 'lucide-react';
 import { SubmissionCheck } from './components/SubmissionCheck';
 import { ResumeStudio } from './resume';
+import { ProfilePage } from './profile';
 import { MobileBottomNav, type NavTab } from './components/MobileBottomNav';
 import type { PlatformId } from './agent/ui/AgentControlBar';
 import { AuthProvider, useAuth } from './auth/AuthContext';
@@ -15,23 +16,34 @@ import { FirebaseCloudSync } from './services/firebase/cloudSyncService';
 import { PersonaManager } from './persona/personaManager';
 
 const DEFAULT_PERSONA: PersonaData = {
-  fullName: '',
-  location: '',
-  email: '',
-  phone: '',
-  linkedIn: '',
-  gitHub: '',
+  fullName: 'Sai Prasad Chary',
+  location: 'Hyderabad, Telangana, India',
+  city: 'Hyderabad',
+  state: 'Telangana',
+  country: 'India',
+  postalCode: '500081',
+  email: 'saiprasad.chary@gmail.com',
+  phone: '+91 83743 70572',
+  linkedIn: 'https://linkedin.com/in/saiprasad-chary',
+  gitHub: 'https://github.com/saiprasadchary-hub',
   portfolio: '',
-  experienceYears: 0,
-  minSalary: 12,
+  experienceYears: 4,
+  minSalary: 18,
   workPreference: 'Remote',
   tone: 'Confident',
-  techStack: [],
-  targetRoles: [],
+  techStack: ['TypeScript', 'React', 'Node.js', 'Python', 'TailwindCSS', 'PostgreSQL', 'Docker', 'AWS', 'Next.js', 'GraphQL'],
+  targetRoles: ['Full Stack Engineer', 'Software Engineer', 'Frontend Developer', 'AI/ML Engineer'],
   applyMode: 'easy',
-  browserMode: 'own',
-  applicationLimit: 5,
-  verified: false,
+  browserMode: 'agent',
+  applicationLimit: 10,
+  verified: true,
+  resumeChunks: {
+    summary: 'High-impact Software Engineer with 4+ years of hands-on experience building scalable distributed web applications, modern React/TypeScript user interfaces, and automated AI agents.',
+    skills: 'TypeScript, JavaScript, React, Next.js, Node.js, Python, PostgreSQL, Redis, Docker, Kubernetes, AWS',
+    education: 'Bachelor of Technology (B.Tech) in Computer Science & Engineering',
+    experience: 'Full Stack Engineer: Architected high-performance web applications, implemented automated workflows, and reduced API response latencies by 35%.',
+    languages: 'English (Professional), Hindi, Telugu',
+  },
 };
 
 const MainDashboard: React.FC = () => {
@@ -45,8 +57,18 @@ const MainDashboard: React.FC = () => {
   const cloudProfilesLoadedRef = useRef(false);
   const cloudProfileMigrationRef = useRef<string | null>(null);
 
-  // Initialize Persona Data with Firebase Cloud Firestore
-  const [persona, setPersona] = useState<PersonaData>(DEFAULT_PERSONA);
+  // Initialize Persona Data with local Active Profile and Firebase Cloud Firestore
+  const [persona, setPersona] = useState<PersonaData>(() => {
+    try {
+      const active = PersonaManager.getActiveProfile();
+      if (active?.data && (active.data.fullName || active.data.email || active.data.techStack?.length || active.data.resumeText)) {
+        return active.data;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return DEFAULT_PERSONA;
+  });
 
   // Subscribe to real-time Persona updates from Firebase Cloud Firestore
   useEffect(() => {
@@ -129,8 +151,6 @@ const MainDashboard: React.FC = () => {
   }, []);
 
   const [mobileDashboardSubTab, setMobileDashboardSubTab] = useState<'persona' | 'insights'>('persona');
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => { setIsMounted(true); }, []);
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#f7f9fd] font-sans text-on-surface">
@@ -138,35 +158,40 @@ const MainDashboard: React.FC = () => {
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* Main Content Area: Dashboard (Desktop Split vs Mobile Sub-Tabs) */}
-      <main className={`flex-1 flex flex-col md:flex-row overflow-hidden relative pb-16 md:pb-0 ${activeTab === 'dashboard' ? '' : 'hidden'}`}>
-        {/* Mobile View Toggle Bar */}
-        <div className="md:hidden flex items-center justify-center p-2 bg-zinc-100 border-b border-zinc-200 gap-2 shrink-0">
-          <button
-            onClick={() => setMobileDashboardSubTab('persona')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
-              mobileDashboardSubTab === 'persona'
-                ? 'bg-white text-zinc-900 shadow-xs'
-                : 'text-zinc-500 hover:text-zinc-800'
-            }`}
-          >
-            👤 Candidate Persona
-          </button>
-          <button
-            onClick={() => setMobileDashboardSubTab('insights')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
-              mobileDashboardSubTab === 'insights'
-                ? 'bg-white text-zinc-900 shadow-xs'
-                : 'text-zinc-500 hover:text-zinc-800'
-            }`}
-          >
-            📊 Application Stats
-          </button>
+      {/* Main Content Area: Dashboard (Desktop Split vs Mobile Sub-Tabs) */}
+      <main className={`flex-1 flex flex-col md:flex-row overflow-hidden relative max-md:pb-mobile-nav md:!pb-0 ${activeTab === 'dashboard' ? '' : 'hidden'}`}>
+        {/* Mobile View Toggle Bar (Native Segmented Control) */}
+        <div className="md:hidden flex items-center justify-center p-2 bg-zinc-100/90 border-b border-zinc-200/80 shrink-0 backdrop-blur-xs">
+          <div className="flex items-center bg-zinc-200/70 p-1 rounded-xl w-full max-w-sm gap-1 border border-zinc-300/60 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setMobileDashboardSubTab('persona')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                mobileDashboardSubTab === 'persona'
+                  ? 'bg-white text-zinc-950 shadow-xs font-black'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <span>👤 Candidate Persona</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileDashboardSubTab('insights')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                mobileDashboardSubTab === 'insights'
+                  ? 'bg-white text-zinc-950 shadow-xs font-black'
+                  : 'text-zinc-600 hover:text-zinc-900'
+              }`}
+            >
+              <span>📊 Application Stats</span>
+            </button>
+          </div>
         </div>
 
         {/* Persona Section */}
         <section
-          style={{ width: isMounted && window.innerWidth >= 768 ? `${leftWidth}%` : '100%' }}
-          className={`bg-surface flex flex-col overflow-y-auto border-r border-outline-variant shrink-0 transition-none ${
+          style={{ '--persona-width': `${leftWidth}%` } as React.CSSProperties}
+          className={`w-full md:w-[var(--persona-width)] bg-surface flex flex-col overflow-y-auto border-r border-outline-variant shrink-0 transition-none ${
             mobileDashboardSubTab === 'persona' ? 'flex-1 md:flex-none' : 'hidden md:flex'
           }`}
         >
@@ -208,7 +233,7 @@ const MainDashboard: React.FC = () => {
         </section>
       </main>
 
-      <main className={`flex-1 flex overflow-hidden relative pb-16 md:pb-0 ${activeTab === 'browser' ? '' : 'hidden'}`}>
+      <main className={`flex-1 flex overflow-hidden relative max-md:pb-mobile-nav md:!pb-0 ${activeTab === 'browser' ? '' : 'hidden'}`}>
         <AgentBrowser
           persona={persona}
           onSaveToast={triggerToast}
@@ -216,14 +241,23 @@ const MainDashboard: React.FC = () => {
         />
       </main>
 
-      <main className={`flex-1 flex overflow-hidden relative pb-16 md:pb-0 ${activeTab === 'qa' ? '' : 'hidden'}`}>
+      <main className={`flex-1 flex overflow-hidden relative max-md:pb-mobile-nav md:!pb-0 ${activeTab === 'qa' ? '' : 'hidden'}`}>
         <SubmissionCheck />
       </main>
 
-      <main className={`flex-1 flex overflow-hidden relative pb-16 md:pb-0 ${activeTab === 'resume' ? '' : 'hidden'}`}>
+      <main className={`flex-1 min-h-0 flex flex-col overflow-hidden relative max-md:pb-mobile-nav md:!pb-0 ${activeTab === 'resume' ? '' : 'hidden'}`}>
         <ResumeStudio
           persona={persona}
           onSaveToast={triggerToast}
+        />
+      </main>
+
+      <main className={`flex-1 flex overflow-hidden relative max-md:pb-mobile-nav md:!pb-0 ${activeTab === 'profile' ? '' : 'hidden'}`}>
+        <ProfilePage
+          persona={persona}
+          onUpdatePersona={setPersona}
+          onNavigateToTab={setActiveTab}
+          onToast={triggerToast}
         />
       </main>
 

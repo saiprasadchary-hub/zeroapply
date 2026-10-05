@@ -28,7 +28,11 @@ export async function extractRawTextFromFile(file: File): Promise<string> {
     throw new Error('Legacy .doc files are not supported. Please save the resume as PDF or DOCX and upload it again.');
   }
 
-  // Fallback for plain text files (.txt)
+  if (!fileName.endsWith('.txt')) {
+    throw new Error('Please upload a PDF, DOCX, or TXT resume.');
+  }
+
+  // Decode plain text files.
   const decoder = new TextDecoder('utf-8', { fatal: false });
   return decoder.decode(buffer);
 }
@@ -36,13 +40,6 @@ export async function extractRawTextFromFile(file: File): Promise<string> {
 export async function extractTextFromPdfBuffer(buffer: ArrayBuffer): Promise<string> {
   // Keep a safe copy for the fallback before pdfjs potentially detaches the buffer
   const fallbackBuffer = buffer.slice(0);
-
-  // Electron's file:// renderer can reject module workers even when the same
-  // worker succeeds in a normal browser. Use the proven local stream decoder
-  // there and keep PDF.js for regular browser deployments.
-  if (isElectronRenderer()) {
-    return extractRawPdfTextFallback(fallbackBuffer);
-  }
 
   try {
     const uint8Array = new Uint8Array(buffer);
@@ -58,8 +55,8 @@ export async function extractTextFromPdfBuffer(buffer: ArrayBuffer): Promise<str
       let currentLine = '';
       let lastY: number | null = null;
 
-      for (const item of textContent.items as any[]) {
-        if (!item.str) continue;
+      for (const item of textContent.items) {
+        if (!('str' in item) || !item.str) continue;
         const str = item.str.trim();
         if (!str) continue;
 
@@ -100,10 +97,6 @@ export async function extractTextFromPdfBuffer(buffer: ArrayBuffer): Promise<str
 
   // Fallback if PDF has unencrypted raw streams — uses pre-copied buffer
   return extractRawPdfTextFallback(fallbackBuffer);
-}
-
-function isElectronRenderer(): boolean {
-  return typeof window !== 'undefined' && (window as Window & { zeroApply?: { isDesktop?: boolean } }).zeroApply?.isDesktop === true;
 }
 
 async function extractTextFromDocxBuffer(buffer: ArrayBuffer): Promise<string> {

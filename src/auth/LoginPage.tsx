@@ -76,7 +76,7 @@ export const LoginPage: React.FC = () => {
       <div className="relative z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-center my-auto">
         
         {/* Left Column: Clean Editorial Product Story */}
-        <div className="lg:col-span-6 flex flex-col justify-center text-left space-y-6">
+        <div className="lg:col-span-6 flex flex-col justify-center text-left space-y-6 order-2 lg:order-1">
           {/* Logo Brand Header */}
           <div className="flex items-center gap-3">
             <img
@@ -132,7 +132,7 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* Right Column: Clean White Card Login */}
-        <div className="lg:col-span-6 flex flex-col items-center">
+        <div className="lg:col-span-6 flex flex-col items-center order-1 lg:order-2">
           <div className="w-full max-w-[420px] bg-white border border-zinc-200/90 rounded-2xl p-6 sm:p-8 shadow-xl shadow-zinc-900/5 flex flex-col">
             
             {/* Card Header */}
