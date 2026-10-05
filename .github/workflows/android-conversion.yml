@@ -41,6 +41,10 @@ jobs:
           git -C "$RUNTIME" remote add origin https://github.com/ggml-org/llama.cpp.git
           git -C "$RUNTIME" fetch --depth 1 origin 8e1642198dcd4e408f8776222d6ae31b74d01187
           git -C "$RUNTIME" checkout --detach FETCH_HEAD
+          NOTICES=android-conversion/android/app/src/main/assets/licenses
+          mkdir -p "$NOTICES"
+          cp "$RUNTIME/LICENSE" "$NOTICES/llama.cpp-MIT.txt"
+          curl --fail --location --max-time 60 https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/LICENSE -o "$NOTICES/Qwen-Apache-2.0.txt"
       - name: Cache verified AI test model
         uses: actions/cache@v4
         with:
@@ -55,8 +59,9 @@ jobs:
         run: |
           APK=android-conversion/android/app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "$APK"
           mkdir -p android-download
-          cp "$APK" android-download/ZeroApply-Android.apk
+          cp "$APK" android-download/ZeroApply-Phone-AI.apk
           sha256sum android-download/*.apk > android-download/SHA256SUMS.txt
       - name: Enable emulator hardware acceleration
         run: |
@@ -73,7 +78,7 @@ jobs:
           ram-size: 6144M
           disable-animations: true
           script: |
-            adb install android-download/ZeroApply-Android.apk
+            adb install android-download/ZeroApply-Phone-AI.apk
             adb install android-conversion/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             adb push public/models/zeroapply/qwen2.5-1.5b-instruct-q4_k_m.gguf /data/local/tmp/zeroapply-model.gguf
             adb shell run-as com.zeroapply.app.android.ai mkdir -p files/models

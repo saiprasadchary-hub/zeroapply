@@ -90,7 +90,7 @@ public class PhoneAgentPlugin extends Plugin {
         boolean supported = false;
         for (String abi : Build.SUPPORTED_ABIS) if (abi.equals("arm64-v8a") || abi.equals("x86_64")) supported = true;
         if (!supported) throw new IllegalStateException("The local AI requires a 64-bit Android device.");
-        long needed = modelFile().isFile() ? 128L * 1024 * 1024 : MODEL_BYTES + 512L * 1024 * 1024;
+        long needed = modelFile().isFile() && modelFile().length() == MODEL_BYTES ? 128L * 1024 * 1024 : MODEL_BYTES + 512L * 1024 * 1024;
         if (new StatFs(getContext().getFilesDir().getPath()).getAvailableBytes() < needed)
             throw new IllegalStateException("Free about 1.6 GB of storage for the one-time AI download.");
     }
@@ -104,7 +104,7 @@ public class PhoneAgentPlugin extends Plugin {
             loading = true;
         }
         publish("Preparing phone AI…", 0);
-        if (!modelFile().isFile()) {
+        if (!modelFile().isFile() || modelFile().length() != MODEL_BYTES) {
             getActivity().runOnUiThread(() -> new AlertDialog.Builder(getActivity())
                 .setTitle("Download built-in AI?")
                 .setMessage("One-time download: about 1.1 GB. Use Wi-Fi if possible. AI then works on this phone without Ollama or a computer. You can stop at any time.")
@@ -165,7 +165,8 @@ public class PhoneAgentPlugin extends Plugin {
                     checkSession(session); total += count;
                     if (total > MODEL_BYTES) throw new IllegalStateException("AI download size mismatch.");
                     output.write(buffer, 0, count); digest.update(buffer, 0, count);
-                    publish("Downloading AI: " + (total/1024/1024) + " / 1066 MB", (int)(total*85/MODEL_BYTES));
+                    int percent = (int)(total*85/MODEL_BYTES);
+                    if (percent != progress) publish("Downloading AI: " + (total/1024/1024) + " / 1066 MB", percent);
                 }
                 output.getFD().sync();
             }
@@ -235,7 +236,7 @@ public class PhoneAgentPlugin extends Plugin {
             browserDialog.show(); browserDialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT); browser.loadUrl(url); call.resolve();
         });
     }
-    private void addButton(LinearLayout row, String title, Runnable action) { Button button = new Button(getActivity()); button.setText(title); button.setTextSize(10); button.setPadding(4, 4, 4, 4); row.addView(button, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1)); button.setOnClickListener(view -> action.run()); }
+    private void addButton(LinearLayout row, String title, Runnable action) { Button button = new Button(getActivity()); button.setText(title); button.setTextSize(12); button.setPadding(4, 4, 4, 4); row.addView(button, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1)); button.setOnClickListener(view -> action.run()); }
     @PluginMethod public void evaluateLinkedIn(PluginCall call) {
         if (!trusted(call)) return;
         String script = call.getString("script", "");
