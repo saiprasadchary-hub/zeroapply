@@ -223,7 +223,7 @@ public class PhoneAgentPlugin extends Plugin {
             WebSettings settings = browser.getSettings(); settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true); settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW); settings.setAllowFileAccess(false); settings.setAllowContentAccess(true); settings.setSupportMultipleWindows(false);
             CookieManager.getInstance().setAcceptCookie(true); CookieManager.getInstance().setAcceptThirdPartyCookies(browser, false);
             browser.setWebChromeClient(new WebChromeClient() {
-                @Override public boolean onShowFileChooser(WebView view, android.webkit.ValueCallback<Uri[]> callback, FileChooserParams params) { pickingResume = true; ((MainActivity)getActivity()).chooseResume(callback); return true; }
+                @Override public boolean onShowFileChooser(WebView view, android.webkit.ValueCallback<Uri[]> callback, FileChooserParams params) { pickingResume = ((MainActivity)getActivity()).chooseResume(callback); return true; }
             });
             browser.setWebViewClient(new WebViewClient() {
                 @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return !linkedInUrl(request.getUrl().toString()); }

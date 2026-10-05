@@ -54,7 +54,7 @@ jobs:
         run: node scripts/download-model.mjs
       - name: Build APK
         working-directory: android-conversion/android
-        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
       - name: Verify Android signature and prepare download
         run: |
           APK=android-conversion/android/app/build/outputs/apk/debug/app-debug.apk

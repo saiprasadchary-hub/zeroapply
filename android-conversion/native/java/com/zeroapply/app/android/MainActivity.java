@@ -14,14 +14,14 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PhoneAgentPlugin.class);
         super.onCreate(savedInstanceState);
     }
-    void chooseResume(ValueCallback<Uri[]> callback) {
+    boolean chooseResume(ValueCallback<Uri[]> callback) {
         if (fileCallback != null) fileCallback.onReceiveValue(null);
         fileCallback = callback;
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/pdf");
-        try { startActivityForResult(Intent.createChooser(intent, "Choose your resume"), FILE_REQUEST); }
-        catch (RuntimeException error) { fileCallback.onReceiveValue(null); fileCallback = null; }
+        try { startActivityForResult(Intent.createChooser(intent, "Choose your resume"), FILE_REQUEST); return true; }
+        catch (RuntimeException error) { fileCallback.onReceiveValue(null); fileCallback = null; return false; }
     }
     void cancelResumeChoice() {
         if (fileCallback != null) { fileCallback.onReceiveValue(null); fileCallback = null; }
