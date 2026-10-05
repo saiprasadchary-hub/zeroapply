@@ -57,10 +57,17 @@ jobs:
           mkdir -p android-download
           cp "$APK" android-download/ZeroApply-Android.apk
           sha256sum android-download/*.apk > android-download/SHA256SUMS.txt
+      - name: Enable emulator hardware acceleration
+        run: |
+          test -c /dev/kvm
+          sudo chown "$USER" /dev/kvm
       - name: Test existing mobile view on Android
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
+          target: google_apis
+          profile: pixel_7
+          emulator-boot-timeout: 180
           arch: x86_64
           disable-animations: true
           script: |
