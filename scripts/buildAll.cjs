@@ -6,7 +6,7 @@ const signed = process.argv.includes('--signed') || process.env.ZEROAPPLY_REQUIR
 if (!['win32', 'darwin'].includes(process.platform)) throw new Error('Build installers on Windows or macOS so the native AI runtime matches.');
 if (signed && !process.env.CSC_LINK && !process.env.ZEROAPPLY_SIGN_CERT_SHA1) throw new Error('A signing certificate is required for public releases.');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const run = (command, args) => execFileSync(command, args, { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' });
+const run = (command, args) => execFileSync(command, args, { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' && command.endsWith('.cmd') });
 run(npm, ['run', 'model:download']);
 run(npm, ['run', 'typecheck']);
 run(npm, ['run', 'build']);
