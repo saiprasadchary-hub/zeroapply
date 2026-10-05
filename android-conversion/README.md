@@ -1,8 +1,8 @@
 # ZeroApply Android APK — existing mobile view
 
-This build packages `src/App.tsx` and the existing responsive React interface in Capacitor 8. It reuses the Persona, Resume, Profile, Notifications and account UI; it does not replace them with the separate `mobile/` companion.
+This build packages `src/App.tsx` and the existing responsive React interface in Capacitor 8.5.2. It reuses the Persona, Resume, Profile, Notifications and account UI; it does not replace them with the separate `mobile/` companion.
 
-Build-only adapters blank the seeded developer profile in App and PersonaManager, block desktop AutoApply before AI/browser startup, and replace Electron's browser component with an explanatory screen and manual job-site links. Desktop source files are unchanged. Android does not include the desktop model, Node runtime or Electron process. Resume editing, login, cloud sync and export require further device/backend checks beyond the emulator smoke test.
+Build-only adapters blank the seeded developer profile in App and PersonaManager, block desktop AutoApply before AI/browser startup, and replace Electron's browser component with an explanatory screen and manual job-site links. Desktop source files are unchanged. Google sign-in requires native Android OAuth setup; email sign-in and guest mode remain available. Resume Studio opens a blank candidate resume; Load Demo remains an explicit action. Android does not include the desktop model, Node runtime or Electron process. Resume editing, login, cloud sync and export require further device/backend checks beyond the emulator smoke test.
 
 ## Build
 

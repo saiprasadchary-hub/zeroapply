@@ -21,3 +21,11 @@ test('Unsupported source changes fail the build instead of leaking seeded data',
   assert.throws(() => adaptAndroidSource('changed', '/src/App.tsx'));
   assert.equal(adaptAndroidSource('unchanged', '/src/components/Header.tsx'), null);
 });
+
+test('Android begins with the candidate resume instead of loading a demo automatically', () => {
+  const source = readFileSync('src/resume/ResumeStudio.tsx', 'utf8');
+  const output = adaptAndroidSource(source, '/src/resume/ResumeStudio.tsx');
+  assert.match(output, /return personaToResume\(persona\);/);
+  assert.doesNotMatch(output, /return DEFAULT_RESUME_DOCUMENT;/);
+  assert.match(output, /setDocument\(\{ \.\.\.DEFAULT_RESUME_DOCUMENT/);
+});

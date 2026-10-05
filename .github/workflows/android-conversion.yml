@@ -26,8 +26,10 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: node --test android-conversion/test/adapters.test.mjs
+      - run: npx tsc -p android-conversion/tsconfig.json
       - run: npx vite build --config android-conversion/vite.config.ts
       - run: npm ci --prefix android-conversion --ignore-scripts
+      - run: npm audit --prefix android-conversion --audit-level=moderate
       - name: Create Android project
         working-directory: android-conversion
         run: npx cap add android
@@ -41,7 +43,7 @@ jobs:
           text = text.replace('<application', '<application android:usesCleartextTraffic="false"', 1)
           manifest.write_text(text)
           for folder in Path('android-conversion/android/app/src/main/res').glob('mipmap-*'):
-              if folder.is_dir():
+              if folder.is_dir() and 'anydpi' not in folder.name:
                   for name in ['ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png']:
                       shutil.copyfile('public/logo_square.png', folder / name)
           PY
