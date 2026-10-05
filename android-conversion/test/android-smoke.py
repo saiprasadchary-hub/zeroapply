@@ -36,8 +36,16 @@ if resume is None:
 tap(resume)
 time.sleep(3)
 nodes = snapshot('resume')
-if not any('Resume' in node.get('text', '') for node in nodes):
+if not any('Contact & Online Footprint' in node.get('text', '') for node in nodes):
     raise SystemExit('Resume screen did not open')
+browser = next((node for node in nodes if node.get('text') == 'Browser'), None)
+if browser is None:
+    raise SystemExit('Browser navigation is missing')
+tap(browser)
+time.sleep(2)
+nodes = snapshot('browser')
+if not any('Your job browser' in node.get('text', '') for node in nodes):
+    raise SystemExit('Android browser explanation did not open')
 log = subprocess.check_output(['adb', 'logcat', '-d', '-s', 'AndroidRuntime:E'], text=True)
 if 'FATAL EXCEPTION' in log:
     raise SystemExit('Android app crashed: ' + log[-2000:])

@@ -4,3 +4,4 @@ android/
 *.jks
 *.keystore
 local.properties
+__pycache__/
