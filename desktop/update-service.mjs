@@ -9,7 +9,7 @@ export class DesktopUpdateService {
     this.installing = false;
     this.state = {
       phase: enabled ? 'idle' : 'disabled', currentVersion, progressPercent: 0,
-      message: enabled ? 'Updates are checked automatically.' : 'Preview build. Public releases receive automatic update checks.',
+      message: enabled ? 'Updates are checked automatically.' : 'Automatic updates will be available after the first signed release.',
     };
     updater.autoDownload = false;
     updater.autoInstallOnAppQuit = false;

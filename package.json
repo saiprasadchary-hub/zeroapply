@@ -33,7 +33,7 @@
     "firebase:create": "npx --yes firebase-tools projects:create",
     "firebase:use": "npx --yes firebase-tools use",
     "lint": "oxlint --ignore-pattern \"release_exe/**\" --ignore-pattern \"release_setup/**\" --ignore-pattern \"dist/**\"",
-    "test": "tsx test/ats_detection.test.ts && tsx test/auth_policy.test.ts && tsx test/security_policy.test.ts && tsx test/site_access.test.ts && tsx test/browser_navigation.test.ts && tsx test/browser_core.test.ts && tsx test/browser_select.test.ts && tsx test/chrome_launch_lifecycle.test.ts && tsx test/chrome_agent_startup.test.ts && tsx test/browser_refresh_recovery.test.ts && tsx test/renderer_refresh_recovery.test.ts && tsx test/autoapply_startup_readiness.test.ts && tsx test/autoapply_click_dispatch.test.ts && tsx test/browser_login_compatibility.test.ts && tsx test/contact_autofill.test.ts && tsx test/web_control_accuracy.test.ts && tsx test/workflow_recovery.test.ts && tsx test/electron_browser_features.test.ts && tsx test/easy_apply_safety.test.ts && tsx test/standard_forms_safety.test.ts && tsx test/single_model_policy.test.ts && tsx test/production_regressions.test.ts && tsx test/autoapply_architecture.test.ts && tsx test/autoapply_workflow_execution.test.ts && tsx test/scrolling_feature.test.ts && tsx test/geo_intelligence.test.ts && tsx test/whatsapp_link_detection_and_skip.test.ts && tsx test/embedded_model.test.ts && node --test test/desktop_updates.test.mjs",
+    "test": "tsx test/ats_detection.test.ts && tsx test/auth_policy.test.ts && tsx test/security_policy.test.ts && tsx test/site_access.test.ts && tsx test/browser_navigation.test.ts && tsx test/browser_core.test.ts && tsx test/browser_select.test.ts && tsx test/chrome_launch_lifecycle.test.ts && tsx test/chrome_agent_startup.test.ts && tsx test/browser_refresh_recovery.test.ts && tsx test/renderer_refresh_recovery.test.ts && tsx test/autoapply_startup_readiness.test.ts && tsx test/autoapply_click_dispatch.test.ts && tsx test/browser_login_compatibility.test.ts && tsx test/contact_autofill.test.ts && tsx test/web_control_accuracy.test.ts && tsx test/workflow_recovery.test.ts && tsx test/electron_browser_features.test.ts && tsx test/easy_apply_safety.test.ts && tsx test/standard_forms_safety.test.ts && tsx test/single_model_policy.test.ts && tsx test/production_regressions.test.ts && tsx test/autoapply_architecture.test.ts && tsx test/autoapply_workflow_execution.test.ts && tsx test/scrolling_feature.test.ts && tsx test/geo_intelligence.test.ts && tsx test/whatsapp_link_detection_and_skip.test.ts && tsx test/embedded_model.test.ts && node --test test/desktop_updates.test.mjs && node --import tsx --test test/auth_startup.test.ts",
     "test:integration": "tsx test/agent_integration.test.ts",
     "verify": "npm run lint && npm run build && npm test",
     "preview": "vite preview",
@@ -50,7 +50,8 @@
     "test:embedded-llm": "node --import tsx test/embedded_model.test.ts",
     "test:embedded-llm:inference": "node scripts/verify-embedded-model.mjs",
     "dist:mac": "node scripts/buildAll.cjs",
-    "test:updates": "node --test test/desktop_updates.test.mjs"
+    "test:updates": "node --test test/desktop_updates.test.mjs",
+    "test:startup": "node --import tsx --test test/auth_startup.test.ts"
   },
   "build": {
     "appId": "com.zeroapply.app",

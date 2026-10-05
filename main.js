@@ -375,7 +375,7 @@ const loginSessionDir = isModelVerification
   ? fs.mkdtempSync(path.join(app.getPath('temp'), 'ZeroApply_Model_Verification-'))
   : isSmokeTest
   ? path.join(app.getPath('temp'), 'ZeroApply_Smoke_Test')
-  : path.join(app.getPath('appData'), 'ZeroApply_Login_Sessions');
+  : path.join(app.getPath('appData'), app.isPackaged ? 'ZeroApply_Login_Sessions' : 'ZeroApply_Development_Sessions');
 try {
   if (!fs.existsSync(loginSessionDir)) {
     fs.mkdirSync(loginSessionDir, { recursive: true });
