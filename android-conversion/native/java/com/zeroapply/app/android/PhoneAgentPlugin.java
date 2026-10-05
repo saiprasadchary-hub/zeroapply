@@ -6,6 +6,7 @@ import android.app.Dialog;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Looper;
 import android.os.StatFs;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
@@ -34,6 +35,9 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.Executors;
 import org.json.JSONArray;
 
@@ -61,7 +65,16 @@ public class PhoneAgentPlugin extends Plugin {
     private boolean destroyed = false;
 
     private boolean trusted(PluginCall call) {
-        Uri uri = Uri.parse(getBridge().getWebView().getUrl() == null ? "" : getBridge().getWebView().getUrl());
+        AtomicReference<String> page = new AtomicReference<>("");
+        Runnable readOrigin = () -> { String value = getBridge().getWebView().getUrl(); page.set(value == null ? "" : value); };
+        if (Looper.myLooper() == Looper.getMainLooper()) readOrigin.run();
+        else {
+            CountDownLatch latch = new CountDownLatch(1);
+            getActivity().runOnUiThread(() -> { try { readOrigin.run(); } finally { latch.countDown(); } });
+            try { if (!latch.await(2, TimeUnit.SECONDS)) { call.reject("The app is busy. Retry this action."); return false; } }
+            catch (InterruptedException error) { Thread.currentThread().interrupt(); call.reject("The app action was interrupted."); return false; }
+        }
+        Uri uri = Uri.parse(page.get());
         if (!"https".equals(uri.getScheme()) || !"localhost".equals(uri.getHost())) {
             call.reject("This command is available only from ZeroApply's app interface."); return false;
         }

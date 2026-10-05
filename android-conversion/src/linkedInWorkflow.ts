@@ -11,6 +11,7 @@ const SCAN = `(() => {
   const visible = el => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0 && !el.hidden;
   const modal = Array.from(document.querySelectorAll('.jobs-easy-apply-modal,[role="dialog"]')).find(el => visible(el) && /apply|application/i.test(el.innerText));
   if (!modal) return {phase:'jobs', fields:[]};
+  document.querySelectorAll('[data-zeroapply-phone]').forEach(el => el.removeAttribute('data-zeroapply-phone'));
   const fields = Array.from(modal.querySelectorAll('input,textarea,select')).filter(el => visible(el) && !el.disabled && !el.readOnly && !['password','hidden','submit','button','file','checkbox','radio'].includes(el.type)).map((el,index) => {
     const id = 'za-phone-' + index; el.setAttribute('data-zeroapply-phone',id);
     const labels = Array.from(el.labels || []).map(label => label.innerText).join(' ');

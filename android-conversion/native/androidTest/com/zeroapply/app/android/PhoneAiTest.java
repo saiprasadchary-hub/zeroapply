@@ -7,6 +7,10 @@ import android.content.Context;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -53,5 +57,39 @@ public class PhoneAiTest {
                 fail("Generation must fail after Stop");
             } catch (IllegalStateException expected) { assertTrue(expected.getMessage().contains("AI is off")); }
         } finally { LlamaNative.cancel(); LlamaNative.unload(); }
+        MainActivity app = (MainActivity) instrument.startActivitySync(launch);
+        try {
+            long until = System.currentTimeMillis() + 30000;
+            while (!"true".equals(evaluate(app, "typeof window.zeroApply?.startEmbeddedLlm === 'function'")) && System.currentTimeMillis() < until) Thread.sleep(500);
+            assertEquals("Phone bridge must exist in the installed app", "true", evaluate(app, "typeof window.zeroApply?.startEmbeddedLlm === 'function'"));
+            evaluate(app, "window.__zeroApplyNativeTest = null; window.zeroApply.startEmbeddedLlm().then(s => window.__zeroApplyNativeTest={ready:s.isReady}).catch(e => window.__zeroApplyNativeTest={error:String(e)}); true");
+            JSONObject started = awaitResult(app, 120000);
+            assertTrue("Reviewed native bridge startup: " + started, started.optBoolean("ready"));
+            evaluate(app, "window.__zeroApplyNativeTest=null; window.zeroApply.generateEmbeddedLlm({prompt:'Reply with READY.',systemPrompt:'Be concise.',temperature:0,maxTokens:12}).then(text=>window.__zeroApplyNativeTest={text}).catch(e=>window.__zeroApplyNativeTest={error:String(e)}); true");
+            JSONObject generated = awaitResult(app, 120000);
+            assertFalse("Installed app must get real AI text: " + generated, generated.optString("text").trim().isEmpty());
+            evaluate(app, "window.__zeroApplyNativeTest=null; window.zeroApply.stopEmbeddedLlm().then(()=>window.zeroApply.getEmbeddedLlmStatus()).then(s=>window.__zeroApplyNativeTest={off:!s.isReady}).catch(e=>window.__zeroApplyNativeTest={error:String(e)}); true");
+            assertTrue("Stop must cross the app bridge", awaitResult(app, 10000).optBoolean("off"));
+            Thread.sleep(1000);
+            String after = new String(Files.readAllBytes(new File("/proc/self/maps").toPath()), StandardCharsets.UTF_8);
+            assertFalse("Stop must unmap model weights", after.contains(PhoneAgentPlugin.MODEL_FILE));
+        } finally { instrument.runOnMainSync(app::finish); }
+    }
+    private static String evaluate(MainActivity activity, String script) throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<String> result = new AtomicReference<>();
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> activity.getBridge().getWebView().evaluateJavascript(script, value -> { result.set(value); latch.countDown(); }));
+        assertTrue("App renderer must respond", latch.await(10, TimeUnit.SECONDS));
+        return result.get();
+    }
+    private static JSONObject awaitResult(MainActivity activity, long timeout) throws Exception {
+        long until = System.currentTimeMillis() + timeout;
+        while (System.currentTimeMillis() < until) {
+            String raw = evaluate(activity, "JSON.stringify(window.__zeroApplyNativeTest || null)");
+            String decoded = new JSONArray("[" + raw + "]").getString(0);
+            if (!"null".equals(decoded)) return new JSONObject(decoded);
+            Thread.sleep(500);
+        }
+        throw new AssertionError("Timed out waiting for native phone AI bridge");
     }
 }
