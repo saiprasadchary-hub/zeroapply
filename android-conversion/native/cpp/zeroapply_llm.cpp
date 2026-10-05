@@ -54,7 +54,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_zeroapply_app_android_LlamaNative_loa
         env->ReleaseStringUTFChars(path, raw_path);
         auto model_params = llama_model_default_params();
         model_params.n_gpu_layers = 0;
-        model_params.use_mmap = true;
+        model_params.load_mode = LLAMA_LOAD_MODE_MMAP;
         model_params.progress_callback = load_progress;
         model = llama_model_load_from_file(model_path.c_str(), model_params);
         if (!model || cancelled.load()) throw std::runtime_error("The phone could not load the AI model. Stop other apps and retry.");

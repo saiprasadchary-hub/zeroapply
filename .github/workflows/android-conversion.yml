@@ -27,7 +27,7 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: npm ci --prefix android-conversion --ignore-scripts
       - run: npm audit --prefix android-conversion --audit-level=moderate
-      - run: node --test android-conversion/test/adapters.test.mjs
+      - run: node --test android-conversion/test/*.test.mjs
       - run: npx tsc -p android-conversion/tsconfig.json
       - run: npx vite build --config android-conversion/vite.config.ts
       - name: Create Android project

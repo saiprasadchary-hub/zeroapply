@@ -1,8 +1,8 @@
+import { candidateAnswer, sensitiveQuestion, parseAnswer, type LinkedInField } from './answerPolicy';
 import type { PersonaData } from '../../src/types';
 import { generateWebLlmResponse, ensureEmbeddedModelReady } from '../../src/agent/llm/webLlmEngine';
 import { evaluateLinkedIn, phoneAgent } from './phoneBridge';
 
-export interface LinkedInField { id: string; label: string; type: string; required: boolean; value: string; options: string[]; }
 interface LinkedInPage { phase: 'login' | 'checkpoint' | 'jobs' | 'form' | 'review'; fields: LinkedInField[]; }
 const SCAN = `(() => {
   const path = location.pathname;
@@ -16,38 +16,13 @@ const SCAN = `(() => {
     const labels = Array.from(el.labels || []).map(label => label.innerText).join(' ');
     const group = el.closest('fieldset,.jobs-easy-apply-form-section__grouping,.fb-dash-form-element');
     const label = (labels || el.getAttribute('aria-label') || (group && group.querySelector('legend,label')?.innerText) || el.placeholder || el.name || '').slice(0,350);
-    return {id,label,type:el.tagName === 'SELECT' ? 'select' : el.type || 'text',required:el.required || el.getAttribute('aria-required')==='true',value:el.tagName==='SELECT' && (!el.value || /^(select|choose|please select)/i.test(el.selectedOptions[0]?.text.trim() || '')) ? '' : el.value || '',options:el.tagName==='SELECT' ? Array.from(el.options).map(option => option.text.trim()).filter(Boolean) : []};
+    return {id,label,type:el.tagName === 'SELECT' ? 'select' : el.type || 'text',required:el.required || el.getAttribute('aria-required')==='true',value:el.tagName==='SELECT' && (!el.value || /^(select|choose|please select)/i.test(el.selectedOptions[0]?.text.trim() || '')) ? '' : el.value || '',options:el.tagName==='SELECT' ? Array.from(el.options).map(option => option.text.trim().slice(0,200)).filter(Boolean).slice(0,80) : []};
   });
   return {phase:Array.from(modal.querySelectorAll('button')).some(el => visible(el) && /submit application/i.test(el.innerText+' '+el.getAttribute('aria-label'))) ? 'review' : 'form',fields};
 })()`;
 
-export function candidateAnswer(label: string, persona: PersonaData): string | undefined {
-  const key = label.toLowerCase();
-  if (/password|race|ethnic|religion|gender|disability|veteran|citizenship|nationality|criminal|background|authorized|authorization|sponsorship|visa|date of birth|social security/.test(key)) return undefined;
-  if (/first name/.test(key)) return persona.fullName.trim().split(/\s+/)[0] || undefined;
-  if (/last name|surname/.test(key)) return persona.fullName.trim().split(/\s+/).slice(1).join(' ') || undefined;
-  if (/full name|your name/.test(key)) return persona.fullName.trim() || undefined;
-  if (/email/.test(key)) return persona.email.trim() || undefined;
-  if (/phone|mobile number/.test(key)) return persona.phone.trim() || undefined;
-  if (/linkedin/.test(key)) return persona.linkedIn.trim() || undefined;
-  if (/github/.test(key)) return persona.gitHub.trim() || undefined;
-  if (/portfolio|website/.test(key)) return persona.portfolio.trim() || undefined;
-  if (/city|location/.test(key)) return persona.location.trim() || undefined;
-  return undefined;
-}
-export function sensitiveQuestion(label: string): boolean {
-  return /password|race|ethnic|religion|gender|disability|veteran|citizenship|nationality|criminal|background|authorized|authorization|sponsorship|visa|date of birth|social security/i.test(label);
-}
-export function parseAnswer(text: string, field: LinkedInField): string | undefined {
-  const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
-  let answer: unknown;
-  try { const result: unknown = JSON.parse(cleaned); if (result && typeof result === 'object' && 'answer' in result) answer = (result as { answer: unknown }).answer; } catch { return undefined; }
-  if (typeof answer !== 'string' || !answer.trim() || /^(unknown|null|not provided|n\/a)$/i.test(answer.trim())) return undefined;
-  if (field.options.length > 0) return field.options.find((option: string): boolean => option.toLowerCase() === answer.trim().toLowerCase());
-  if (field.type === 'number' && !/^\d+(\.\d+)?$/.test(answer.trim())) return undefined;
-  return answer.trim().slice(0,2000);
-}
 async function fillField(field: LinkedInField, value: string): Promise<boolean> {
+  if (!/^za-phone-\d+$/.test(field.id)) return false;
   return evaluateLinkedIn<boolean>(`(() => {
     const el = document.querySelector('[data-zeroapply-phone="${field.id}"]');
     if (!el || el.disabled || el.readOnly || el.type === 'password' || !el.closest('.jobs-easy-apply-modal,[role="dialog"]')) return false;
