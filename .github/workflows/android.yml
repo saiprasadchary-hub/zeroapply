@@ -1,0 +1,75 @@
+name: ZeroApply Android APK
+on:
+  pull_request:
+    paths: ['mobile/**', '.github/workflows/android.yml', 'src/auth/**', 'src/services/firebase/**', 'src/resume-autofill/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: node --import tsx --test mobile/test/profile.test.ts
+      - run: npx vite build --config mobile/vite.config.ts
+      - run: npm install --prefix mobile --ignore-scripts
+      - name: Create Android project
+        working-directory: mobile
+        run: npx cap add android
+      - name: Set app branding and disable backups
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          manifest = Path('mobile/android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text().replace('android:allowBackup="true"', 'android:allowBackup="false"')
+          text = text.replace('<application', '<application android:usesCleartextTraffic="false"', 1)
+          manifest.write_text(text)
+          for folder in Path('mobile/android/app/src/main/res').glob('mipmap-*'):
+              if folder.is_dir():
+                  shutil.copyfile('public/logo_square.png', folder / 'ic_launcher.png')
+                  shutil.copyfile('public/logo_square.png', folder / 'ic_launcher_round.png')
+                  shutil.copyfile('public/logo_square.png', folder / 'ic_launcher_foreground.png')
+          PY
+      - name: Build installable APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+      - run: sdkmanager 'build-tools;36.0.0'
+      - name: Verify APK
+        run: |
+          APK=mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          mkdir -p android-download
+          cp "$APK" android-download/ZeroApply-1.0.0-Android.apk
+          sha256sum android-download/*.apk > android-download/SHA256SUMS.txt
+      - name: Test app opens on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: |
+            adb install android-download/ZeroApply-1.0.0-Android.apk
+            adb shell am start -n com.zeroapply.mobile/.MainActivity
+            sleep 10
+            adb shell uiautomator dump /sdcard/zeroapply-ui.xml
+            adb pull /sdcard/zeroapply-ui.xml android-download/zeroapply-launch.xml
+            python3 mobile/test/android-smoke.py
+            adb exec-out screencap -p > android-download/zeroapply-android.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZeroApply-Android-APK
+          path: android-download/*
+          retention-days: 90
