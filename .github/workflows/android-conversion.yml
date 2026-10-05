@@ -1,0 +1,100 @@
+name: ZeroApply existing mobile view APK
+on:
+  pull_request:
+    paths: ['android-conversion/**', '.github/workflows/android-conversion.yml', 'src/**', 'AgentBrowser/**', 'package-lock.json']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 ndk;28.2.13676358 cmake;3.22.1'
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: npm ci --prefix android-conversion --ignore-scripts
+      - run: npm audit --prefix android-conversion --audit-level=moderate
+      - run: node --test android-conversion/test/*.test.mjs
+      - run: npx tsc -p android-conversion/tsconfig.json
+      - run: npx vite build --config android-conversion/vite.config.ts
+      - name: Create Android project
+        working-directory: android-conversion
+        run: npx cap add android
+      - name: Prepare native phone AI and pinned runtime
+        run: |
+          python3 android-conversion/prepare-native.py
+          RUNTIME=android-conversion/android/app/src/main/cpp/llama.cpp
+          git init "$RUNTIME"
+          git -C "$RUNTIME" remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C "$RUNTIME" fetch --depth 1 origin 8e1642198dcd4e408f8776222d6ae31b74d01187
+          git -C "$RUNTIME" checkout --detach FETCH_HEAD
+          NOTICES=android-conversion/android/app/src/main/assets/licenses
+          mkdir -p "$NOTICES"
+          cp "$RUNTIME/LICENSE" "$NOTICES/llama.cpp-MIT.txt"
+          curl --fail --location --max-time 60 https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/LICENSE -o "$NOTICES/Qwen-Apache-2.0.txt"
+      - name: Cache verified AI test model
+        uses: actions/cache@v4
+        with:
+          path: public/models/zeroapply
+          key: android-qwen-6a1a2eb6d15622bf
+      - name: Download verified model for inference test
+        run: node scripts/download-model.mjs
+      - name: Build APK
+        working-directory: android-conversion/android
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+      - name: Verify Android signature and prepare download
+        run: |
+          APK=android-conversion/android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "$APK"
+          mkdir -p android-download
+          cp "$APK" android-download/ZeroApply-Phone-AI.apk
+          sha256sum android-download/*.apk > android-download/SHA256SUMS.txt
+      - name: Enable emulator hardware acceleration
+        run: |
+          test -c /dev/kvm
+          sudo chown "$USER" /dev/kvm
+      - name: Test existing mobile view on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          profile: pixel_7
+          emulator-boot-timeout: 180
+          arch: x86_64
+          ram-size: 6144M
+          disable-animations: true
+          script: |
+            adb install android-download/ZeroApply-Phone-AI.apk
+            adb install android-conversion/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+            adb push public/models/zeroapply/qwen2.5-1.5b-instruct-q4_k_m.gguf /data/local/tmp/zeroapply-model.gguf
+            adb shell run-as com.zeroapply.app.android.ai mkdir -p files/models
+            adb shell "cat /data/local/tmp/zeroapply-model.gguf | run-as com.zeroapply.app.android.ai tee files/models/qwen2.5-1.5b-instruct-q4_k_m.gguf >/dev/null"
+            adb shell rm /data/local/tmp/zeroapply-model.gguf
+            adb shell am instrument -w -r com.zeroapply.app.android.ai.test/androidx.test.runner.AndroidJUnitRunner | tee android-download/native-ai-tests.txt
+            grep -q 'OK (2 tests)' android-download/native-ai-tests.txt
+            adb shell am force-stop com.zeroapply.app.android.ai
+            adb logcat -c
+            adb shell am start -W -n com.zeroapply.app.android.ai/com.zeroapply.app.android.MainActivity
+            sleep 10
+            python3 android-conversion/test/android-smoke.py
+            adb exec-out screencap -p > android-download/zeroapply-android.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ZeroApply-phone-AI-Android-APK
+          path: android-download/*
+          retention-days: 90

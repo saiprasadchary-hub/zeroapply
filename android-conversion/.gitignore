@@ -1,0 +1,7 @@
+node_modules/
+dist/
+android/
+*.jks
+*.keystore
+local.properties
+__pycache__/
