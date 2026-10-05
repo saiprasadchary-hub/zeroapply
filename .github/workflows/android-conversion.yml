@@ -86,7 +86,9 @@ jobs:
             adb shell rm /data/local/tmp/zeroapply-model.gguf
             adb shell am instrument -w -r com.zeroapply.app.android.ai.test/androidx.test.runner.AndroidJUnitRunner | tee android-download/native-ai-tests.txt
             grep -q 'OK (2 tests)' android-download/native-ai-tests.txt
-            adb shell am start -n com.zeroapply.app.android.ai/com.zeroapply.app.android.MainActivity
+            adb shell am force-stop com.zeroapply.app.android.ai
+            adb logcat -c
+            adb shell am start -W -n com.zeroapply.app.android.ai/com.zeroapply.app.android.MainActivity
             sleep 10
             python3 android-conversion/test/android-smoke.py
             adb exec-out screencap -p > android-download/zeroapply-android.png

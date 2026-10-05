@@ -33,7 +33,10 @@ public class PhoneAiTest {
         android.content.Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         assertNotNull(launch);
         android.app.Activity activity = instrument.startActivitySync(launch);
-        Thread.sleep(2500);
+        long renderUntil = System.currentTimeMillis() + 30000;
+        while (!"true".equals(evaluate((MainActivity) activity, "!!document.getElementById('root')?.childElementCount")) && System.currentTimeMillis() < renderUntil) Thread.sleep(500);
+        assertEquals("App interface must render before startup checks", "true", evaluate((MainActivity) activity, "!!document.getElementById('root')?.childElementCount"));
+        Thread.sleep(1000);
         String maps = new String(Files.readAllBytes(new File("/proc/self/maps").toPath()), StandardCharsets.UTF_8);
         assertFalse("App startup must not load native AI", maps.contains("libzeroapply_llm"));
         assertFalse("App startup must not map model weights", maps.contains(PhoneAgentPlugin.MODEL_FILE));

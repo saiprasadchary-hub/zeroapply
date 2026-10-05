@@ -18,10 +18,19 @@ def tap(node):
     subprocess.run(['adb', 'shell', 'input', 'tap', str((bounds[0]+bounds[2])//2), str((bounds[1]+bounds[3])//2)], check=True)
 
 
-nodes = snapshot('launch')
-guest = next((node for node in nodes if 'Continue as Guest' in node.get('text', '')), None)
+guest = None
+for attempt in range(12):
+    nodes = snapshot('launch')
+    guest = next((node for node in nodes if 'Continue as Guest' in node.get('text', '')), None)
+    if guest is not None:
+        break
+    time.sleep(2)
 if guest is None:
-    raise SystemExit('Existing ZeroApply login screen did not open')
+    with open('android-download/launch-failure.png','wb') as output:
+        subprocess.run(['adb','exec-out','screencap','-p'],stdout=output,check=True)
+    log = subprocess.check_output(['adb','logcat','-d'],text=True)
+    open('android-download/launch-logcat.txt','w').write(log)
+    raise SystemExit('ZeroApply login did not render: ' + ' '.join(node.get('text','') for node in nodes) + '\n' + log[-8000:])
 tap(guest)
 time.sleep(4)
 nodes = snapshot('dashboard')
