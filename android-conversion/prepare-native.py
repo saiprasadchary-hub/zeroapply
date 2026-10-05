@@ -6,6 +6,7 @@ project = root / 'android'
 main = project / 'app/src/main'
 shutil.copytree(root / 'native/java', main / 'java', dirs_exist_ok=True)
 shutil.copytree(root / 'native/cpp', main / 'cpp', dirs_exist_ok=True)
+shutil.rmtree(project / 'app/src/androidTest/java', ignore_errors=True)
 shutil.copytree(root / 'native/androidTest', project / 'app/src/androidTest/java', dirs_exist_ok=True)
 gradle = project / 'app/build.gradle'
 text = gradle.read_text().replace('applicationId "com.zeroapply.app.android"', 'applicationId "com.zeroapply.app.android.ai"')
