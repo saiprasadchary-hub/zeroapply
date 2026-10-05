@@ -21,7 +21,7 @@ A local Apple Silicon preview installer has been built and verified: `release_bu
 
 ## One-time release setup
 
-Connect the GitHub plugin, and add these repository Actions secrets using GitHub's settings (do not paste private certificates/passwords into chat):
+GitHub is connected and repository publishing access is verified. The tested app snapshot is available in draft pull request https://github.com/saiprasadchary-hub/zeroapply/pull/1, with Windows and macOS preview builds running. Before publishing a signed production release, configure/verify these repository Actions secrets in GitHub settings (do not paste private certificates/passwords into chat):
 
 - `WINDOWS_SIGN_CERT_BASE64`, `WINDOWS_SIGN_CERT_PASSWORD`: trusted Windows code-signing PFX and password.
 - `MAC_SIGN_CERT_BASE64`, `MAC_SIGN_CERT_PASSWORD`: Developer ID Application certificate P12 and password.
