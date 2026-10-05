@@ -198,11 +198,11 @@ export const ApplicationDashboard: React.FC<ApplicationDashboardProps> = () => {
   }, [filteredAndSortedLogs, currentPage, pageSize]);
 
   return (
-    <div className="flex-1 bg-[#FAFAFA] flex flex-col h-full overflow-y-auto p-4 sm:p-6 md:p-8 font-sans">
-      <div className="max-w-6xl mx-auto w-full space-y-5 sm:space-y-6">
+    <div className="flex-1 bg-[#FAFAFA] flex flex-col h-full overflow-y-auto p-3 sm:p-6 md:p-8 font-sans pb-16 sm:pb-8">
+      <div className="max-w-6xl mx-auto w-full space-y-4 sm:space-y-6">
 
         {/* Header Title & Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200/80 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-zinc-200/80 pb-4 sm:pb-5">
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
               Applications Dashboard
@@ -212,11 +212,11 @@ export const ApplicationDashboard: React.FC<ApplicationDashboardProps> = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={handleExportCsv}
               disabled={logs.length === 0}
-              className="px-3 py-1.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 hover:bg-zinc-50 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+              className="px-2.5 sm:px-3 py-1.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 hover:bg-zinc-50 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
               title="Export as CSV spreadsheet"
             >
               <Download size={13} className="text-zinc-600" />
@@ -226,7 +226,7 @@ export const ApplicationDashboard: React.FC<ApplicationDashboardProps> = () => {
             <button
               onClick={handleExportJson}
               disabled={logs.length === 0}
-              className="px-3 py-1.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 hover:bg-zinc-50 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+              className="px-2.5 sm:px-3 py-1.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 hover:bg-zinc-50 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
               title="Export as JSON dataset"
             >
               <FileCode size={13} className="text-zinc-600" />
@@ -236,17 +236,17 @@ export const ApplicationDashboard: React.FC<ApplicationDashboardProps> = () => {
             <button
               onClick={handleClearHistory}
               disabled={logs.length === 0}
-              className="px-3 py-1.5 bg-white border border-zinc-200 hover:border-red-300 text-red-600 hover:bg-red-50 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+              className="px-2.5 sm:px-3 py-1.5 bg-white border border-zinc-200 hover:border-red-300 text-red-600 hover:bg-red-50 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
               title="Clear all application logs"
             >
               <Trash2 size={13} />
-              <span className="hidden sm:inline">Clear All</span>
+              <span>Clear</span>
             </button>
           </div>
         </div>
 
         {/* Clean Metric Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
           <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
             <div className="flex items-center justify-between text-zinc-400 mb-1">
               <span className="text-[11px] font-mono font-bold uppercase text-zinc-500">Total Apps</span>
@@ -352,33 +352,35 @@ export const ApplicationDashboard: React.FC<ApplicationDashboardProps> = () => {
           </div>
 
           {/* Row 2: Status Segmented Control */}
-          <div className="flex items-center gap-1 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/70 w-fit">
-            {[
-              { id: 'ALL' as const, label: 'All', count: totalApplications },
-              { id: 'SUCCESS' as const, label: 'Success', count: successfulApplications },
-              { id: 'PARTIAL' as const, label: 'Partial', count: partialApplications },
-              { id: 'FAILED' as const, label: 'Failed', count: failedApplications },
-            ].map(({ id, label, count }) => (
-              <button
-                key={id}
-                onClick={() => {
-                  setStatusFilter(id);
-                  setCurrentPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-lg transition-all text-xs flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                  statusFilter === id
-                    ? 'bg-white text-zinc-900 shadow-2xs font-bold border border-zinc-200/60'
-                    : 'text-zinc-500 hover:text-zinc-800 font-semibold'
-                }`}
-              >
-                <span>{label}</span>
-                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
-                  statusFilter === id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'bg-zinc-200/70 text-zinc-500'
-                }`}>
-                  {count}
-                </span>
-              </button>
-            ))}
+          <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+            <div className="flex items-center gap-1 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/70 w-fit shrink-0">
+              {[
+                { id: 'ALL' as const, label: 'All', count: totalApplications },
+                { id: 'SUCCESS' as const, label: 'Success', count: successfulApplications },
+                { id: 'PARTIAL' as const, label: 'Partial', count: partialApplications },
+                { id: 'FAILED' as const, label: 'Failed', count: failedApplications },
+              ].map(({ id, label, count }) => (
+                <button
+                  key={id}
+                  onClick={() => {
+                    setStatusFilter(id);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg transition-all text-xs flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                    statusFilter === id
+                      ? 'bg-white text-zinc-900 shadow-2xs font-bold border border-zinc-200/60'
+                      : 'text-zinc-500 hover:text-zinc-800 font-semibold'
+                  }`}
+                >
+                  <span>{label}</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
+                    statusFilter === id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'bg-zinc-200/70 text-zinc-500'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -472,7 +474,7 @@ export const ApplicationDashboard: React.FC<ApplicationDashboardProps> = () => {
                           <>
                             <button
                               type="button"
-                              onClick={(e) => handleCopyUrl(log.id, log.url, e)}
+                              onClick={(e) => handleCopyUrl(log.id, log.url!, e)}
                               className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
                               title={isCopied ? 'URL Copied!' : 'Copy job listing link'}
                             >
@@ -539,7 +541,7 @@ export const ApplicationDashboard: React.FC<ApplicationDashboardProps> = () => {
                               </span>
                               {log.url && (
                                 <button
-                                  onClick={(e) => handleCopyUrl(log.id, log.url, e)}
+                                  onClick={(e) => handleCopyUrl(log.id, log.url!, e)}
                                   className="text-zinc-800 hover:underline font-bold text-[10px] cursor-pointer shrink-0"
                                 >
                                   {isCopied ? 'Copied!' : 'Copy'}

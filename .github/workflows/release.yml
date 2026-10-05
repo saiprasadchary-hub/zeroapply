@@ -1,17 +1,43 @@
-name: Signed Windows Release
+name: ZeroApply Desktop Release
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths-ignore: ['audits/**', '**/*.md']
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: zeroapply-desktop-release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: echo "version=1.0.$((1000 + RUN_NUMBER))" >> "$GITHUB_OUTPUT"
   build:
-    runs-on: windows-latest
-    timeout-minutes: 45
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows-x64
+          - os: macos-latest
+            label: macOS-arm64
+          - os: macos-15-intel
+            label: macOS-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,51 +45,78 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm version ${{ needs.version.outputs.version }} --no-git-tag-version
       - run: npm run verify
-      - name: Import signing certificate
-        id: certificate
-        shell: pwsh
+      - run: npm run test:updates
+      - name: Build signed Windows installer
+        if: runner.os == 'Windows' && github.event_name != 'pull_request'
         env:
-          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
+          CSC_LINK: ${{ secrets.WINDOWS_SIGN_CERT_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERT_PASSWORD }}
+        run: node scripts/buildAll.cjs --signed
+      - name: Build signed and notarized macOS installers
+        if: runner.os == 'macOS' && github.event_name != 'pull_request'
+        env:
+          CSC_LINK: ${{ secrets.MAC_SIGN_CERT_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_SIGN_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if (-not $env:CERTIFICATE_BASE64 -or -not $env:CERTIFICATE_PASSWORD) { throw 'Windows signing secrets are required.' }
-          $pfxPath = Join-Path $env:RUNNER_TEMP 'zeroapply-signing.pfx'
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
-          $password = ConvertTo-SecureString $env:CERTIFICATE_PASSWORD -AsPlainText -Force
-          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password
-          "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
-          Remove-Item -LiteralPath $pfxPath -Force
-      - name: Build signed installer
-        shell: pwsh
-        env:
-          ZEROAPPLY_SIGN_CERT_SHA1: ${{ steps.certificate.outputs.thumbprint }}
-          ZEROAPPLY_REQUIRE_SIGNING: '1'
+          test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID"
+          node scripts/buildAll.cjs --signed
+      - name: Build unsigned review installers
+        if: github.event_name == 'pull_request'
         run: node scripts/buildAll.cjs
-      - name: Smoke test packaged desktop app
+      - name: Verify Windows packaged app and AI
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $executable = Get-ChildItem -LiteralPath . -Filter ZeroApply.exe -Recurse | Where-Object { $_.FullName -match 'release_exe_v' } | Select-Object -First 1
-          if (-not $executable) { throw 'Packaged executable was not found.' }
-          $process = Start-Process -FilePath $executable.FullName -ArgumentList '--smoke-test' -WindowStyle Hidden -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "Desktop smoke test failed with exit code $($process.ExitCode)." }
+          $exe = (Resolve-Path 'release_build/win-unpacked/ZeroApply.exe').Path
+          foreach ($argument in @('--smoke-test', '--verify-bundled-model')) {
+            $process = Start-Process -FilePath $exe -ArgumentList $argument -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw "Packaged verification failed: $argument" }
+          }
+      - name: Verify macOS packaged app and AI
+        if: runner.os == 'macOS'
+        run: |
+          app=$(find release_build -maxdepth 2 -name ZeroApply.app -print -quit)
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            codesign --verify --deep --strict "$app"
+            xcrun stapler validate "$app"
+          fi
+          "$app/Contents/MacOS/ZeroApply" --smoke-test
+          "$app/Contents/MacOS/ZeroApply" --verify-bundled-model
       - uses: actions/upload-artifact@v4
         with:
-          name: ZeroApply-Windows-${{ github.ref_name }}
+          name: ZeroApply-${{ matrix.label }}
           path: |
-            release_exe_v*/ZeroApply-win32-x64/**
-            release_setup_v*/ZeroApply-Setup.exe
+            release_build/*.exe
+            release_build/*.dmg
+            release_build/*.zip
+            release_build/*.blockmap
+            release_build/latest*.yml
           if-no-files-found: error
-      - name: Publish signed installer to GitHub Releases
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+      - name: Merge Intel and Apple Silicon update feeds
+        run: python3 scripts/merge-mac-update-feeds.py installers
+      - name: Publish all installers and update feeds together
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          COMMIT: ${{ github.sha }}
         run: |
-          $installer = Get-ChildItem -LiteralPath . -Filter ZeroApply-Setup.exe -Recurse | Where-Object { $_.FullName -match 'release_setup_v' } | Select-Object -First 1
-          if (-not $installer) { throw 'Signed installer was not found.' }
-          if (gh release view '${{ github.ref_name }}' --json tagName 2>$null) {
-            gh release upload '${{ github.ref_name }}' $installer.FullName --clobber
-          } else {
-            gh release create '${{ github.ref_name }}' $installer.FullName --verify-tag --generate-notes --title 'ZeroApply ${{ github.ref_name }}'
-          }
+          tag="v$VERSION"
+          gh release create "$tag" --target "$COMMIT" --draft --title "ZeroApply $VERSION" --generate-notes
+          find installers -type f -print0 | xargs -0 gh release upload "$tag" --clobber
+          gh release edit "$tag" --draft=false --latest

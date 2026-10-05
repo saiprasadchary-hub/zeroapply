@@ -1,3 +1,6 @@
+import { getVisualCursorScript } from '../agent/stealth/agentCursor';
+import { getLiveAgentLightHudScript } from '../agent/ui/liveAgentLightHUD';
+
 interface ChromeLaunchResult {
   ok: boolean;
   url?: string;
@@ -9,6 +12,17 @@ export interface ChromeAgentPage {
   navigate(url: string): Promise<boolean>;
   executeJavaScript<T = unknown>(script: string): Promise<T>;
   refreshTarget(): Promise<boolean>;
+}
+
+function installOptionalOverlays(page: ChromeAgentPage): void {
+  // Decorations must not hold up page readiness or the first automation action.
+  // Catch each separately so a disappearing document or a slow cursor cannot
+  // prevent the other overlay from being attempted.
+  for (const makeScript of [getVisualCursorScript, getLiveAgentLightHudScript]) {
+    void Promise.resolve()
+      .then(() => page.executeJavaScript(makeScript()))
+      .catch(() => {});
+  }
 }
 
 export async function launchChromeAgentPage(startUrl: string): Promise<ChromeAgentPage> {
@@ -33,7 +47,9 @@ export async function launchChromeAgentPage(startUrl: string): Promise<ChromeAge
     },
     async navigate(nextUrl: string): Promise<boolean> {
       currentUrl = nextUrl;
-      return Boolean(await bridge.chromeAgentNavigate!(nextUrl));
+      const ok = Boolean(await bridge.chromeAgentNavigate!(nextUrl));
+      if (ok) installOptionalOverlays(page);
+      return ok;
     },
     async executeJavaScript<T = unknown>(script: string): Promise<T> {
       return bridge.chromeAgentEvaluate!(script) as Promise<T>;
@@ -42,5 +58,8 @@ export async function launchChromeAgentPage(startUrl: string): Promise<ChromeAge
       return Boolean(await bridge.chromeAgentSelectActiveTarget?.());
     },
   };
+
+  installOptionalOverlays(page);
+
   return page;
 }

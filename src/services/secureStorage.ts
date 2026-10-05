@@ -1,12 +1,35 @@
+import type { WebLlmEngineState } from '../agent/llm/webLlmEngine';
+
+export interface DesktopUpdateState {
+  phase: 'idle' | 'disabled' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
+  currentVersion: string;
+  latestVersion?: string;
+  progressPercent: number;
+  message: string;
+  error?: string;
+  canRestart: boolean;
+}
 interface ZeroApplyDesktopBridge {
+  getDesktopUpdateStatus?: () => Promise<DesktopUpdateState>;
+  checkDesktopUpdates?: () => Promise<DesktopUpdateState>;
+  downloadDesktopUpdate?: () => Promise<DesktopUpdateState>;
+  installDesktopUpdate?: () => Promise<void>;
+  setAutoApplyActive?: (active: boolean) => Promise<void>;
+  onDesktopUpdateState?: (callback: (state: DesktopUpdateState) => void) => () => void;
   isDesktop: boolean;
-  autoInstallLLM?: boolean;
-  installOllama?: () => Promise<unknown>;
-  startOllama?: () => Promise<boolean>;
+  startEmbeddedLlm?: () => Promise<WebLlmEngineState>;
+  getEmbeddedLlmStatus?: () => Promise<WebLlmEngineState>;
+  generateEmbeddedLlm?: (payload: { prompt: string; systemPrompt: string; temperature: number; maxTokens: number }) => Promise<string>;
+  stopEmbeddedLlm?: () => Promise<void>;
+  onEmbeddedLlmState?: (callback: (state: WebLlmEngineState) => void) => () => void;
   launchChromeAgent?: (url: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
   chromeAgentNavigate?: (url: string) => Promise<boolean>;
   chromeAgentEvaluate?: <T = unknown>(script: string) => Promise<T>;
   chromeAgentSelectActiveTarget?: () => Promise<boolean>;
+  launchCamoufox?: (url: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
+  camoufoxNavigate?: (url: string) => Promise<boolean>;
+  camoufoxEvaluate?: <T = unknown>(script: string) => Promise<T>;
+  camoufoxClose?: () => Promise<boolean>;
   secureGet?: (key: string) => string | null;
   secureSet?: (key: string, value: string) => Promise<boolean>;
   secureRemove?: (key: string) => Promise<boolean>;

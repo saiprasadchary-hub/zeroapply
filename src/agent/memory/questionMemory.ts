@@ -1,177 +1,202 @@
-import { FirebaseCloudSync } from '../../services/firebase/cloudSyncService';
-import { getSecureItem, setSecureItem } from '../../services/secureStorage';
+import type { PersonaData } from '../../types';
+import { resolveGeographicDetailsSync } from '../location/geoIntelligence';
 
-export interface QuestionMemoryEntry {
-  id: string;
-  questionPattern: string; // e.g. "Why do you want to work here?"
-  answerText: string;
-  category: 'behavioral' | 'technical' | 'screening' | 'custom';
+export interface MemoryEntry {
+  question: string;
+  normalizedQuestion: string;
+  answer: string;
+  source: 'persona' | 'llm' | 'custom';
   createdAt: string;
+  hitCount: number;
 }
 
-const MEMORY_BANK_STORAGE_KEY = 'zeroapply_question_memory_bank_v1';
+export function normalizeQuestion(text: string): string {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .replace(/<[^>]+>/g, '')
+    .replace(/[*_~`]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-const DEFAULT_MEMORY_ENTRIES: QuestionMemoryEntry[] = [
-  {
-    id: 'mem-1',
-    questionPattern: 'Why do you want to work at our company?',
-    answerText: 'I am drawn to your team’s innovation, engineering standards, and mission to deliver high-impact scalable products.',
-    category: 'behavioral',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'mem-2',
-    questionPattern: 'Describe your most challenging project',
-    answerText: 'Architected a high-throughput real-time web application with automated performance monitoring, reducing latency by 45%.',
-    category: 'technical',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'mem-3',
-    questionPattern: 'What is your notice period or availability?',
-    answerText: 'Immediately available / 2 weeks notice.',
-    category: 'screening',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'mem-4',
-    questionPattern: 'Are you legally authorized to work in the United States?',
-    answerText: 'Yes',
-    category: 'screening',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'mem-5',
-    questionPattern: 'Will you now or in the future require sponsorship for employment visa status?',
-    answerText: 'No',
-    category: 'screening',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'mem-6',
-    questionPattern: 'What is your highest level of education completed?',
-    answerText: "Bachelor's Degree",
-    category: 'screening',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'mem-7',
-    questionPattern: 'Are you willing to undergo a background check and drug test?',
-    answerText: 'Yes',
-    category: 'screening',
-    createdAt: new Date().toISOString(),
-  },
-];
+export function tokenize(text: string): string[] {
+  return normalizeQuestion(text)
+    .split(/\s+/)
+    .filter((w) => w.length > 1);
+}
+
+const STORAGE_KEY = 'zeroapply_question_memory_bank';
 
 export class QuestionMemoryBank {
-  public static getEntries(): QuestionMemoryEntry[] {
+  private static instance: QuestionMemoryBank | null = null;
+  private entries: Map<string, MemoryEntry> = new Map();
+
+  private constructor() {
+    this.loadFromStorage();
+  }
+
+  public static getInstance(): QuestionMemoryBank {
+    if (!QuestionMemoryBank.instance) {
+      QuestionMemoryBank.instance = new QuestionMemoryBank();
+    }
+    return QuestionMemoryBank.instance;
+  }
+
+  public static addOrUpdateEntry(question: string, answer: string, source: 'persona' | 'llm' | 'custom' = 'custom'): void {
+    QuestionMemoryBank.getInstance().set(question, answer, source);
+  }
+
+  private loadFromStorage(): void {
+    if (typeof localStorage === 'undefined') return;
     try {
-      const raw = getSecureItem(MEMORY_BANK_STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Ensure all default entries are represented if missing
-          const existingPatterns = new Set(parsed.map((e: QuestionMemoryEntry) => e.questionPattern.toLowerCase().trim()));
-          let added = false;
-          DEFAULT_MEMORY_ENTRIES.forEach(def => {
-            if (!existingPatterns.has(def.questionPattern.toLowerCase().trim())) {
-              parsed.push(def);
-              added = true;
-            }
-          });
-          if (added) {
-            this.saveEntries(parsed);
-          }
-          return parsed;
-        }
+        const arr: MemoryEntry[] = JSON.parse(raw);
+        arr.forEach((e) => this.entries.set(e.normalizedQuestion, e));
       }
-    } catch (e) {
-      console.error('Failed to load question memory bank:', e);
-    }
-    this.saveEntries(DEFAULT_MEMORY_ENTRIES);
-    return DEFAULT_MEMORY_ENTRIES;
+    } catch {}
   }
 
-  public static saveEntries(entries: QuestionMemoryEntry[]): void {
+  private saveToStorage(): void {
+    if (typeof localStorage === 'undefined') return;
     try {
-      setSecureItem(MEMORY_BANK_STORAGE_KEY, JSON.stringify(entries));
-    } catch (e) {
-      console.error('Failed to save memory bank:', e);
+      const arr = Array.from(this.entries.values());
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+    } catch {}
+  }
+
+  public set(question: string, answer: string, source: 'persona' | 'llm' | 'custom' = 'custom'): void {
+    const norm = normalizeQuestion(question);
+    if (!norm) return;
+
+    const existing = this.entries.get(norm);
+    this.entries.set(norm, {
+      question,
+      normalizedQuestion: norm,
+      answer,
+      source,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      hitCount: (existing?.hitCount || 0) + 1,
+    });
+    this.saveToStorage();
+  }
+
+  public get(question: string): string | null {
+    const res = this.lookup(question);
+    return res.hit ? res.answer : null;
+  }
+
+  public lookup(question: string): { hit: boolean; answer: string; source?: string; confidence: number } {
+    const norm = normalizeQuestion(question);
+    if (!norm) return { hit: false, answer: '', confidence: 0 };
+
+    // 1. Exact match
+    if (this.entries.has(norm)) {
+      const e = this.entries.get(norm)!;
+      e.hitCount++;
+      return { hit: true, answer: e.answer, source: e.source, confidence: 1.0 };
     }
-  }
 
-  public static addOrUpdateEntry(questionPattern: string, answerText: string, category: QuestionMemoryEntry['category'] = 'custom'): QuestionMemoryEntry {
-    const entries = this.getEntries();
-    const qLower = questionPattern.trim().toLowerCase();
+    // 2. Fuzzy Token Overlap
+    const qTokens = new Set(tokenize(question));
+    let bestMatch: MemoryEntry | null = null;
+    let highestScore = 0;
 
-    const existingIndex = entries.findIndex(e => e.questionPattern.trim().toLowerCase() === qLower);
+    for (const entry of this.entries.values()) {
+      const entryTokens = tokenize(entry.normalizedQuestion);
+      if (entryTokens.length === 0) continue;
 
-    if (existingIndex !== -1) {
-      entries[existingIndex].answerText = answerText.trim();
-      entries[existingIndex].category = category;
-      this.saveEntries(entries);
-      FirebaseCloudSync.saveQuestionMemory(questionPattern, answerText).catch(() => {});
-      return entries[existingIndex];
-    }
-
-    const newEntry: QuestionMemoryEntry = {
-      id: 'mem_' + Math.random().toString(36).substr(2, 9),
-      questionPattern: questionPattern.trim(),
-      answerText: answerText.trim(),
-      category,
-      createdAt: new Date().toISOString(),
-    };
-    entries.unshift(newEntry);
-    this.saveEntries(entries);
-    FirebaseCloudSync.saveQuestionMemory(questionPattern, answerText).catch(() => {});
-    return newEntry;
-  }
-
-  public static deleteEntry(id: string): void {
-    const entries = this.getEntries().filter(e => e.id !== id);
-    this.saveEntries(entries);
-  }
-
-  /**
-   * Performs fuzzy keyword matching to find a pre-saved custom answer for a given form question.
-   */
-  public static findSavedAnswer(questionText: string): string | null {
-    if (!questionText || questionText.trim().length < 3) return null;
-    const qLower = questionText.toLowerCase();
-
-    const entries = this.getEntries();
-    const stopwords = new Set(['what', 'have', 'does', 'with', 'your', 'from', 'about', 'when', 'which', 'there', 'their', 'will', 'you', 'now', 'for', 'the', 'and', 'not']);
-    
-    // Helper to tokenize and filter
-    const getTokens = (str: string) => new Set(str.toLowerCase().split(/[^\w]+/).filter(w => w.length > 2 && !stopwords.has(w)));
-    const qTokens = getTokens(questionText);
-
-    let bestMatch: QuestionMemoryEntry | null = null;
-    let bestScore = 0;
-
-    for (const entry of entries) {
-      const entryLower = entry.questionPattern.toLowerCase();
-      if (qLower.includes(entryLower) || entryLower.includes(qLower)) {
-        return entry.answerText;
+      let overlap = 0;
+      for (const t of entryTokens) {
+        if (qTokens.has(t)) overlap++;
       }
 
-      const patternTokens = getTokens(entry.questionPattern);
-      if (patternTokens.size === 0) continue;
-
-      let matchCount = 0;
-      patternTokens.forEach(token => {
-        if (qTokens.has(token) || Array.from(qTokens).some(qt => qt.startsWith(token) || token.startsWith(qt))) {
-          matchCount++;
-        }
-      });
-
-      const matchRatio = matchCount / patternTokens.size;
-      if (matchRatio > bestScore && (matchRatio >= 0.5 || matchCount >= 3)) {
-        bestScore = matchRatio;
+      const score = overlap / Math.max(qTokens.size, entryTokens.length);
+      if (score > highestScore && score >= 0.6) {
+        highestScore = score;
         bestMatch = entry;
       }
     }
 
-    return bestMatch ? bestMatch.answerText : null;
+    if (bestMatch) {
+      bestMatch.hitCount++;
+      return { hit: true, answer: bestMatch.answer, source: bestMatch.source, confidence: highestScore };
+    }
+
+    return { hit: false, answer: '', confidence: 0 };
+  }
+
+  public seedFromPersona(persona: PersonaData): void {
+    if (!persona) return;
+
+    if (persona.fullName) {
+      this.set('full name', persona.fullName, 'persona');
+      this.set('first name', persona.fullName.split(' ')[0] || '', 'persona');
+      this.set('last name', persona.fullName.split(' ').slice(1).join(' ') || '', 'persona');
+    }
+    if (persona.email) {
+      this.set('email address', persona.email, 'persona');
+      this.set('email', persona.email, 'persona');
+    }
+    if (persona.phone) {
+      this.set('phone number', persona.phone, 'persona');
+      this.set('mobile number', persona.phone, 'persona');
+      this.set('phone', persona.phone, 'persona');
+    }
+    if (persona.location) {
+      this.set('location', persona.location, 'persona');
+      const geo = resolveGeographicDetailsSync(persona.location, persona);
+      this.set('city', geo.city, 'persona');
+      this.set('current city', geo.city, 'persona');
+      this.set('state', geo.state, 'persona');
+      this.set('province', geo.state, 'persona');
+      this.set('state/province', geo.state, 'persona');
+      this.set('country', geo.country, 'persona');
+      this.set('postal code', geo.postalCode, 'persona');
+      this.set('zip code', geo.postalCode, 'persona');
+      this.set('zip/postal code', geo.postalCode, 'persona');
+      this.set('pin code', geo.postalCode, 'persona');
+    }
+    if (persona.linkedIn) {
+      this.set('linkedin profile url', persona.linkedIn, 'persona');
+      this.set('linkedin', persona.linkedIn, 'persona');
+    }
+    if (persona.gitHub) {
+      this.set('github profile url', persona.gitHub, 'persona');
+      this.set('github', persona.gitHub, 'persona');
+    }
+    const cleanPortfolio = (persona.portfolio || persona.portfolioUrl || '').trim();
+    if (cleanPortfolio && cleanPortfolio !== 'N/A' && !/^(none|nil|no|false)$/i.test(cleanPortfolio)) {
+      this.set('portfolio website url', cleanPortfolio, 'persona');
+      this.set('website', cleanPortfolio, 'persona');
+      this.set('portfolio', cleanPortfolio, 'persona');
+    } else {
+      this.set('portfolio website url', 'N/A', 'persona');
+      this.set('website', 'N/A', 'persona');
+      this.set('portfolio', 'N/A', 'persona');
+    }
+    if (typeof persona.experienceYears === 'number') {
+      this.set('years of experience', String(persona.experienceYears), 'persona');
+      this.set('total experience in years', String(persona.experienceYears), 'persona');
+      this.set('how many years of work experience do you have', String(persona.experienceYears), 'persona');
+    }
+
+    // Common screening defaults
+    this.set('are you legally authorized to work', 'Yes', 'persona');
+    this.set('do you require visa sponsorship', 'No', 'persona');
+    this.set('will you now or in the future require sponsorship', 'No', 'persona');
+  }
+
+  public getAll(): MemoryEntry[] {
+    return Array.from(this.entries.values());
+  }
+
+  public clear(): void {
+    this.entries.clear();
+    this.saveToStorage();
   }
 }
+
+export const questionMemory = QuestionMemoryBank.getInstance();

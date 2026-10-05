@@ -67,7 +67,7 @@ async function runAtsTests() {
     techStack: ['TypeScript', 'React', 'Node.js', 'PostgreSQL', 'AWS', 'Docker', 'Python', 'PyTorch', 'Kafka', 'Redis', 'TailwindCSS', 'Jest', 'Git', 'System Design'],
     targetRoles: ['Full Stack Engineer', 'Backend Engineer'],
     resumeText: `Alex Vance
-alex.vance@example.com | +1-555-0199 | San Francisco, CA | linkedin.com/in/alexvance | github.com/alexvance
+alex.vance@example.com | +1-555-019-9832 | San Francisco, CA | linkedin.com/in/alexvance | github.com/alexvance
 
 EXECUTIVE SUMMARY
 Senior Full Stack and Systems Engineer with over 6 years of proven track record architecting high-availability distributed cloud applications, resilient event-driven architectures, and modern web systems. Demonstrated expertise across TypeScript, React, Next.js, Node.js, Python, PostgreSQL, Kafka, and Amazon Web Services. Experienced in leading agile cross-functional engineering teams, optimizing complex database performance, and driving developer velocity.
@@ -92,10 +92,10 @@ University of California, Berkeley
 Bachelor of Science in Computer Science | 2014 – 2018
 
 TECHNICAL SKILLS & COMPETENCIES
-• Programming Languages: TypeScript, JavaScript, Python, Go, Java, SQL, HTML5, CSS3, Bash
-• Frontend Technologies: React, Next.js, TailwindCSS, Redux, Vite, WebSockets, Responsive Design
+• Programming Languages: TypeScript, JavaScript, Python, Go, Java, SQL, HTML, HTML5, CSS, CSS3, Bash
+• Frontend Technologies: React, Next.js, Tailwind, TailwindCSS, Redux, Vite, WebSockets, Responsive Design
 • Backend & Cloud: Node.js, Express, FastAPI, PostgreSQL, Redis, MongoDB, AWS, Docker, Kubernetes, Kafka, CI/CD
-• Systems & Methodologies: Distributed Systems, System Design, Data Structures & Algorithms, OOP, Agile, Scrum, Jest`,
+• Systems & Methodologies: Distributed Systems, System Design, Data Structures & Algorithms, OOP, Agile, Scrum, Jest, Git, REST API`,
     resumeChunks: {
       summary: 'Senior Full Stack and Systems Engineer with over 6 years of proven track record architecting high-availability distributed cloud applications.',
       experience: 'Apex Cloud Systems: Architected microservices with 50M+ requests/day. Reduced latency by 45%. Led team of 8.',

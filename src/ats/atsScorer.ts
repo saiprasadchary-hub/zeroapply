@@ -234,15 +234,13 @@ export function calculateAtsScore(
   rawResumeText?: string,
   chunks?: PersonaData['resumeChunks']
 ): AtsScoreResult {
-  const fullText = (
-    (rawResumeText || '') + ' ' +
-    (persona.resumeText || '') + ' ' +
-    Object.values(chunks || persona.resumeChunks || {}).filter(Boolean).join(' ') + ' ' +
-    (persona.techStack || []).join(' ') + ' ' +
-    (persona.fullName || '') + ' ' +
-    (persona.location || '') + ' ' +
-    (persona.email || '')
-  ).trim();
+  // Score one document exactly once. Profile defaults are not resume evidence.
+  const fullText = (rawResumeText !== undefined ? rawResumeText : persona.resumeText ??
+    Object.values(chunks ?? persona.resumeChunks ?? {}).filter(Boolean).join('\n')).trim();
+  const containsTerm = (term: string): boolean => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|[^a-z0-9_])${escaped}(?=$|[^a-z0-9_+#])`, 'i').test(fullText);
+  };
 
   const textLower = fullText.toLowerCase();
   const words = fullText.split(/\s+/).filter((w) => w.length > 0);
@@ -261,12 +259,13 @@ export function calculateAtsScore(
   // ==========================================
   // PILLAR 1: Contact & Identity (15%)
   // ==========================================
-  const hasName = Boolean(persona.fullName && persona.fullName.trim().length >= 3);
-  const hasEmail = Boolean(persona.email && /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/i.test(persona.email.trim()));
-  const hasPhone = Boolean((persona.phone && persona.phone.replace(/\D/g, '').length >= 10) || /\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/.test(fullText));
-  const hasLocation = Boolean(persona.location && persona.location.trim().length >= 2);
-  const hasLinkedIn = Boolean(persona.linkedIn && /linkedin\.com\/in\//i.test(persona.linkedIn));
-  const hasPortfolio = Boolean(persona.gitHub || persona.portfolio || /github\.com\//i.test(textLower));
+  const header = fullText.split(/\n(?:experience|education|skills|projects)\s*[:\n]/i)[0].split('\n').slice(0, 6).join('\n');
+  const hasName = Boolean(persona.fullName?.trim() && containsTerm(persona.fullName.trim()));
+  const hasEmail = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/.test(header);
+  const hasPhone = /(?:\+?\d[ ().-]*){10,15}/.test(header);
+  const hasLocation = Boolean(persona.city && containsTerm(persona.city) || persona.location && containsTerm(persona.location));
+  const hasLinkedIn = /linkedin\.com\/in\//i.test(fullText);
+  const hasPortfolio = /github\.com\//i.test(fullText) || Boolean(persona.portfolio && fullText.includes(persona.portfolio));
 
   // Deal-breakers in Contact
   if (!hasEmail) {
@@ -338,12 +337,13 @@ export function calculateAtsScore(
   // ==========================================
   // PILLAR 2: Section Architecture (20%)
   // ==========================================
-  const summaryChunk = chunks?.summary || persona.resumeChunks?.summary || '';
-  const expChunk = chunks?.experience || persona.resumeChunks?.experience || '';
-  const eduChunk = chunks?.education || persona.resumeChunks?.education || '';
-  const skillsChunk = chunks?.skills || persona.resumeChunks?.skills || (persona.techStack || []).join(' ');
-  const projectsChunk = chunks?.projects || persona.resumeChunks?.projects || '';
-  const certsChunk = chunks?.certifications || persona.resumeChunks?.certifications || '';
+  const evidenceChunks = fullText === (persona.resumeText ?? '').trim() ? (chunks ?? persona.resumeChunks) : rawResumeText !== undefined ? undefined : chunks ?? persona.resumeChunks;
+  const summaryChunk = evidenceChunks?.summary || '';
+  const expChunk = evidenceChunks?.experience || '';
+  const eduChunk = evidenceChunks?.education || '';
+  const skillsChunk = evidenceChunks?.skills || '';
+  const projectsChunk = evidenceChunks?.projects || '';
+  const certsChunk = evidenceChunks?.certifications || '';
 
   const hasSummarySection = summaryChunk.length > 20 || /summary|professional summary|about me|profile|executive summary|overview/i.test(textLower);
   const hasExperienceSection = expChunk.length > 40 || /experience|work history|employment history|career history|professional experience/i.test(textLower);
@@ -505,8 +505,8 @@ export function calculateAtsScore(
   (Object.keys(TECH_CATALOG) as Array<AtsSkillCategory>).forEach((category) => {
     TECH_CATALOG[category].forEach((tech) => {
       const escaped = tech.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const techRegex = new RegExp(`\\b${escaped}\\b`, 'i');
-      if (techRegex.test(textLower) || (persona.techStack || []).some((s) => s.toLowerCase() === tech)) {
+      const techRegex = new RegExp(`(?:^|[^a-z0-9_])${escaped}(?=$|[^a-z0-9_+#])`, 'i');
+      if (techRegex.test(textLower)) {
         const inExp = expChunk.length > 0 && techRegex.test(expChunk.toLowerCase());
         const formattedName = tech
           .split(' ')
@@ -701,7 +701,7 @@ export function calculateAtsScore(
   const roleMatches: AtsRoleMatch[] = [];
 
   Object.entries(TARGET_ROLE_BENCHMARKS).forEach(([, bench]) => {
-    const matched = bench.requiredSkills.filter((s) => textLower.includes(s) || (persona.techStack || []).some((ts) => ts.toLowerCase() === s));
+    const matched = bench.requiredSkills.filter((s) => containsTerm(s));
     const missing = bench.requiredSkills.filter((s) => !matched.includes(s));
     const matchPct = Math.round((matched.length / bench.requiredSkills.length) * 100);
 
@@ -798,7 +798,7 @@ export function calculateAtsScore(
   const dealBreakersCount = ruleViolations.filter((r) => r.severity === 'dealbreaker').length;
   
   // Severe dealbreaker deduction
-  let overallScore = Math.min(99, Math.max(20, rawOverall));
+  let overallScore = Math.min(100, Math.max(0, rawOverall));
   if (dealBreakersCount > 0) {
     overallScore = Math.min(68, overallScore);
   }
@@ -806,18 +806,18 @@ export function calculateAtsScore(
   let grade: AtsScoreResult['grade'] = 'C';
   let gradeColor = '#f59e0b';
   let summaryTitle = 'Good ATS Foundation';
-  let summaryDescription = 'Your resume has solid foundational sections and will pass standard keyword screeners.';
+  let summaryDescription = 'Your resume has foundational sections; review the evidence and suggestions below.';
 
   if (overallScore >= 92 && dealBreakersCount === 0) {
     grade = 'A+';
     gradeColor = '#10b981';
-    summaryTitle = 'Elite ATS Ranking (Top 5%)';
-    summaryDescription = 'Flawless ATS parsing architecture. Maximizes recruiter match rate across Greenhouse, Workday, Lever, and Ashby.';
+    summaryTitle = 'Excellent Resume Readiness';
+    summaryDescription = 'Strong results against the resume checks shown below. Employer screening outcomes depend on the job and ATS.';
   } else if (overallScore >= 82 && dealBreakersCount === 0) {
     grade = 'A';
     gradeColor = '#059669';
     summaryTitle = 'Strong ATS Compliance';
-    summaryDescription = 'Excellent technical density and clear structure. Passes 90%+ of automated parsing filters.';
+    summaryDescription = 'Strong technical evidence and clear structure against these resume checks.';
   } else if (overallScore >= 72) {
     grade = 'B+';
     gradeColor = '#06b6d4';
@@ -938,7 +938,7 @@ export function calculateAtsScore(
     grade,
     gradeColor,
     summaryTitle,
-    summaryDescription,
+    summaryDescription: `${summaryDescription} This is a heuristic readiness estimate, not an employer ATS score or job-description match.`,
     dealBreakersCount,
     totalViolationsCount: ruleViolations.length,
     wordCount,

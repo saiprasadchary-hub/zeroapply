@@ -4,7 +4,7 @@ import { getSecureItem, setSecureItem } from '../src/services/secureStorage';
 export const DEFAULT_HOME_URL = 'https://www.google.com/';
 export const MAX_BROWSER_TABS = 20;
 const SESSION_KEY = 'zeroapply_browser_session_v2';
-const VALID_PLATFORMS = new Set<PlatformId>(['linkedin', 'unstop', 'indeed', 'glassdoor', 'naukri', 'auto']);
+const VALID_PLATFORMS = new Set<PlatformId>(['linkedin', 'unstop', 'indeed', 'glassdoor', 'naukri', 'testbed', 'auto']);
 
 export interface BrowserTab {
   id: string;

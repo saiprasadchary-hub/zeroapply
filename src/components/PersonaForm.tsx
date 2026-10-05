@@ -1,3 +1,4 @@
+import { initWebLlmEngine } from '../agent/llm/webLlmEngine';
 import React, { useState, useRef } from 'react';
 import type { PersonaData, PersonaTone, WorkLocation } from '../types';
 import {
@@ -16,8 +17,13 @@ import {
   Database,
   ShieldCheck,
   ChevronDown,
+  Zap,
+  HelpCircle,
+  Briefcase,
+  GraduationCap,
 } from 'lucide-react';
 import { autoFillPersonaFromResume } from '../resume-autofill';
+import { chunkResumeText } from '../agent/rag/resumeChunker';
 import { saveResumeFileToStorage, clearSavedResumeFileFromStorage, getSavedResumeFileFromStorage } from '../agent/autofill/resumeInjector';
 import { PersonaManager } from '../persona';
 import { MemoryBankManager } from '../agent/memory/MemoryBankManager';
@@ -141,13 +147,19 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
   };
 
   const handleAutoApplyClick = () => {
+    void initWebLlmEngine('review-start')
+      .catch((error: unknown) => onSaveToast(error instanceof Error ? error.message : 'Built-in AI could not start.'));
     const missing = getMissingAutoApplySections();
     if (missing.length > 0) {
-      setMissingSections([...missing]);
-      setShowMissingModal(true);
-      return;
+      onSaveToast(`🚀 AutoApply starting! AI will infer ${missing.length} memory details using your local LLM.`);
     }
     onLaunchBrowser?.('autoApply', selectedPlatform || 'linkedin');
+  };
+
+  const handleOpenReadinessModal = () => {
+    const missing = getMissingAutoApplySections();
+    setMissingSections([...missing]);
+    setShowMissingModal(true);
   };
 
   React.useEffect(() => {
@@ -185,23 +197,32 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
     }
   }, [persona.fullName, persona.resumeText, persona.resumeChunks, uploadedFile]);
 
-  // Auto-clean misplaced programming languages in spoken languages chunk
+  // Backfill previously uploaded resumes while preserving reviewed topic entries.
   React.useEffect(() => {
-    const rawLanguages = persona.resumeChunks?.languages;
-    const techRegex = /\b(?:python|javascript|typescript|c\+\+|java\b|c#|sql|mongodb|firebase|html5?|css3?|react|node|flask|opencv|dsa|system design|pandas|numpy|matplotlib|scikit-learn|databases|frameworks|oop|beautifulsoup|scrapy)\b/i;
-    if (rawLanguages && techRegex.test(rawLanguages)) {
-      const updatedChunks = { ...(persona.resumeChunks || {}) };
-      if (!updatedChunks.skills || !updatedChunks.skills.includes('Python')) {
-        updatedChunks.skills = updatedChunks.skills ? `${updatedChunks.skills}\n\n${rawLanguages}` : rawLanguages;
-      }
-      updatedChunks.languages = 'English (Professional), Hindi, Telugu';
-      setPersona((prev) => {
-        const updated = { ...prev, resumeChunks: updatedChunks };
-        PersonaManager.updateActiveProfileData(updated);
-        return updated;
-      });
+    if (!persona.resumeText?.trim()) return;
+    const extracted = chunkResumeText(persona.resumeText);
+    const updatedChunks = { ...(persona.resumeChunks ?? {}) };
+    let changed = false;
+    for (const [key, value] of Object.entries(extracted)) {
+      if (key === 'general' || updatedChunks[key]?.trim() || !value.trim()) continue;
+      updatedChunks[key] = value;
+      changed = true;
     }
-  }, [persona.resumeChunks, setPersona]);
+    const languages = updatedChunks.languages;
+    if (languages && /(?:\b(?:python|javascript|typescript|java|sql|html|css)\b|c\+\+|c#)/i.test(languages)
+      && !/\b(?:english|hindi|telugu|tamil|french|spanish|german|mandarin|arabic|native|fluent|conversational)\b/i.test(languages)) {
+      updatedChunks.skills = [updatedChunks.skills, languages].filter(Boolean).join('\n');
+      updatedChunks.languages = extracted.languages ?? '';
+      changed = true;
+    }
+    if (!changed) return;
+    setPersona((previous) => {
+      if (previous.resumeText !== persona.resumeText) return previous;
+      const updated = { ...previous, resumeChunks: updatedChunks, verified: false };
+      PersonaManager.updateActiveProfileData(updated);
+      return updated;
+    });
+  }, [persona.resumeText, persona.resumeChunks, setPersona]);
 
   const handleInputChange = <Key extends keyof PersonaData>(field: Key, value: PersonaData[Key]) => {
     setPersona((prev) => {
@@ -296,7 +317,7 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
       setPersona(updatedPersona);
       HierarchicalMemory.onPersonaOrResumeUpdated(updatedPersona);
       PersonaManager.updateActiveProfileData(updatedPersona, savedResume);
-      onSaveToast(fieldsCount > 0 ? `Auto-filled ${fieldsCount} attributes from "${file.name}".` : `Read "${file.name}", but no supported profile attributes were found.`);
+      onSaveToast(fieldsCount > 0 ? `Auto-filled ${fieldsCount} attributes from "${file.name}". Review extracted details before verifying.` : `Read "${file.name}", but no supported profile attributes were found.`);
     } catch (err: unknown) {
       if (fileUrl) URL.revokeObjectURL(fileUrl);
       console.error('Failed to parse resume:', err);
@@ -309,804 +330,1000 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
 
 
   return (
-    <div className="p-3 sm:p-5 md:p-6 space-y-5 sm:space-y-6 max-w-3xl mx-auto w-full text-on-surface">
+    <div className="p-3 sm:p-5 md:p-6 space-y-5 sm:space-y-6 max-w-3xl mx-auto w-full text-on-surface pb-16 sm:pb-8">
       <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xs">
         <nav aria-label="Profile setup sections" className="grid grid-cols-2 gap-1 bg-zinc-50 p-1.5">
-        <button
-          type="button"
-          onClick={() => setActiveTab('basic')}
-          aria-pressed={activeTab === 'basic'}
-          aria-controls="basic-persona-panel"
-          className={`min-w-0 rounded-xl px-3 py-2.5 text-left transition-all ${
-            activeTab === 'basic'
-              ? 'bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-200'
-              : 'text-zinc-500 hover:bg-white/70 hover:text-zinc-800'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${activeTab === 'basic' ? 'bg-cyan-50 text-cyan-700' : 'bg-zinc-200/70 text-zinc-500'}`}>
-              <Contact size={15} />
+          <button
+            type="button"
+            onClick={() => setActiveTab('basic')}
+            aria-pressed={activeTab === 'basic'}
+            aria-controls="basic-persona-panel"
+            className={`min-w-0 rounded-xl px-3 py-2.5 text-left transition-all ${activeTab === 'basic'
+                ? 'bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-200'
+                : 'text-zinc-500 hover:bg-white/70 hover:text-zinc-800'
+              }`}
+          >
+            <span className="flex items-center gap-2">
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${activeTab === 'basic' ? 'bg-cyan-50 text-cyan-700' : 'bg-zinc-200/70 text-zinc-500'}`}>
+                <Contact size={15} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-extrabold">Basic info &amp; persona</span>
+                <span className="mt-0.5 block truncate text-[10px] text-zinc-500">{completedBasicChecks} of {basicChecks.length} essentials</span>
+              </span>
+              <span className="text-[11px] font-black tabular-nums text-zinc-500">{basicProgress}%</span>
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-extrabold">Basic info &amp; persona</span>
-              <span className="mt-0.5 block truncate text-[10px] text-zinc-500">{completedBasicChecks} of {basicChecks.length} essentials</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('chunks')}
+            aria-pressed={activeTab === 'chunks'}
+            aria-controls="memory-bank-panel"
+            className={`min-w-0 rounded-xl px-3 py-2.5 text-left transition-all ${activeTab === 'chunks'
+                ? 'bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-200'
+                : 'text-zinc-500 hover:bg-white/70 hover:text-zinc-800'
+              }`}
+          >
+            <span className="flex items-center gap-2">
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${activeTab === 'chunks' ? 'bg-violet-50 text-violet-700' : 'bg-zinc-200/70 text-zinc-500'}`}>
+                <Database size={15} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-extrabold">Memory bank</span>
+                <span className="mt-0.5 block truncate text-[10px] text-zinc-500">{completedMemorySections} of {REQUIRED_AUTOAPPLY_CHUNKS.length} essentials</span>
+              </span>
+              <span className="text-[11px] font-black tabular-nums text-zinc-500">{memoryProgress}%</span>
             </span>
-            <span className="text-[11px] font-black tabular-nums text-zinc-500">{basicProgress}%</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('chunks')}
-          aria-pressed={activeTab === 'chunks'}
-          aria-controls="memory-bank-panel"
-          className={`min-w-0 rounded-xl px-3 py-2.5 text-left transition-all ${
-            activeTab === 'chunks'
-              ? 'bg-white text-zinc-950 shadow-xs ring-1 ring-zinc-200'
-              : 'text-zinc-500 hover:bg-white/70 hover:text-zinc-800'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${activeTab === 'chunks' ? 'bg-violet-50 text-violet-700' : 'bg-zinc-200/70 text-zinc-500'}`}>
-              <Database size={15} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-extrabold">Memory bank</span>
-              <span className="mt-0.5 block truncate text-[10px] text-zinc-500">{completedMemorySections} of {REQUIRED_AUTOAPPLY_CHUNKS.length} essentials</span>
-            </span>
-            <span className="text-[11px] font-black tabular-nums text-zinc-500">{memoryProgress}%</span>
-          </span>
-        </button>
+          </button>
         </nav>
       </section>
 
       {activeTab === 'basic' ? (
         <div id="basic-persona-panel" role="region" aria-label="Basic information and persona" className="space-y-5 sm:space-y-6">
-      {/* Upload Dropzone / Uploaded File Display */}
-      <div className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs sm:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-black tracking-tight text-zinc-950 sm:text-lg">Start from your resume</h2>
-            <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">Upload once to fill your profile and memory automatically.</p>
-          </div>
-          {isAutoFilling ? (
-            <span className="text-xs font-mono font-semibold px-2.5 py-1 bg-cyan-50 text-cyan-700 border border-cyan-200 rounded-full">Reading resume…</span>
-          ) : uploadedFile && (
-            <span className="text-xs font-mono font-semibold px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full flex items-center gap-1">
-              <CheckCircle2 size={12} /> Auto-filled
-            </span>
-          )}
-        </div>
-
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileUpload}
-          accept=".pdf,.docx"
-          className="hidden"
-        />
-
-        {uploadedFile ? (
-          <div className="border border-cyan-200 bg-cyan-50/30 rounded-xl p-4 md:p-5 ambient-shadow transition-all space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-lg bg-red-100 text-red-600 flex flex-col items-center justify-center font-black font-mono text-[10px] shrink-0 leading-tight">
-                  <FileText size={16} />
-                  <span>{uploadedFile.type === 'pdf' ? 'PDF' : 'DOC'}</span>
-                </div>
-                <div className="min-w-0">
-                  <h4 className="font-bold text-sm text-primary truncate max-w-[220px] sm:max-w-[320px]" title={uploadedFile.name}>
-                    {uploadedFile.name}
-                  </h4>
-                  <p className="text-xs text-on-surface-variant font-mono">
-                    {uploadedFile.size} • Uploaded &amp; Parsed
-                  </p>
-                </div>
+          {/* Upload Dropzone / Uploaded File Display */}
+          <div className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-black tracking-tight text-zinc-950 sm:text-lg">Start from your resume</h2>
+                <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">Upload once to fill your profile and memory automatically.</p>
               </div>
+              {isAutoFilling ? (
+                <span className="text-xs font-mono font-semibold px-2.5 py-1 bg-cyan-50 text-cyan-700 border border-cyan-200 rounded-full">Reading resume…</span>
+              ) : uploadedFile && (
+                <span className="text-xs font-mono font-semibold px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full flex items-center gap-1">
+                  <CheckCircle2 size={12} /> Auto-filled
+                </span>
+              )}
+            </div>
 
-              <div className="flex items-center gap-2">
-                {uploadedFile.url && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPdfPreview(!showPdfPreview)}
-                    className="px-3 py-1.5 bg-white border border-outline-variant hover:border-cyan-500 rounded-lg text-xs font-bold text-primary flex items-center gap-1.5 transition-colors shadow-sm"
-                  >
-                    {showPdfPreview ? <EyeOff size={14} /> : <Eye size={14} />}
-                    <span>{showPdfPreview ? 'Hide PDF' : 'View PDF'}</span>
-                  </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".pdf,.docx"
+              className="hidden"
+            />
+
+            {uploadedFile ? (
+              <div className="border border-cyan-200 bg-cyan-50/30 rounded-xl p-4 md:p-5 ambient-shadow transition-all space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-red-100 text-red-600 flex flex-col items-center justify-center font-black font-mono text-[10px] shrink-0 leading-tight">
+                      <FileText size={16} />
+                      <span>{uploadedFile.type === 'pdf' ? 'PDF' : 'DOC'}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-sm text-primary truncate max-w-[220px] sm:max-w-[320px]" title={uploadedFile.name}>
+                        {uploadedFile.name}
+                      </h4>
+                      <p className="text-xs text-on-surface-variant font-mono">
+                        {uploadedFile.size} • Uploaded &amp; Parsed
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {uploadedFile.url && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPdfPreview(!showPdfPreview)}
+                        className="px-3 py-1.5 bg-white border border-outline-variant hover:border-cyan-500 rounded-lg text-xs font-bold text-primary flex items-center gap-1.5 transition-colors shadow-sm"
+                      >
+                        {showPdfPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+                        <span>{showPdfPreview ? 'Hide PDF' : 'View PDF'}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3 py-1.5 bg-white border border-outline-variant hover:border-cyan-500 rounded-lg text-xs font-bold text-primary flex items-center gap-1.5 transition-colors shadow-sm"
+                      title="Upload another file"
+                    >
+                      <RefreshCw size={14} />
+                      <span>Replace</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (uploadedFile?.url) URL.revokeObjectURL(uploadedFile.url);
+                        setUploadedFile(null);
+                        setShowPdfPreview(false);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                        clearSavedResumeFileFromStorage();
+                        HierarchicalMemory.clearEpisodicMemory();
+                        const clearedPersona = { ...persona, resumeChunks: undefined, resumeText: undefined, verified: false };
+                        setPersona(clearedPersona);
+                        PersonaManager.updateActiveProfileData(clearedPersona, null);
+                        onSaveToast('Resume removed. Memory chunks and active caches cleared.');
+                      }}
+                      className="p-1.5 bg-white border border-outline-variant hover:border-red-400 hover:text-red-600 rounded-lg text-xs font-bold text-on-surface-variant transition-colors shadow-sm"
+                      title="Remove uploaded resume"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Embedded PDF Viewer */}
+                {showPdfPreview && uploadedFile.url && (
+                  <div className="border border-zinc-200 rounded-xl overflow-hidden shadow-inner bg-zinc-900 animate-fadeIn">
+                    <div className="bg-zinc-800 text-zinc-300 px-4 py-2 flex items-center justify-between text-xs font-mono border-b border-zinc-700">
+                      <span className="truncate max-w-[260px]">📄 {uploadedFile.name}</span>
+                      <a
+                        href={uploadedFile.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-cyan-400 hover:underline flex items-center gap-1"
+                      >
+                        <ExternalLink size={12} /> Open in full tab ↗
+                      </a>
+                    </div>
+                    <iframe
+                      src={uploadedFile.url}
+                      title="Uploaded Resume PDF Preview"
+                      className="w-full h-[480px] bg-white border-0"
+                    />
+                  </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-white border border-outline-variant hover:border-cyan-500 rounded-lg text-xs font-bold text-primary flex items-center gap-1.5 transition-colors shadow-sm"
-                  title="Upload another file"
-                >
-                  <RefreshCw size={14} />
-                  <span>Replace</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (uploadedFile?.url) URL.revokeObjectURL(uploadedFile.url);
-                    setUploadedFile(null);
-                    setShowPdfPreview(false);
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                    clearSavedResumeFileFromStorage();
-                    HierarchicalMemory.clearEpisodicMemory();
-                    const clearedPersona = { ...persona, resumeChunks: undefined, resumeText: undefined, verified: false };
-                    setPersona(clearedPersona);
-                    PersonaManager.updateActiveProfileData(clearedPersona, null);
-                    onSaveToast('Resume removed. Memory chunks and active caches cleared.');
-                  }}
-                  className="p-1.5 bg-white border border-outline-variant hover:border-red-400 hover:text-red-600 rounded-lg text-xs font-bold text-on-surface-variant transition-colors shadow-sm"
-                  title="Remove uploaded resume"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-
-            {/* Embedded PDF Viewer */}
-            {showPdfPreview && uploadedFile.url && (
-              <div className="border border-zinc-200 rounded-xl overflow-hidden shadow-inner bg-zinc-900 animate-fadeIn">
-                <div className="bg-zinc-800 text-zinc-300 px-4 py-2 flex items-center justify-between text-xs font-mono border-b border-zinc-700">
-                  <span className="truncate max-w-[260px]">📄 {uploadedFile.name}</span>
-                  <a
-                    href={uploadedFile.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-cyan-400 hover:underline flex items-center gap-1"
-                  >
-                    <ExternalLink size={12} /> Open in full tab ↗
-                  </a>
-                </div>
-                <iframe
-                  src={uploadedFile.url}
-                  title="Uploaded Resume PDF Preview"
-                  className="w-full h-[480px] bg-white border-0"
+                {/* Real-Time Advanced ATS Score Card */}
+                <AtsScoreCard
+                  persona={persona}
+                  resumeText={persona.resumeText}
+                  resumeChunks={persona.resumeChunks}
+                  fileName={uploadedFile.name}
+                  onNavigateToResume={onNavigateToResume}
                 />
               </div>
-            )}
-
-            {/* Real-Time Advanced ATS Score Card */}
-            <AtsScoreCard
-              persona={persona}
-              resumeText={persona.resumeText}
-              resumeChunks={persona.resumeChunks}
-              fileName={uploadedFile.name}
-              onNavigateToResume={onNavigateToResume}
-            />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <button
-              type="button"
-              disabled={isAutoFilling}
-              onClick={() => fileInputRef.current?.click()}
-              className={`w-full border-2 border-dashed border-zinc-300 rounded-xl p-6 md:p-8 flex flex-col items-center justify-center gap-3 hover:border-cyan-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 transition-all bg-zinc-50/50 group relative overflow-hidden ${isAutoFilling ? 'opacity-60 cursor-wait' : 'cursor-pointer'}`}
-            >
-              <div className="w-12 h-12 rounded-full bg-cyan-50 text-cyan-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Upload size={24} />
-              </div>
-              <p className="text-sm text-on-surface-variant text-center">
-                Choose a <span className="font-bold text-primary">PDF or DOCX</span> to fill this page automatically
-              </p>
-              <span className="text-[11px] font-medium text-zinc-400">Your original file stays under your control.</span>
-            </button>
-
-            {/* Create Own Resume Option */}
-            {onNavigateToResume && (
-              <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-cyan-50/70 via-blue-50/50 to-indigo-50/40 border border-cyan-200/90 rounded-xl shadow-2xs">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-cyan-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                    <FileText size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-zinc-900 truncate">Don't have a resume yet?</p>
-                    <p className="text-[11px] text-zinc-500 truncate">Build an ATS-optimized Harvard resume from scratch</p>
-                  </div>
-                </div>
+            ) : (
+              <div className="space-y-3">
                 <button
                   type="button"
-                  onClick={onNavigateToResume}
-                  className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow-md shrink-0 cursor-pointer ml-2"
+                  disabled={isAutoFilling}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-full border-2 border-dashed border-zinc-300 rounded-xl p-6 md:p-8 flex flex-col items-center justify-center gap-3 hover:border-cyan-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 transition-all bg-zinc-50/50 group relative overflow-hidden ${isAutoFilling ? 'opacity-60 cursor-wait' : 'cursor-pointer'}`}
                 >
-                  <FileText size={13} className="text-cyan-100" />
-                  <span>Create Own Resume</span>
+                  <div className="w-12 h-12 rounded-full bg-cyan-50 text-cyan-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Upload size={24} />
+                  </div>
+                  <p className="text-sm text-on-surface-variant text-center">
+                    Choose a <span className="font-bold text-primary">PDF or DOCX</span> to fill this page automatically
+                  </p>
+                  <span className="text-[11px] font-medium text-zinc-400">Your original file stays under your control.</span>
                 </button>
+
+                {/* Create Own Resume Option */}
+                {onNavigateToResume && (
+                  <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-cyan-50/70 via-blue-50/50 to-indigo-50/40 border border-cyan-200/90 rounded-xl shadow-2xs">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-cyan-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <FileText size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-zinc-900 truncate">Don't have a resume yet?</p>
+                        <p className="text-[11px] text-zinc-500 truncate">Build an ATS-optimized Harvard resume from scratch</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onNavigateToResume}
+                      className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow-md shrink-0 cursor-pointer ml-2"
+                    >
+                      <FileText size={13} className="text-cyan-100" />
+                      <span>Create Own Resume</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Section 1: Personal Information */}
-      <div className="space-y-4 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="w-6 h-6 rounded-lg bg-cyan-50 border border-cyan-200/90 text-cyan-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
-              01
-            </span>
-            <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
-              About you
-            </h3>
-          </div>
-          {persona.verified && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1">
-              <CheckCircle2 size={10} /> Verified
-            </span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          <div className="space-y-1.5">
-            <label htmlFor="persona-full-name" className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
-              Full Name
-            </label>
-            <input
-              id="persona-full-name"
-              type="text"
-              autoComplete="name"
-              placeholder="e.g. Alex Johnson"
-              value={persona.fullName}
-              onChange={(e) => handleInputChange('fullName', e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="persona-location" className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
-              Location
-            </label>
-            <input
-              id="persona-location"
-              type="text"
-              autoComplete="address-level2"
-              placeholder="e.g. San Francisco, CA"
-              value={persona.location}
-              onChange={(e) => handleInputChange('location', e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="persona-email" className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
-              Email Address
-            </label>
-            <input
-              id="persona-email"
-              type="email"
-              autoComplete="email"
-              placeholder="e.g. alex@example.com"
-              value={persona.email}
-              onChange={(e) => handleInputChange('email', e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="persona-phone" className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
-              Phone Number
-            </label>
-            <input
-              id="persona-phone"
-              type="tel"
-              autoComplete="tel"
-              placeholder="e.g. +1 (555) 019-2834"
-              value={persona.phone}
-              onChange={(e) => handleInputChange('phone', e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Section 2: Social Profiles & Links */}
-      <div className="space-y-4 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
-        <div className="flex items-center gap-2.5">
-          <span className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-200/90 text-blue-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
-            02
-          </span>
-          <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
-            Professional links
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          <div className="space-y-1.5">
+          {/* Section 1: Personal Information */}
+          <div className="space-y-4 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
             <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
-                LinkedIn Profile
-              </label>
-              {persona.linkedIn && (
-                <a
-                  href={persona.linkedIn.startsWith('http') ? persona.linkedIn : `https://${persona.linkedIn}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10px] text-cyan-600 hover:underline font-mono flex items-center gap-0.5 font-bold"
-                  title="Open LinkedIn in new tab"
-                >
-                  Open ↗
-                </a>
-              )}
-            </div>
-            <input
-              type="text"
-              placeholder="e.g. linkedin.com/in/username"
-              value={persona.linkedIn}
-              onChange={(e) => handleInputChange('linkedIn', e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
-                GitHub Repository
-              </label>
-              {persona.gitHub && (
-                <a
-                  href={persona.gitHub.startsWith('http') ? persona.gitHub : `https://${persona.gitHub}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10px] text-cyan-600 hover:underline font-mono flex items-center gap-0.5 font-bold"
-                  title="Open GitHub in new tab"
-                >
-                  Open ↗
-                </a>
-              )}
-            </div>
-            <input
-              type="text"
-              placeholder="e.g. github.com/username"
-              value={persona.gitHub}
-              onChange={(e) => handleInputChange('gitHub', e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Section 3: Work Preferences & Compensation */}
-      <div className="space-y-4 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
-        <div className="flex items-center gap-2.5">
-          <span className="w-6 h-6 rounded-lg bg-emerald-50 border border-emerald-200/90 text-emerald-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
-            03
-          </span>
-          <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
-            Work preferences
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-          {/* Experience Slider */}
-          <div className="bg-zinc-50/70 border border-zinc-200/80 rounded-xl p-3.5 space-y-2.5">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-zinc-700">
-                Experience Level
-              </span>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-cyan-50 text-cyan-700 border border-cyan-200 font-mono">
-                {persona.experienceYears} Years
-              </span>
-            </div>
-            <input
-              type="range"
-              aria-label="Years of professional experience"
-              min="0"
-              max="20"
-              value={persona.experienceYears}
-              onChange={(e) => handleInputChange('experienceYears', Number(e.target.value))}
-              className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-cyan-600"
-            />
-          </div>
-
-          {/* Salary Slider */}
-          <div className="bg-zinc-50/70 border border-zinc-200/80 rounded-xl p-3.5 space-y-2.5">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-zinc-700 flex items-center gap-1.5">
-                <span className="text-xs font-black text-emerald-600">₹</span>
-                Min Salary Expectation
-              </span>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
-                ₹{persona.minSalary ?? 12} LPA
-              </span>
-            </div>
-            <input
-              type="range"
-              aria-label="Minimum salary expectation in lakhs per annum"
-              min="3"
-              max="100"
-              step="1"
-              value={persona.minSalary ?? 12}
-              onChange={(e) => handleInputChange('minSalary', Number(e.target.value))}
-              className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
-            />
-            <div className="flex justify-between text-[9px] font-mono text-zinc-400">
-              <span>₹3 LPA</span>
-              <span>₹12 LPA</span>
-              <span>₹35 LPA</span>
-              <span>₹100 LPA</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Work Location Mode */}
-        <div className="pt-1">
-          <label className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block mb-2">
-            Workplace Preference
-          </label>
-          <div className="grid grid-cols-3 gap-2 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/80">
-            {(['Remote', 'Hybrid', 'On-site'] as WorkLocation[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => handleInputChange('workPreference', mode)}
-                aria-pressed={persona.workPreference === mode}
-                className={`py-2 text-center rounded-lg font-bold text-xs transition-all cursor-pointer ${
-                  persona.workPreference === mode
-                    ? 'bg-white text-zinc-900 shadow-xs font-extrabold'
-                    : 'text-zinc-500 hover:text-zinc-900'
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Section 4: Persona Tone */}
-      <div className="space-y-3 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
-        <div className="flex items-center gap-2.5">
-          <span className="w-6 h-6 rounded-lg bg-amber-50 border border-amber-200/90 text-amber-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
-            04
-          </span>
-          <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
-            Answer style
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/80">
-          {(['Confident', 'Minimalist', 'Detailed'] as PersonaTone[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => handleInputChange('tone', t)}
-              aria-pressed={persona.tone === t}
-              className={`py-2 text-center rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                persona.tone === t
-                  ? 'bg-white text-zinc-900 shadow-xs font-extrabold'
-                  : 'text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
-              <span>{t}</span>
-              {persona.tone === t && (
-                <CheckCircle2 size={12} className="text-cyan-600 shrink-0" />
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Section 5: Tech Stack */}
-      <div className="space-y-3.5 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2.5">
-            <span className="w-6 h-6 rounded-lg bg-purple-50 border border-purple-200/90 text-purple-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
-              05
-            </span>
-            <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
-              Skills
-            </h3>
-          </div>
-          <span className="text-[11px] font-mono font-bold text-purple-700 bg-purple-50 border border-purple-200/80 px-2 py-0.5 rounded-md">
-            {persona.techStack.length} {persona.techStack.length === 1 ? 'skill' : 'skills'}
-          </span>
-        </div>
-
-        {/* Input Bar with Instant Add & Comma/Enter Support */}
-        <form onSubmit={(e) => handleAddSkill(e)} className="flex gap-2">
-          <div className="relative flex-1">
-            <input
-                type="text"
-                aria-label="Add a skill"
-              placeholder="Add skills (e.g. React, TypeScript, Docker)..."
-              value={newSkill}
-              onChange={(e) => setNewSkill(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === ',' || e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddSkill();
-                }
-              }}
-              className="w-full pl-3.5 pr-20 py-2 text-xs rounded-xl border border-zinc-200 bg-zinc-50/60 outline-none focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all font-medium text-zinc-900"
-            />
-            {newSkill.trim() && (
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-zinc-400 pointer-events-none">
-                Press Enter ↵
-              </span>
-            )}
-          </div>
-          <button
-            type="submit"
-            disabled={!newSkill.trim()}
-            className="px-4 py-2 bg-zinc-900 hover:bg-black disabled:opacity-40 disabled:hover:bg-zinc-900 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0"
-          >
-            <Plus size={13} />
-            <span>Add</span>
-          </button>
-        </form>
-
-        {/* Current Active Tech Stack Badges */}
-        <div className="flex flex-wrap gap-2 pt-1">
-          {persona.techStack.map((skill) => (
-            <span
-              key={skill}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-50/90 to-indigo-50/70 hover:from-purple-100 hover:to-indigo-100 text-purple-950 border border-purple-200/90 rounded-xl text-xs font-semibold shadow-2xs transition-all group"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
-              <span>{skill}</span>
-              <button
-                type="button"
-                onClick={() => handleRemoveSkill(skill)}
-                aria-label={`Remove ${skill}`}
-                className="w-4 h-4 rounded-full flex items-center justify-center text-purple-400 hover:text-white hover:bg-red-500 transition-colors ml-0.5 cursor-pointer"
-                title={`Remove ${skill}`}
-              >
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-          {persona.techStack.length === 0 && (
-            <div className="w-full text-center py-4 border border-dashed border-zinc-200 rounded-xl bg-zinc-50/40">
-              <p className="text-xs text-zinc-400">No skills added yet.</p>
-              <p className="text-[11px] text-zinc-400">Type above or click a suggestion to add skills to your ATS profile.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Section 6: Target Roles */}
-      <div className="space-y-3.5 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
-        <div className="flex items-center gap-2.5">
-          <span className="w-6 h-6 rounded-lg bg-orange-50 border border-orange-200/90 text-orange-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
-            06
-          </span>
-          <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
-            Target roles
-          </h3>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {persona.targetRoles.map((role) => (
-            <span
-              key={role}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-50/80 hover:bg-orange-100/80 border border-orange-200/90 rounded-xl text-xs font-semibold text-orange-950 shadow-2xs transition-all group"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
-              <span>{role}</span>
-              <button
-                type="button"
-                onClick={() => removeTarget('targetRoles', role)}
-                aria-label={`Remove ${role}`}
-                className="w-4 h-4 rounded-full flex items-center justify-center text-orange-400 hover:text-white hover:bg-red-500 transition-colors ml-0.5 cursor-pointer"
-                title={`Remove ${role}`}
-              >
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-        </div>
-
-        <form
-          className="flex gap-2 pt-1"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (addTarget('targetRoles', newTargetRole)) setNewTargetRole('');
-          }}
-        >
-          <input
-            value={newTargetRole}
-            aria-label="Add a target role"
-            onChange={(event) => setNewTargetRole(event.target.value)}
-            placeholder="e.g. Full Stack Engineer, Tech Lead"
-            className="flex-1 px-3.5 py-2 text-xs border border-zinc-200 rounded-xl bg-zinc-50/50 outline-none focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 transition-all font-medium"
-          />
-          <button type="submit" className="px-4 py-2 bg-zinc-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer">
-            Add Role
-          </button>
-        </form>
-      </div>
-
-      {/* Section 7: Autonomous Apply Setup & Launch Hub */}
-      <div className="space-y-4 bg-gradient-to-b from-white to-zinc-50/80 border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-xs">
-        {/* Hub Header */}
-        <div className="flex items-center gap-2.5">
-          <span className="w-6 h-6 rounded-lg bg-cyan-50 border border-cyan-200/90 text-cyan-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
-            07
-          </span>
-          <div>
-            <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
-              Application preferences
-            </h3>
-            <p className="text-[11px] text-zinc-500">
-              Choose how ZeroApply should search and pace applications
-            </p>
-          </div>
-        </div>
-
-        {/* Apply Mode Selection */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
-              Apply Mode
-            </label>
-            <span className="text-[10px] font-mono text-zinc-400">
-              {persona.applyMode === 'easy' ? 'Quick submission filter' : 'All standard job postings'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/80">
-            <button
-              type="button"
-              onClick={() => handleInputChange('applyMode', 'easy')}
-              aria-pressed={persona.applyMode === 'easy'}
-              className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                persona.applyMode === 'easy'
-                  ? 'bg-white text-zinc-900 shadow-2xs font-extrabold border border-zinc-200/60'
-                  : 'text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>Quick Apply forms</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleInputChange('applyMode', 'normal')}
-              aria-pressed={persona.applyMode === 'normal'}
-              className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                persona.applyMode === 'normal'
-                  ? 'bg-white text-zinc-900 shadow-2xs font-extrabold border border-zinc-200/60'
-                  : 'text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-cyan-500" />
-              <span>All supported forms</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Batch Limit Controller */}
-        <div className="space-y-2 pt-2 border-t border-zinc-100">
-          <div className="flex items-center justify-between">
-            <label className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
-              Application Batch Limit
-            </label>
-            <span className="text-[11px] font-mono font-bold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded-md border border-zinc-200">
-              {persona.applicationLimit ?? 5} jobs max
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 bg-zinc-50/70 border border-zinc-200/80 rounded-xl p-3">
-            <button
-              type="button"
-              onClick={() => handleInputChange('applicationLimit', Math.max(1, (persona.applicationLimit ?? 5) - 1))}
-              className="w-7 h-7 flex items-center justify-center rounded-lg bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100 active:scale-95 transition font-bold text-xs shrink-0 shadow-2xs cursor-pointer"
-              title="Decrease limit"
-            >
-              -
-            </button>
-
-            <div className="flex-1 flex flex-col justify-center px-1">
-              <input
-                type="range"
-                aria-label="Maximum applications per run"
-                min="1"
-                max="50"
-                value={persona.applicationLimit ?? 5}
-                onChange={(e) => handleInputChange('applicationLimit', parseInt(e.target.value) || 5)}
-                className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
-              />
-              <div className="flex justify-between text-[9px] font-mono text-zinc-400 mt-1">
-                <span>1</span>
-                <span>10</span>
-                <span>25</span>
-                <span>50</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleInputChange('applicationLimit', Math.min(50, (persona.applicationLimit ?? 5) + 1))}
-              className="w-7 h-7 flex items-center justify-center rounded-lg bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100 active:scale-95 transition font-bold text-xs shrink-0 shadow-2xs cursor-pointer"
-              title="Increase limit"
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        {/* Stealth Anti-Detection & Human Simulation Engine */}
-        <div className="space-y-2.5 pt-2 border-t border-zinc-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck size={14} className={stealthConfig.enabled ? 'text-emerald-600' : 'text-zinc-400'} />
-              <label className="text-[11px] font-bold text-zinc-700 uppercase tracking-wide">
-                Human-paced browsing
-              </label>
-            </div>
-            <button
-              type="button"
-              onClick={() => handleStealthToggle(!stealthConfig.enabled)}
-              aria-pressed={stealthConfig.enabled}
-              className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-mono font-bold transition-all cursor-pointer border ${
-                stealthConfig.enabled
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : 'bg-zinc-100 text-zinc-500 border-zinc-200'
-              }`}
-            >
-              {stealthConfig.enabled ? 'ACTIVE' : 'OFF'}
-            </button>
-          </div>
-
-          {stealthConfig.enabled && (
-            <div className="bg-zinc-50/70 border border-zinc-200/80 rounded-xl p-3 space-y-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-zinc-500 font-medium">Human Typing &amp; Mouse Cadence:</span>
-                <span className="font-mono text-[11px] font-bold text-zinc-700">
-                  {stealthConfig.typingSpeedWPM} WPM avg
+              <div className="flex items-center gap-2.5">
+                <span className="w-6 h-6 rounded-lg bg-cyan-50 border border-cyan-200/90 text-cyan-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
+                  01
                 </span>
+                <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                  About you
+                </h3>
+              </div>
+              {persona.verified && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1">
+                  <CheckCircle2 size={10} /> Verified
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <label htmlFor="persona-full-name" className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
+                  Full Name
+                </label>
+                <input
+                  id="persona-full-name"
+                  type="text"
+                  autoComplete="name"
+                  placeholder="e.g. Alex Johnson"
+                  value={persona.fullName}
+                  onChange={(e) => handleInputChange('fullName', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
+                />
               </div>
 
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['natural', 'careful', 'fast'] as const).map((mode) => (
+              <div className="space-y-1.5">
+                <label htmlFor="persona-location" className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
+                  Location
+                </label>
+                <input
+                  id="persona-location"
+                  type="text"
+                  autoComplete="address-level2"
+                  placeholder="e.g. San Francisco, CA"
+                  value={persona.location}
+                  onChange={(e) => handleInputChange('location', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="persona-email" className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
+                  Email Address
+                </label>
+                <input
+                  id="persona-email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="e.g. alex@example.com"
+                  value={persona.email}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="persona-phone" className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
+                  Phone Number
+                </label>
+                <input
+                  id="persona-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="e.g. +1 (555) 019-2834"
+                  value={persona.phone}
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Social Profiles & Links */}
+          <div className="space-y-4 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-200/90 text-blue-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
+                02
+              </span>
+              <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                Professional links
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
+                    LinkedIn Profile
+                  </label>
+                  {persona.linkedIn && (
+                    <a
+                      href={persona.linkedIn.startsWith('http') ? persona.linkedIn : `https://${persona.linkedIn}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] text-cyan-600 hover:underline font-mono flex items-center gap-0.5 font-bold"
+                      title="Open LinkedIn in new tab"
+                    >
+                      Open ↗
+                    </a>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. linkedin.com/in/username"
+                  value={persona.linkedIn}
+                  onChange={(e) => handleInputChange('linkedIn', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
+                    GitHub Repository
+                  </label>
+                  {persona.gitHub && (
+                    <a
+                      href={persona.gitHub.startsWith('http') ? persona.gitHub : `https://${persona.gitHub}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] text-cyan-600 hover:underline font-mono flex items-center gap-0.5 font-bold"
+                      title="Open GitHub in new tab"
+                    >
+                      Open ↗
+                    </a>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. github.com/username"
+                  value={persona.gitHub}
+                  onChange={(e) => handleInputChange('gitHub', e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-zinc-50/50 border border-zinc-200 hover:border-zinc-300 focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 rounded-xl text-xs font-semibold text-zinc-900 outline-none transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Work Preferences & Compensation */}
+          <div className="space-y-4 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-lg bg-emerald-50 border border-emerald-200/90 text-emerald-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
+                03
+              </span>
+              <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                Work preferences
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              {/* Experience Slider */}
+              <div className="bg-zinc-50/70 border border-zinc-200/80 rounded-xl p-3.5 space-y-2.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-zinc-700">
+                    Experience Level
+                  </span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-cyan-50 text-cyan-700 border border-cyan-200 font-mono">
+                    {persona.experienceYears} Years
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  aria-label="Years of professional experience"
+                  min="0"
+                  max="20"
+                  value={persona.experienceYears}
+                  onChange={(e) => handleInputChange('experienceYears', Number(e.target.value))}
+                  className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-cyan-600"
+                />
+              </div>
+
+              {/* Salary Slider */}
+              <div className="bg-zinc-50/70 border border-zinc-200/80 rounded-xl p-3.5 space-y-2.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-zinc-700 flex items-center gap-1.5">
+                    <span className="text-xs font-black text-emerald-600">₹</span>
+                    Min Salary Expectation
+                  </span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
+                    ₹{persona.minSalary ?? 12} LPA
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  aria-label="Minimum salary expectation in lakhs per annum"
+                  min="3"
+                  max="100"
+                  step="1"
+                  value={persona.minSalary ?? 12}
+                  onChange={(e) => handleInputChange('minSalary', Number(e.target.value))}
+                  className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                />
+                <div className="flex justify-between text-[9px] font-mono text-zinc-400">
+                  <span>₹3 LPA</span>
+                  <span>₹12 LPA</span>
+                  <span>₹35 LPA</span>
+                  <span>₹100 LPA</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Work Location Mode */}
+            <div className="pt-1">
+              <label className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block mb-2">
+                Workplace Preference
+              </label>
+              <div className="grid grid-cols-3 gap-2 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/80">
+                {(['Remote', 'Hybrid', 'On-site'] as WorkLocation[]).map((mode) => (
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => handleStealthModeChange(mode)}
-                    aria-pressed={stealthConfig.mode === mode}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-bold capitalize transition-all cursor-pointer border ${
-                      stealthConfig.mode === mode
-                        ? 'bg-white text-zinc-900 shadow-2xs border-zinc-300'
-                        : 'bg-transparent text-zinc-500 border-transparent hover:text-zinc-800'
-                    }`}
+                    onClick={() => handleInputChange('workPreference', mode)}
+                    aria-pressed={persona.workPreference === mode}
+                    className={`py-2 text-center rounded-lg font-bold text-xs transition-all cursor-pointer ${persona.workPreference === mode
+                        ? 'bg-white text-zinc-900 shadow-xs font-extrabold'
+                        : 'text-zinc-500 hover:text-zinc-900'
+                      }`}
                   >
                     {mode}
                   </button>
                 ))}
               </div>
-
-              <p className="text-[10px] text-zinc-400 font-medium">
-                Uses natural typing, pointer movement, and reading pauses while respecting site checkpoints.
-              </p>
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Start AutoApply Action Button */}
-        <BrowserSelector
-          value={normalizeBrowserMode(persona.browserMode)}
-          onChange={(browserMode) => handleInputChange('browserMode', browserMode)}
-        />
+          {/* Section 4: Persona Tone */}
+          <div className="space-y-3 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-lg bg-amber-50 border border-amber-200/90 text-amber-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
+                04
+              </span>
+              <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                Answer style
+              </h3>
+            </div>
 
-        {/* Start AutoApply Action Button */}
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={handleAutoApplyClick}
-            className="w-full py-2.5 px-4 bg-white hover:bg-zinc-50 text-zinc-900 border border-zinc-300 hover:border-zinc-400 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all shadow-2xs hover:shadow-xs active:scale-[0.99] cursor-pointer"
-          >
-            <img
-              src="/zeroapply-logo.png"
-              alt="ZeroApply"
-              className="w-4 h-4 object-contain shrink-0"
+            <div className="grid grid-cols-3 gap-2 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/80">
+              {(['Confident', 'Minimalist', 'Detailed'] as PersonaTone[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => handleInputChange('tone', t)}
+                  aria-pressed={persona.tone === t}
+                  className={`py-2 text-center rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 ${persona.tone === t
+                      ? 'bg-white text-zinc-900 shadow-xs font-extrabold'
+                      : 'text-zinc-500 hover:text-zinc-800'
+                    }`}
+                >
+                  <span>{t}</span>
+                  {persona.tone === t && (
+                    <CheckCircle2 size={12} className="text-cyan-600 shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 5: Tech Stack */}
+          <div className="space-y-3.5 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <span className="w-6 h-6 rounded-lg bg-purple-50 border border-purple-200/90 text-purple-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
+                  05
+                </span>
+                <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                  Skills
+                </h3>
+              </div>
+              <span className="text-[11px] font-mono font-bold text-purple-700 bg-purple-50 border border-purple-200/80 px-2 py-0.5 rounded-md">
+                {persona.techStack.length} {persona.techStack.length === 1 ? 'skill' : 'skills'}
+              </span>
+            </div>
+
+            {/* Input Bar with Instant Add & Comma/Enter Support */}
+            <form onSubmit={(e) => handleAddSkill(e)} className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  aria-label="Add a skill"
+                  placeholder="Add skills (e.g. React, TypeScript, Docker)..."
+                  value={newSkill}
+                  onChange={(e) => setNewSkill(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === ',' || e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddSkill();
+                    }
+                  }}
+                  className="w-full pl-3.5 pr-20 py-2 text-xs rounded-xl border border-zinc-200 bg-zinc-50/60 outline-none focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all font-medium text-zinc-900"
+                />
+                {newSkill.trim() && (
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-zinc-400 pointer-events-none">
+                    Press Enter ↵
+                  </span>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={!newSkill.trim()}
+                className="px-4 py-2 bg-zinc-900 hover:bg-black disabled:opacity-40 disabled:hover:bg-zinc-900 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0"
+              >
+                <Plus size={13} />
+                <span>Add</span>
+              </button>
+            </form>
+
+            {/* Current Active Tech Stack Badges */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {persona.techStack.map((skill) => (
+                <span
+                  key={skill}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-50/90 to-indigo-50/70 hover:from-purple-100 hover:to-indigo-100 text-purple-950 border border-purple-200/90 rounded-xl text-xs font-semibold shadow-2xs transition-all group"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                  <span>{skill}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveSkill(skill)}
+                    aria-label={`Remove ${skill}`}
+                    className="w-4 h-4 rounded-full flex items-center justify-center text-purple-400 hover:text-white hover:bg-red-500 transition-colors ml-0.5 cursor-pointer"
+                    title={`Remove ${skill}`}
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+              {persona.techStack.length === 0 && (
+                <div className="w-full text-center py-4 border border-dashed border-zinc-200 rounded-xl bg-zinc-50/40">
+                  <p className="text-xs text-zinc-400">No skills added yet.</p>
+                  <p className="text-[11px] text-zinc-400">Type above or click a suggestion to add skills to your ATS profile.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 6: Target Roles */}
+          <div className="space-y-3.5 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-6 h-6 rounded-lg bg-orange-50 border border-orange-200/90 text-orange-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
+                06
+              </span>
+              <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                Target roles
+              </h3>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {persona.targetRoles.map((role) => (
+                <span
+                  key={role}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-50/80 hover:bg-orange-100/80 border border-orange-200/90 rounded-xl text-xs font-semibold text-orange-950 shadow-2xs transition-all group"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+                  <span>{role}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeTarget('targetRoles', role)}
+                    aria-label={`Remove ${role}`}
+                    className="w-4 h-4 rounded-full flex items-center justify-center text-orange-400 hover:text-white hover:bg-red-500 transition-colors ml-0.5 cursor-pointer"
+                    title={`Remove ${role}`}
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            <form
+              className="flex gap-2 pt-1"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (addTarget('targetRoles', newTargetRole)) setNewTargetRole('');
+              }}
+            >
+              <input
+                value={newTargetRole}
+                aria-label="Add a target role"
+                onChange={(event) => setNewTargetRole(event.target.value)}
+                placeholder="e.g. Full Stack Engineer, Tech Lead"
+                className="flex-1 px-3.5 py-2 text-xs border border-zinc-200 rounded-xl bg-zinc-50/50 outline-none focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 transition-all font-medium"
+              />
+              <button type="submit" className="px-4 py-2 bg-zinc-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer">
+                Add Role
+              </button>
+            </form>
+          </div>
+
+          {/* Section 7: Employment Status & Current CTC */}
+          <div className="space-y-4 bg-white border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-6 h-6 rounded-lg bg-emerald-50 border border-emerald-200/90 text-emerald-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
+                  07
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                      Employment Status & Current CTC
+                    </h3>
+                    <div className="group relative inline-flex items-center">
+                      <button
+                        type="button"
+                        className="text-zinc-400 hover:text-zinc-600 transition-colors cursor-help p-0.5 rounded-full hover:bg-zinc-100"
+                        title="Help on Employment Status & Current CTC"
+                        aria-label="Help on Employment Status & Current CTC"
+                      >
+                        <HelpCircle size={13} />
+                      </button>
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:flex group-focus-within:flex flex-col z-30 w-72 p-2.5 bg-zinc-900 text-white text-[11px] rounded-xl shadow-xl pointer-events-none leading-relaxed border border-zinc-700">
+                        <span className="font-bold text-cyan-300 mb-0.5">Why this matters:</span>
+                        <span>
+                          Portals like LinkedIn Easy Apply frequently ask:
+                        </span>
+                        <ul className="list-disc pl-3.5 mt-1 space-y-0.5 text-zinc-300">
+                          <li><em>"What is your current CTC (in LPA)?"</em></li>
+                          <li><em>"Current CTC in INR"</em></li>
+                          <li><em>"How long is your notice period (in days)?"</em></li>
+                        </ul>
+                        <span className="mt-1 text-emerald-300 font-medium">
+                          If you are a Fresher, ZeroApply fills 0 LPA and 0 days notice automatically!
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-zinc-500">
+                    Are you a fresher or currently working in a company?
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Selection: Fresher vs Currently Working */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  handleInputChange('employmentStatus', 'fresher');
+                  handleInputChange('currentCtcLpa', 0);
+                  handleInputChange('noticePeriodDays', 0);
+                }}
+                className={`p-3 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                  (persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working'))
+                    ? 'border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20 shadow-xs'
+                    : 'border-zinc-200 hover:border-zinc-300 bg-zinc-50/50 hover:bg-zinc-50'
+                }`}
+              >
+                <div className={`p-2 rounded-lg shrink-0 ${
+                  (persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working'))
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-zinc-200 text-zinc-600'
+                }`}>
+                  <GraduationCap size={16} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-zinc-900">Fresher / Student</span>
+                    {(persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working')) && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded">Active</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
+                    Current CTC: 0 LPA • Immediate joiner (0 days)
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleInputChange('employmentStatus', 'currently_working');
+                  if (!persona.currentCtcLpa || persona.currentCtcLpa === 0) {
+                    handleInputChange('currentCtcLpa', 8);
+                  }
+                }}
+                className={`p-3 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                  (persona.employmentStatus === 'currently_working' || (persona.currentCtcLpa && persona.currentCtcLpa > 0))
+                    ? 'border-cyan-500 bg-cyan-50/60 ring-2 ring-cyan-500/20 shadow-xs'
+                    : 'border-zinc-200 hover:border-zinc-300 bg-zinc-50/50 hover:bg-zinc-50'
+                }`}
+              >
+                <div className={`p-2 rounded-lg shrink-0 ${
+                  (persona.employmentStatus === 'currently_working' || (persona.currentCtcLpa && persona.currentCtcLpa > 0))
+                    ? 'bg-cyan-600 text-white'
+                    : 'bg-zinc-200 text-zinc-600'
+                }`}>
+                  <Briefcase size={16} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-zinc-900">Currently Working</span>
+                    {(persona.employmentStatus === 'currently_working' || (persona.currentCtcLpa && persona.currentCtcLpa > 0)) && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 bg-cyan-100 text-cyan-800 rounded">Active</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
+                    Working at company with current LPA compensation
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* Dynamic Details based on Selection */}
+            {(persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working')) ? (
+              <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl flex items-center gap-2.5 text-xs text-emerald-900">
+                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                <span>
+                  <strong>Fresher auto-fill configured:</strong> Questions asking for <em>"Current CTC"</em> will be filled with <strong>0 LPA</strong> (or ₹0 INR), and <em>"Notice Period"</em> with <strong>0 days</strong>.
+                </span>
+              </div>
+            ) : (
+              <div className="space-y-3 pt-1 border-t border-zinc-100">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Current CTC in LPA */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-zinc-700">
+                        Current CTC (in LPA)
+                      </label>
+                      <span className="text-[10px] font-mono font-bold text-cyan-700 bg-cyan-50 px-1.5 py-0.5 rounded">
+                        ₹{persona.currentCtcLpa ?? 8} LPA
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="200"
+                        step="0.5"
+                        value={persona.currentCtcLpa ?? 8}
+                        onChange={(e) => handleInputChange('currentCtcLpa', Math.max(0, Number(e.target.value)))}
+                        placeholder="8"
+                        className="w-full px-3 py-2 text-xs border border-zinc-200 rounded-xl bg-zinc-50/50 outline-none focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 font-semibold text-zinc-900"
+                      />
+                      <span className="absolute right-3 top-2 text-xs font-bold text-zinc-400 pointer-events-none">
+                        LPA
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400">
+                      ₹{((persona.currentCtcLpa ?? 8) * 100000).toLocaleString('en-IN')} INR / year
+                    </p>
+                  </div>
+
+                  {/* Current Company Name */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-zinc-700">
+                      Current Company
+                    </label>
+                    <input
+                      type="text"
+                      value={persona.currentCompany || ''}
+                      onChange={(e) => handleInputChange('currentCompany', e.target.value)}
+                      placeholder="e.g. Google, TechKareer"
+                      className="w-full px-3 py-2 text-xs border border-zinc-200 rounded-xl bg-zinc-50/50 outline-none focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 font-medium text-zinc-900"
+                    />
+                    <p className="text-[10px] text-zinc-400">
+                      Fills "Current employer" fields
+                    </p>
+                  </div>
+
+                  {/* Notice Period in Days */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-zinc-700">
+                        Notice Period (in Days)
+                      </label>
+                      <span className="text-[10px] font-mono font-bold text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded">
+                        {(persona.noticePeriodDays ?? 0) === 0 ? 'Immediate' : `${persona.noticePeriodDays} days`}
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="180"
+                      step="5"
+                      value={persona.noticePeriodDays ?? 0}
+                      onChange={(e) => handleInputChange('noticePeriodDays', Math.max(0, Number(e.target.value)))}
+                      placeholder="0"
+                      className="w-full px-3 py-2 text-xs border border-zinc-200 rounded-xl bg-zinc-50/50 outline-none focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 font-semibold text-zinc-900"
+                    />
+                    <p className="text-[10px] text-zinc-400">
+                      0 = Immediate joiner
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Section 8: Autonomous Apply Setup & Launch Hub */}
+          <div className="space-y-4 bg-gradient-to-b from-white to-zinc-50/80 border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-xs">
+            {/* Hub Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="w-6 h-6 rounded-lg bg-cyan-50 border border-cyan-200/90 text-cyan-800 font-mono text-[11px] font-black flex items-center justify-center shadow-2xs">
+                  08
+                </span>
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                    AutoApply Launch Hub
+                  </h3>
+                  <p className="text-[11px] text-zinc-500">
+                    {persona.applyMode === 'normal'
+                      ? 'Searches & applies to standard company job postings'
+                      : 'Searches & applies to in-platform Easy Apply postings'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Application Mode Selection: Easy Apply vs Normal Apply */}
+            <div className="pt-2 border-t border-zinc-100">
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  id="select-easy-apply"
+                  onClick={() => {
+                    handleInputChange('applyMode', 'easy');
+                    onSaveToast('Switched to Easy Apply mode');
+                  }}
+                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    (persona.applyMode || 'easy') === 'easy'
+                      ? 'bg-cyan-50/70 border-cyan-500 ring-2 ring-cyan-500/20 shadow-xs text-cyan-950 font-bold'
+                      : 'bg-white border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50 text-zinc-700 font-semibold'
+                  }`}
+                >
+                  <Zap size={15} className={(persona.applyMode || 'easy') === 'easy' ? 'text-cyan-700' : 'text-zinc-400'} />
+                  <span className="text-xs">Easy Apply</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="select-normal-apply"
+                  onClick={() => {
+                    handleInputChange('applyMode', 'normal');
+                    onSaveToast('Switched to Normal Apply mode');
+                  }}
+                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    persona.applyMode === 'normal'
+                      ? 'bg-cyan-50/70 border-cyan-500 ring-2 ring-cyan-500/20 shadow-xs text-cyan-950 font-bold'
+                      : 'bg-white border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50 text-zinc-700 font-semibold'
+                  }`}
+                >
+                  <ExternalLink size={15} className={persona.applyMode === 'normal' ? 'text-cyan-700' : 'text-zinc-400'} />
+                  <span className="text-xs">Normal Apply</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Batch Limit Controller */}
+            <div className="space-y-2 pt-2 border-t border-zinc-100">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide block">
+                  Application Batch Limit
+                </label>
+                <span className="text-[11px] font-mono font-bold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded-md border border-zinc-200">
+                  {persona.applicationLimit ?? 5} jobs max
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 bg-zinc-50/70 border border-zinc-200/80 rounded-xl p-3">
+                <button
+                  type="button"
+                  onClick={() => handleInputChange('applicationLimit', Math.max(1, (persona.applicationLimit ?? 5) - 1))}
+                  className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100 active:scale-95 transition font-black text-sm shrink-0 shadow-2xs cursor-pointer"
+                  title="Decrease limit"
+                >
+                  -
+                </button>
+
+                <div className="flex-1 flex flex-col justify-center px-1">
+                  <input
+                    type="range"
+                    aria-label="Maximum applications per run"
+                    min="1"
+                    max="50"
+                    value={persona.applicationLimit ?? 5}
+                    onChange={(e) => handleInputChange('applicationLimit', parseInt(e.target.value) || 5)}
+                    className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
+                  />
+                  <div className="flex justify-between text-[9px] font-mono text-zinc-400 mt-1">
+                    <span>1</span>
+                    <span>10</span>
+                    <span>25</span>
+                    <span>50</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleInputChange('applicationLimit', Math.min(50, (persona.applicationLimit ?? 5) + 1))}
+                  className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100 active:scale-95 transition font-black text-sm shrink-0 shadow-2xs cursor-pointer"
+                  title="Increase limit"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Stealth Anti-Detection & Human Simulation Engine */}
+            <div className="space-y-2.5 pt-2 border-t border-zinc-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck size={14} className={stealthConfig.enabled ? 'text-emerald-600' : 'text-zinc-400'} />
+                  <label className="text-[11px] font-bold text-zinc-700 uppercase tracking-wide">
+                    Human-paced browsing
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleStealthToggle(!stealthConfig.enabled)}
+                  aria-pressed={stealthConfig.enabled}
+                  className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-mono font-bold transition-all cursor-pointer border ${stealthConfig.enabled
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                    }`}
+                >
+                  {stealthConfig.enabled ? 'ACTIVE' : 'OFF'}
+                </button>
+              </div>
+
+              {stealthConfig.enabled && (
+                <div className="bg-zinc-50/70 border border-zinc-200/80 rounded-xl p-3 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-zinc-500 font-medium">Human Typing &amp; Mouse Cadence:</span>
+                    <span className="font-mono text-[11px] font-bold text-zinc-700">
+                      {stealthConfig.typingSpeedWPM} WPM avg
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(['natural', 'careful', 'fast'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => handleStealthModeChange(mode)}
+                        aria-pressed={stealthConfig.mode === mode}
+                        className={`py-1.5 px-2 rounded-lg text-[11px] font-bold capitalize transition-all cursor-pointer border ${stealthConfig.mode === mode
+                            ? 'bg-white text-zinc-900 shadow-2xs border-zinc-300'
+                            : 'bg-transparent text-zinc-500 border-transparent hover:text-zinc-800'
+                          }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="text-[10px] text-zinc-400 font-medium">
+                    Uses natural typing, pointer movement, and reading pauses while respecting site checkpoints.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Start AutoApply Action Button */}
+            <BrowserSelector
+              value={normalizeBrowserMode(persona.browserMode)}
+              onChange={(browserMode) => handleInputChange('browserMode', browserMode)}
             />
-            <span>Review &amp; start AutoApply</span>
-          </button>
-        </div>
-      </div>
+
+            {/* Start AutoApply Action Button */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleAutoApplyClick}
+                className="w-full py-3 px-4 bg-white hover:bg-zinc-50 active:bg-zinc-100 text-zinc-900 border border-zinc-300 hover:border-zinc-400 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all shadow-2xs hover:shadow-xs active:scale-[0.98] cursor-pointer"
+              >
+                <img
+                  src="/zeroapply-logo.png"
+                  alt="ZeroApply"
+                  className="w-4 h-4 object-contain shrink-0"
+                />
+                <span>Review &amp; start AutoApply</span>
+              </button>
+            </div>
+          </div>
 
         </div>
       ) : (
@@ -1121,10 +1338,15 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                     Keep concise facts ZeroApply can reuse when forms ask about your background, preferences, and experience.
                   </p>
                 </div>
-                <div className="shrink-0 rounded-xl border border-violet-200 bg-white px-3 py-2 text-center shadow-2xs">
+                <button
+                  type="button"
+                  onClick={handleOpenReadinessModal}
+                  title="Click to view required memory readiness details"
+                  className="shrink-0 rounded-xl border border-violet-200 bg-white hover:bg-violet-50/50 px-3 py-2 text-center shadow-2xs cursor-pointer transition-all active:scale-95"
+                >
                   <div className="text-base font-black tabular-nums text-violet-800">{completedMemorySections}/{REQUIRED_AUTOAPPLY_CHUNKS.length}</div>
                   <div className="text-[9px] font-bold uppercase tracking-wide text-zinc-500">essentials</div>
-                </div>
+                </button>
               </div>
               <div
                 className="h-1.5 overflow-hidden rounded-full bg-violet-100"
@@ -1156,7 +1378,7 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
           <div className="space-y-2.5">
             <div className="flex items-center justify-between px-1">
               <h3 className="text-xs font-black uppercase tracking-wider text-zinc-700">Profile knowledge</h3>
-              <span className="text-[11px] text-zinc-500">Open a topic to review or edit</span>
+              <span className="text-[11px] text-zinc-500">Resume evidence fills topics; missing facts need your input</span>
             </div>
 
             {([
@@ -1187,27 +1409,24 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                 <details
                   key={key}
                   id={`chunk-${key}`}
-                  className={`group overflow-hidden rounded-2xl border bg-white transition-all duration-300 ${
-                    isHighlighted
+                  className={`group overflow-hidden rounded-2xl border bg-white transition-all duration-300 ${isHighlighted
                       ? 'border-cyan-500 ring-2 ring-cyan-200 shadow-md'
                       : isRequired && !isReady
-                      ? 'border-amber-200'
-                      : 'border-zinc-200 shadow-2xs'
-                  }`}
+                        ? 'border-amber-200'
+                        : 'border-zinc-200 shadow-2xs'
+                    }`}
                 >
                   <summary className="flex cursor-pointer list-none items-center gap-3 p-3.5 outline-none transition hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-500 [&::-webkit-details-marker]:hidden sm:p-4">
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-black ${
-                      isReady ? 'bg-emerald-50 text-emerald-700' : isRequired ? 'bg-amber-50 text-amber-700' : 'bg-zinc-100 text-zinc-500'
-                    }`}>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-black ${isReady ? 'bg-emerald-50 text-emerald-700' : isRequired ? 'bg-amber-50 text-amber-700' : 'bg-zinc-100 text-zinc-500'
+                      }`}>
                       {isReady ? <CheckCircle2 size={16} /> : isRequired ? '!' : '·'}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-extrabold text-zinc-900 sm:text-sm">{title}</span>
                         {isRequired && (
-                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
-                            isReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-                          }`}>
+                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${isReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                            }`}>
                             {isReady ? 'Ready' : 'Essential'}
                           </span>
                         )}
@@ -1229,7 +1448,7 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                         handleInputChange('resumeChunks', updatedChunks);
                       }}
                       className="min-h-28 w-full resize-y rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-3 text-sm leading-relaxed text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-cyan-500 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                      placeholder={`Add ${title.toLowerCase()} details here…`}
+                      placeholder={`Not found in your resume. Add ${title.toLowerCase()} details if applicable…`}
                     />
                     <div className="mt-2 flex items-center justify-between gap-3 text-[10px] text-zinc-400">
                       <span>Keep it factual and concise. Changes save automatically.</span>
@@ -1340,6 +1559,17 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                 className="w-full sm:w-auto px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <span>✍️ Fill in Memory Chunks</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMissingModal(false);
+                  handleAutoApplyClick();
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <span>🚀 Launch AutoApply Anyway</span>
               </button>
             </div>
           </div>

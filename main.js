@@ -1,4 +1,8 @@
-import { app, BrowserWindow, session, ipcMain, dialog, safeStorage, shell, Menu, clipboard } from 'electron';
+import { app, BrowserWindow, session, ipcMain, dialog, safeStorage, shell, Menu, clipboard, Notification, utilityProcess } from 'electron';
+import { EmbeddedModelService } from './desktop/model-service.mjs';
+import updaterPackage from 'electron-updater';
+import { DesktopUpdateService } from './desktop/update-service.mjs';
+import { MODEL_FILENAME } from './desktop/model-config.mjs';
 import path from 'path';
 import fs from 'fs';
 import http from 'http';
@@ -7,22 +11,40 @@ import net from 'net';
 import { execFile, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import WebSocket from 'ws';
-import { isDeferredPopupUrl, isLinkedInSafetyUrl, isLinkedInTrackerUrl, normalizeGestureCandidates, resolveGestureDestination, resolvePopupDestination } from './AgentBrowser/browser-navigation.js';
+import { matchesStartupDestination, isAuthenticationUrl, shouldKeepAuthenticationPopup, isDeferredPopupUrl, isLinkedInSafetyUrl, isLinkedInTrackerUrl, normalizeGestureCandidates, resolveGestureDestination, resolvePopupDestination } from './AgentBrowser/browser-navigation.js';
 import { browserCommandForInput, isExternalProtocol, parseWebDestination, sanitizedPageFilename } from './AgentBrowser/electron-browser-features.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const embeddedModel = new EmbeddedModelService({
+  modelPath: app.isPackaged
+    ? path.join(process.resourcesPath, 'models', MODEL_FILENAME)
+    : path.join(__dirname, 'public', 'models', 'zeroapply', MODEL_FILENAME),
+  spawnProcess: () => utilityProcess.fork(path.join(__dirname, 'desktop', 'model-runtime.cjs'), [], { serviceName: 'ZeroApply built-in AI' }),
+  notify: (state) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('embedded-llm-state', state);
+    desktopUpdates?.activityChanged();
+  },
+});
+
 let mainWindow = null;
 let rendererServer = null;
 let updateCheckTimer = null;
+let desktopUpdates = null;
+let autoApplyActive = false;
 let rendererUrlInUse = null;
 let unresponsiveDialogOpen = false;
 let handlingFatalError = false;
 let chromeAgentProcess = null;
 let chromeAgentPort = null;
 let chromeAgentConnection = null;
+let chromeAgentLaunchQueue = Promise.resolve();
+// Camoufox anti-detect Firefox agent state
+let camoufoxBrowser = null;
+let camoufoxPage = null;
 const isSmokeTest = process.argv.includes('--smoke-test');
+const isModelVerification = process.argv.includes('--verify-bundled-model');
 
 const PRELOAD_POPUP_PATH = path.join(__dirname, 'preload-popup.cjs');
 const PRELOAD_WEBVIEW_PATH = path.join(__dirname, 'AgentBrowser', 'preload-webview.cjs');
@@ -34,11 +56,12 @@ const popupDestinationTimes = new WeakMap();
 const applyClickTimers = new WeakMap();
 const webviewRecoveryState = new WeakMap();
 const BROWSER_CACHE_SCHEMA = 'native-chromium-v1';
-const RELEASE_API_URL = 'https://api.github.com/repos/saiprasadchary-hub/zeroapply/releases/latest';
-const RELEASES_URL_PREFIX = 'https://github.com/saiprasadchary-hub/zeroapply/releases/';
-const CHROME_AGENT_PROFILE_PATH = path.join(app.getPath('appData'), 'ZeroApply_Chrome_Agent_Profile');
+const CHROME_AGENT_PROFILE_PATH = path.join(app.getPath('appData'), 'ZeroApply_Real_Chrome_Profile');
 
 app.name = 'ZeroApply';
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=2048');
+app.commandLine.appendSwitch('disable-quic');
+app.commandLine.appendSwitch('log-level', '3');
 
 function describeError(value) {
   if (value instanceof Error) return value.stack || value.message;
@@ -69,7 +92,7 @@ function findChromeExecutable() {
       process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe'),
     ]
     : process.platform === 'darwin'
-      ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']
+      ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', path.join(app.getPath('home'), 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome')]
       : ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/snap/bin/chromium'];
   return candidates.filter(Boolean).find((candidate) => fs.existsSync(candidate)) || null;
 }
@@ -136,6 +159,7 @@ class ChromeDevToolsConnection {
       else pending.resolve(message.result || {});
     });
     this.socket.addEventListener('close', () => {
+      if (chromeAgentConnection === this) chromeAgentConnection = null;
       for (const pending of this.pending.values()) pending.reject(new Error('Chrome automation connection closed.'));
       this.pending.clear();
     });
@@ -182,17 +206,47 @@ async function connectChromeAgentTarget(preferredUrl = '') {
   return preferred;
 }
 
-async function launchChromeAgent(startUrl) {
+async function navigateChromeStartup(startUrl) {
+  const current = await chromeAgentConnection.call('Runtime.evaluate', {
+    expression: 'location.href', returnByValue: true,
+  });
+  if (!matchesStartupDestination(current?.result?.value, startUrl)) {
+    await chromeAgentConnection.call('Page.navigate', { url: startUrl });
+  }
+  await chromeAgentConnection.call('Page.bringToFront');
+}
+
+function launchChromeAgent(startUrl) {
+  const launch = chromeAgentLaunchQueue.then(() => launchChromeAgentSerial(startUrl));
+  chromeAgentLaunchQueue = launch.catch(() => {});
+  return launch;
+}
+
+async function launchChromeAgentSerial(startUrl) {
   if (!isSafeChromeAgentUrl(startUrl)) throw new Error('Chrome agent received an unsafe address.');
   const chromeExecutable = findChromeExecutable();
-  if (!chromeExecutable) throw new Error('Google Chrome is not installed in a supported location.');
+  if (!chromeExecutable) throw new Error('Install Google Chrome, then try again. ZeroApply uses a separate Chrome profile to keep your agent logins saved.');
 
-  if (chromeAgentConnection) {
-    await chromeAgentConnection.call('Page.navigate', { url: startUrl });
-    await chromeAgentConnection.call('Page.bringToFront');
+  if (chromeAgentConnection && chromeAgentConnection.socket.readyState === WebSocket.OPEN) {
+    try {
+      await navigateChromeStartup(startUrl);
+      return { ok: true, url: startUrl };
+    } catch {
+      chromeAgentConnection?.close();
+      chromeAgentConnection = null;
+    }
+  } else {
+    chromeAgentConnection?.close();
+    chromeAgentConnection = null;
+  }
+
+  if (chromeAgentProcess && chromeAgentPort) {
+    await connectChromeAgentTarget();
+    await navigateChromeStartup(startUrl);
     return { ok: true, url: startUrl };
   }
 
+  // Chrome owns its profile locks. Removing them can corrupt a running profile.
   fs.mkdirSync(CHROME_AGENT_PROFILE_PATH, { recursive: true });
   chromeAgentPort = await reserveLoopbackPort();
   chromeAgentProcess = spawn(chromeExecutable, [
@@ -203,10 +257,15 @@ async function launchChromeAgent(startUrl) {
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-background-mode',
+    '--start-maximized',
     '--new-window',
     startUrl,
   ], { stdio: 'ignore', windowsHide: false });
-  chromeAgentProcess.once('exit', () => {
+  const launchedProcess = chromeAgentProcess;
+  let launchError = null;
+  launchedProcess.once('error', (error) => { launchError = error; });
+  launchedProcess.once('exit', () => {
+    if (chromeAgentProcess !== launchedProcess) return;
     chromeAgentProcess = null;
     chromeAgentPort = null;
     chromeAgentConnection?.close();
@@ -216,6 +275,13 @@ async function launchChromeAgent(startUrl) {
   let lastError = null;
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
+    if (launchError || launchedProcess.exitCode !== null) {
+      if (chromeAgentProcess === launchedProcess) {
+        chromeAgentProcess = null;
+        chromeAgentPort = null;
+      }
+      throw launchError || new Error('Chrome could not open the agent profile. Close any existing ZeroApply Chrome window and try again.');
+    }
     try {
       const target = await connectChromeAgentTarget(startUrl);
       return { ok: true, url: target.url || startUrl };
@@ -225,6 +291,62 @@ async function launchChromeAgent(startUrl) {
     }
   }
   throw lastError || new Error('Google Chrome did not become ready for automation.');
+}
+
+// ---------------------------------------------------------------------------
+// Camoufox anti-detect Firefox agent
+// ---------------------------------------------------------------------------
+
+async function launchCamoufox(startUrl) {
+  if (!isSafeChromeAgentUrl(startUrl)) throw new Error('Camoufox received an unsafe address.');
+
+  // If already running, just navigate
+  if (camoufoxBrowser && camoufoxPage) {
+    try {
+      await camoufoxPage.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      return { ok: true, url: camoufoxPage.url() };
+    } catch (error) {
+      // Browser died — fall through to relaunch
+      camoufoxBrowser = null;
+      camoufoxPage = null;
+    }
+  }
+
+  // Dynamically import camoufox-js so it's optional (user must run: npx camoufox-js fetch)
+  let Camoufox;
+  try {
+    const mod = await import('camoufox-js');
+    Camoufox = mod.Camoufox || mod.default?.Camoufox || mod.default;
+    if (typeof Camoufox !== 'function') throw new Error('camoufox-js did not export a launcher function.');
+  } catch (error) {
+    throw new Error(
+      'Camoufox is not installed. Run: npm install camoufox-js playwright-core && npx camoufox-js fetch'
+    );
+  }
+
+  camoufoxBrowser = await Camoufox({ headless: false, geoip: true });
+  const ctx = await camoufoxBrowser.newContext({
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
+  });
+  camoufoxPage = await ctx.newPage();
+  camoufoxBrowser.on('disconnected', () => {
+    camoufoxBrowser = null;
+    camoufoxPage = null;
+  });
+
+  await camoufoxPage.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  return { ok: true, url: camoufoxPage.url() };
+}
+
+async function closeCamoufox() {
+  try {
+    if (camoufoxBrowser && !camoufoxBrowser._connection?.isClosed()) {
+      await camoufoxBrowser.close();
+    }
+  } catch {}
+  camoufoxBrowser = null;
+  camoufoxPage = null;
 }
 
 process.on('unhandledRejection', (reason) => {
@@ -249,9 +371,11 @@ process.on('uncaughtException', (error) => {
 });
 
 // Set dedicated login session directory
-const loginSessionDir = isSmokeTest
+const loginSessionDir = isModelVerification
+  ? fs.mkdtempSync(path.join(app.getPath('temp'), 'ZeroApply_Model_Verification-'))
+  : isSmokeTest
   ? path.join(app.getPath('temp'), 'ZeroApply_Smoke_Test')
-  : path.join(app.getPath('appData'), 'ZeroApply_Login_Sessions');
+  : path.join(app.getPath('appData'), app.isPackaged ? 'ZeroApply_Login_Sessions' : 'ZeroApply_Development_Sessions');
 try {
   if (!fs.existsSync(loginSessionDir)) {
     fs.mkdirSync(loginSessionDir, { recursive: true });
@@ -266,7 +390,7 @@ const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
   app.quit();
-  process.exit(0);
+  process.exit(isModelVerification || isSmokeTest ? 1 : 0);
 }
 
 app.on('second-instance', () => {
@@ -290,9 +414,20 @@ function sanitizeDownloadFilename(value) {
 function configureSession(targetSession) {
   if (configuredSessions.has(targetSession)) return targetSession;
 
-  const chromeVersion = process.versions.chrome || '132.0.0.0';
-  const chromeUserAgent = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
-  targetSession.setUserAgent(chromeUserAgent, 'en-US,en;q=0.9');
+  // Keep the real operating system and Chromium version consistent with the browser.
+  targetSession.setUserAgent(app.userAgentFallback, 'en-US,en;q=0.9');
+
+  // Block known ad-sync and cross-origin tracking iframes that trigger unsafe URL frame violations
+  targetSession.webRequest.onBeforeRequest({
+    urls: [
+      '*://cs.ns1p.net/*',
+      '*://*.ns1p.net/*',
+      '*://*.demdex.net/dest5.html*',
+      '*://*.demdex.net/portal.html*',
+    ]
+  }, (details, callback) => {
+    callback({ cancel: true });
+  });
 
   targetSession.webRequest.onBeforeSendHeaders((details, callback) => {
     const requestHeaders = { ...details.requestHeaders };
@@ -495,16 +630,6 @@ const TRUSTED_AUTH_HOSTS = [
   'unstop.com',
 ];
 
-const IDENTITY_POPUP_HOSTS = [
-  'accounts.google.com',
-  'accounts.googleusercontent.com',
-  'zero-apply.firebaseapp.com',
-  'zero-apply.web.app',
-  'appleid.apple.com',
-  'login.microsoftonline.com',
-  'github.com',
-];
-
 const JOB_PORTAL_HOSTS = ['linkedin.com', 'indeed.com', 'glassdoor.com', 'naukri.com', 'unstop.com'];
 const BACKGROUND_POPUP_HOSTS = ['cs.ns1p.net'];
 
@@ -552,7 +677,7 @@ function startRendererServer(rootDir) {
 
         const headers = {
           'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-          'Content-Security-Policy': "default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com http://127.0.0.1:11434; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-src 'self' https://*.firebaseapp.com",
+          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://apis.google.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; connect-src 'self' https: data: blob: http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:* https://*.googleapis.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-src 'self' blob: https:; worker-src 'self' blob:;",
           'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
           'Referrer-Policy': 'no-referrer',
           'X-Content-Type-Options': 'nosniff',
@@ -610,13 +735,80 @@ function isAllowedWebviewUrl(value) {
   }
 }
 
+const recentOpenedTabTimes = new Map();
+
+function isInternalJobSearchNavigation(targetUrl, sourceUrl) {
+  if (!targetUrl) return false;
+  try {
+    const targetObj = new URL(targetUrl);
+    const targetHost = targetObj.hostname.toLowerCase();
+    
+    // Always prevent LinkedIn job search, card selection, or tracker pages from opening in new tabs
+    if (targetHost === 'linkedin.com' || targetHost.endsWith('.linkedin.com')) {
+      if (
+        targetObj.pathname.includes('/jobs/search') ||
+        targetObj.searchParams.has('currentJobId') ||
+        targetObj.pathname.includes('/jobs/collections') ||
+        targetObj.pathname.includes('/jobs/tracker')
+      ) {
+        return true;
+      }
+    }
+    
+    if (sourceUrl) {
+      const sourceObj = new URL(sourceUrl);
+      const sourceHost = sourceObj.hostname.toLowerCase();
+      const isSameHost = targetHost === sourceHost || targetHost.endsWith('.' + sourceHost) || sourceHost.endsWith('.' + targetHost);
+      if (isSameHost) {
+        const isPortal = JOB_PORTAL_HOSTS.some((p) => hostMatches(targetHost, p));
+        if (isPortal) {
+          if (
+            targetObj.pathname.includes('/jobs/') ||
+            targetObj.pathname.includes('/search') ||
+            targetObj.pathname.includes('/viewjob') ||
+            targetObj.pathname.includes('/job/') ||
+            targetObj.searchParams.has('currentJobId') ||
+            targetObj.searchParams.has('jk') ||
+            targetObj.searchParams.has('vjk')
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function sendOpenTab(value, sourceContents) {
   if (!mainWindow || mainWindow.isDestroyed() || !isAllowedWebviewUrl(value) || isLinkedInTrackerUrl(value)) return false;
+  if (isLinkedInSafetyUrl(value)) {
+    const resolved = resolvePopupDestination(value);
+    if (!resolved) return false;
+    value = resolved.toString();
+  }
   const parsed = new URL(value);
   if (isBackgroundPopup(parsed.hostname.toLowerCase())) return false;
   const sourceUrl = sourceContents && !sourceContents.isDestroyed?.()
     ? String(sourceContents.getURL?.() || '').slice(0, 8_192)
     : '';
+
+  if (isInternalJobSearchNavigation(parsed.toString(), sourceUrl)) return false;
+
+  const normalizedKey = `${parsed.origin}${parsed.pathname}${parsed.search}`;
+  const now = Date.now();
+  const lastTime = recentOpenedTabTimes.get(normalizedKey) || 0;
+  if (now - lastTime < 3500) return false;
+  recentOpenedTabTimes.set(normalizedKey, now);
+
+  if (recentOpenedTabTimes.size > 200) {
+    for (const [k, t] of recentOpenedTabTimes.entries()) {
+      if (now - t > 30000) recentOpenedTabTimes.delete(k);
+    }
+  }
+
   mainWindow.webContents.send('zeroapply-open-tab', {
     url: parsed.toString(),
     sourceUrl,
@@ -631,7 +823,29 @@ function sendBrowserCommand(command) {
   }
 }
 
+function isWhatsAppUrl(url) {
+  if (typeof url !== 'string' || !url.trim()) return false;
+  return /(?:chat\.whatsapp\.com|wa\.me|api\.whatsapp\.com|web\.whatsapp\.com|whatsapp:\/\/)/i.test(url);
+}
+
+function notifyWhatsAppIntercepted(url) {
+  clipboard.writeText(url);
+  sendBrowserEvent(`WhatsApp link copied to clipboard: ${url} (Skipped opening to continue applying)`);
+  try {
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'WhatsApp Link Copied',
+        body: `Copied WhatsApp invite link to clipboard: ${url}. Skipped opening to continue applying!`,
+      }).show();
+    }
+  } catch {}
+}
+
 async function confirmOpenExternal(value) {
+  if (isWhatsAppUrl(value)) {
+    notifyWhatsAppIntercepted(value);
+    return;
+  }
   if (!isExternalProtocol(value)) return;
   const parsed = new URL(value);
   const options = {
@@ -699,9 +913,16 @@ function showWebviewContextMenu(contents, params) {
     );
   }
   template.push(
-    { type: 'separator' },
-    { label: 'Back', enabled: contents.canGoBack(), click: () => contents.goBack() },
-    { label: 'Forward', enabled: contents.canGoForward(), click: () => contents.goForward() },
+    {
+      label: 'Back',
+      enabled: contents.navigationHistory ? contents.navigationHistory.canGoBack() : contents.canGoBack(),
+      click: () => (contents.navigationHistory ? contents.navigationHistory.goBack() : contents.goBack()),
+    },
+    {
+      label: 'Forward',
+      enabled: contents.navigationHistory ? contents.navigationHistory.canGoForward() : contents.canGoForward(),
+      click: () => (contents.navigationHistory ? contents.navigationHistory.goForward() : contents.goForward()),
+    },
     { label: 'Reload', click: () => contents.reload() },
     { label: 'Save page as…', click: () => void saveWebPage(contents).catch((error) => console.warn('Save page failed:', error)) },
   );
@@ -715,10 +936,17 @@ function showWebviewContextMenu(contents, params) {
 }
 
 function isTrustedIpcSender(event) {
+  let matchesAppOrigin = false;
+  try {
+    matchesAppOrigin = Boolean(rendererUrlInUse
+      && new URL(event.senderFrame?.url).origin === new URL(rendererUrlInUse).origin);
+  } catch { return false; }
   return Boolean(
     mainWindow
     && !mainWindow.isDestroyed()
     && event.sender === mainWindow.webContents
+    && event.senderFrame === mainWindow.webContents.mainFrame
+    && matchesAppOrigin
     && isLocalAppUrl(event.senderFrame?.url || event.sender.getURL())
   );
 }
@@ -766,6 +994,10 @@ function decryptSecureValue(value) {
 
 const handleWindowOpen = ({ url }, sourceContents) => {
   try {
+    if (isWhatsAppUrl(url)) {
+      notifyWhatsAppIntercepted(url);
+      return { action: 'deny' };
+    }
     const isWebview = sourceContents?.getType?.() === 'webview';
     const gesture = isWebview ? consumePopupGesture(sourceContents) : null;
     if (isExternalProtocol(url)) {
@@ -803,7 +1035,7 @@ const handleWindowOpen = ({ url }, sourceContents) => {
       sendBrowserEvent('LinkedIn recorded the Apply click but did not provide the employer application form URL. Reopen the job details and retry Apply.');
       return { action: 'deny' };
     }
-    const isIdentityPopup = IDENTITY_POPUP_HOSTS.some(h => host === h || host.endsWith('.' + h));
+    const isIdentityPopup = isAuthenticationUrl(parsed.toString());
     if (isSecure && isIdentityPopup) {
       if (isWebview && !gesture) return { action: 'deny' };
       return {
@@ -829,71 +1061,22 @@ const handleWindowOpen = ({ url }, sourceContents) => {
   return { action: 'deny' };
 };
 
-function compareVersions(left, right) {
-  const parts = (value) => String(value).replace(/^v/i, '').split('.').map((part) => Number.parseInt(part, 10) || 0);
-  const leftParts = parts(left);
-  const rightParts = parts(right);
-  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
-    const difference = (leftParts[index] || 0) - (rightParts[index] || 0);
-    if (difference !== 0) return difference;
-  }
-  return 0;
-}
-
-function fetchLatestRelease() {
-  return new Promise((resolve, reject) => {
-    const request = https.get(RELEASE_API_URL, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'User-Agent': `ZeroApply/${app.getVersion()}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    }, (response) => {
-      if (response.statusCode !== 200) {
-        response.resume();
-        reject(new Error(`GitHub release check returned HTTP ${response.statusCode}.`));
-        return;
-      }
-      let body = '';
-      response.setEncoding('utf8');
-      response.on('data', (chunk) => {
-        body += chunk;
-        if (body.length > 1_000_000) request.destroy(new Error('Release response exceeded the size limit.'));
-      });
-      response.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
-    request.setTimeout(10_000, () => request.destroy(new Error('Release check timed out.')));
-    request.on('error', reject);
+function initializeDesktopUpdates() {
+  const releaseInfo = JSON.parse(fs.readFileSync(path.join(__dirname, 'desktop', 'release-info.json'), 'utf8'));
+  const updater = updaterPackage.autoUpdater;
+  updater.setFeedURL({ provider: 'github', owner: 'saiprasadchary-hub', repo: 'zeroapply', private: false });
+  desktopUpdates = new DesktopUpdateService({
+    updater, currentVersion: app.getVersion(),
+    enabled: app.isPackaged && releaseInfo.updatesEnabled === true && !isSmokeTest && !isModelVerification,
+    canRestart: () => !autoApplyActive && !embeddedModel.status().isReady && !embeddedModel.status().isLoading,
+    notify: (state) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('desktop-update-state', state);
+    },
   });
 }
 
 async function checkForUpdates() {
-  if (isSmokeTest || !app.isPackaged || !mainWindow || mainWindow.isDestroyed()) return;
-  try {
-    const release = await fetchLatestRelease();
-    if (release?.draft || release?.prerelease || compareVersions(release?.tag_name, app.getVersion()) <= 0) return;
-    const releaseUrl = String(release?.html_url || '');
-    if (!releaseUrl.startsWith(RELEASES_URL_PREFIX)) throw new Error('The release URL was not trusted.');
-    const result = await dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: 'ZeroApply update available',
-      message: `ZeroApply ${String(release.tag_name).replace(/^v/i, '')} is available.`,
-      detail: 'Open the signed GitHub release to install the latest production build.',
-      buttons: ['Open update', 'Later'],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true,
-    });
-    if (result.response === 0) await shell.openExternal(releaseUrl);
-  } catch (error) {
-    console.warn('Automatic update check failed:', error);
-  }
+  if (desktopUpdates?.status().canRestart) await desktopUpdates.check();
 }
 
 function createWindow(rendererUrl) {
@@ -906,7 +1089,7 @@ function createWindow(rendererUrl) {
     minWidth: 1024,
     minHeight: 700,
     title: 'ZeroApply | High-Output Persona Management',
-    icon: path.join(__dirname, 'public', 'logo.ico'),
+    icon: path.join(__dirname, 'dist', 'logo.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -918,11 +1101,26 @@ function createWindow(rendererUrl) {
     },
   });
 
-  mainWindow.webContents.on('console-message', (event, ...args) => {
-    const level = event?.level ?? args[0];
-    const message = event?.message ?? args[1] ?? (typeof args[0] === 'string' ? args[0] : '');
+  mainWindow.webContents.on('console-message', (event) => {
+    const level = event?.level;
+    const message = event?.message ?? '';
     if (level === 'error' || level === 3) {
-      console.error('Renderer error:', String(message || 'Unknown renderer error').slice(0, 4_000));
+      const msgStr = String(message || '');
+      // Suppress benign Chromium internal network cancellation, extension probe, and tracker noise
+      if (
+        msgStr.includes('ERR_ABORTED') ||
+        msgStr.includes('ERR_BLOCKED_BY_CLIENT') ||
+        msgStr.includes('chrome-extension://') ||
+        msgStr.includes('cs.ns1p.net') ||
+        msgStr.includes('demdex.net') ||
+        msgStr.includes('Unsafe attempt to load URL') ||
+        msgStr.includes('googletagmanager.com') ||
+        msgStr.includes('GUEST_VIEW_MANAGER_CALL') ||
+        msgStr.includes('Script failed to execute')
+      ) {
+        return;
+      }
+      console.error('Renderer error:', msgStr.slice(0, 4_000));
     }
   });
 
@@ -937,6 +1135,18 @@ function createWindow(rendererUrl) {
   const devServerUrl = process.env.ELECTRON_RENDERER_URL;
   rendererUrlInUse = devServerUrl || rendererUrl || 'http://localhost:5173';
   let rendererLoadAttempts = 0;
+  let rendererRecoveryTimer = null;
+  const cancelRendererRecovery = () => {
+    if (rendererRecoveryTimer) clearTimeout(rendererRecoveryTimer);
+    rendererRecoveryTimer = null;
+  };
+  const scheduleRendererRecovery = (delay) => {
+    cancelRendererRecovery();
+    rendererRecoveryTimer = setTimeout(() => {
+      rendererRecoveryTimer = null;
+      loadRenderer();
+    }, delay);
+  };
   const loadRenderer = () => {
     if (!mainWindow || mainWindow.isDestroyed() || !rendererUrlInUse) return;
     mainWindow.loadURL(rendererUrlInUse).catch((error) => {
@@ -945,9 +1155,12 @@ function createWindow(rendererUrl) {
   };
   loadRenderer();
 
-  mainWindow.webContents.on('did-finish-load', () => {
-    rendererLoadAttempts = 0;
+  mainWindow.webContents.on('did-finish-load', cancelRendererRecovery);
+  mainWindow.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
+    if (isMainFrame) { autoApplyActive = false; embeddedModel.stop(); }
+    if (isMainFrame) cancelRendererRecovery();
   });
+  mainWindow.once('closed', cancelRendererRecovery);
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl, isMainFrame) => {
     let isRendererTarget = false;
     try {
@@ -956,6 +1169,7 @@ function createWindow(rendererUrl) {
       isRendererTarget = false;
     }
     if (!isMainFrame || errorCode === -3 || !isRendererTarget) return;
+    cancelRendererRecovery();
     rendererLoadAttempts += 1;
     if (rendererLoadAttempts > 3) {
       dialog.showErrorBox('ZeroApply could not load', 'The local interface failed to load after three recovery attempts. Close and reopen ZeroApply.');
@@ -963,12 +1177,20 @@ function createWindow(rendererUrl) {
     }
     const delay = [500, 1_500, 3_000][rendererLoadAttempts - 1];
     console.warn(`Renderer failed to load (${errorDescription}); retrying in ${delay}ms.`);
-    setTimeout(loadRenderer, delay);
+    scheduleRendererRecovery(delay);
   });
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    autoApplyActive = false;
+    embeddedModel.stop();
     console.error('Main renderer process stopped:', details.reason, details.exitCode);
     if (details.reason === 'clean-exit' || !mainWindow || mainWindow.isDestroyed()) return;
-    setTimeout(loadRenderer, 500);
+    cancelRendererRecovery();
+    rendererLoadAttempts += 1;
+    if (rendererLoadAttempts > 3) {
+      dialog.showErrorBox('ZeroApply stopped responding', 'The interface repeatedly crashed. Close and reopen ZeroApply.');
+      return;
+    }
+    scheduleRendererRecovery(500);
   });
   mainWindow.on('unresponsive', async () => {
     if (unresponsiveDialogOpen || !mainWindow || mainWindow.isDestroyed()) return;
@@ -993,11 +1215,16 @@ function createWindow(rendererUrl) {
   mainWindow.webContents.setWindowOpenHandler((details) => handleWindowOpen(details, mainWindow?.webContents));
 
   mainWindow.on('closed', () => {
+    autoApplyActive = false;
+    embeddedModel.stop();
     mainWindow = null;
   });
 }
 
 app.on('web-contents-created', (_event, contents) => {
+  try {
+    contents.setMaxListeners(50);
+  } catch {}
   contents.setWindowOpenHandler((details) => handleWindowOpen(details, contents));
 
   contents.on('did-create-window', (childWindow, details) => {
@@ -1008,14 +1235,10 @@ app.on('web-contents-created', (_event, contents) => {
     const registerAuthWindow = () => {
       if (registeredAsAuthWindow) return;
       registeredAsAuthWindow = true;
-      for (const existingWindow of topLevelAuthWindows) {
-        if (!existingWindow.isDestroyed()) existingWindow.close();
-      }
-      topLevelAuthWindows.clear();
       topLevelAuthWindows.add(childWindow);
     };
 
-    if (!startsDeferred && (contents === mainWindow?.webContents || contents.getType() === 'webview')) {
+    if (!startsDeferred && (contents === mainWindow?.webContents || contents.getType() === 'webview' || isAuthenticationUrl(details?.url))) {
       registerAuthWindow();
     }
     const deferredTimeout = startsDeferred ? setTimeout(() => {
@@ -1030,6 +1253,14 @@ app.on('web-contents-created', (_event, contents) => {
 
     const routeChildNavigation = (navEvent, targetUrl) => {
       if (isDeferredPopupUrl(targetUrl)) return;
+      if (isWhatsAppUrl(targetUrl)) {
+        navEvent.preventDefault();
+        destinationResolved = true;
+        if (deferredTimeout) clearTimeout(deferredTimeout);
+        if (!childWindow.isDestroyed()) childWindow.close();
+        notifyWhatsAppIntercepted(targetUrl);
+        return;
+      }
       if (isExternalProtocol(targetUrl)) {
         navEvent.preventDefault();
         destinationResolved = true;
@@ -1041,9 +1272,10 @@ app.on('web-contents-created', (_event, contents) => {
       try {
         const parsed = resolvePopupDestination(targetUrl);
         if (parsed) {
-          const host = parsed.hostname.toLowerCase();
-          const isIdentityAuth = parsed.protocol === 'https:'
-            && IDENTITY_POPUP_HOSTS.some((trustedHost) => host === trustedHost || host.endsWith(`.${trustedHost}`));
+          // OAuth callbacks must stay in the original popup to retain window.opener,
+          // POST bodies, and the provider's postMessage completion handshake.
+          const isIdentityAuth = !isBackgroundPopup(parsed.hostname.toLowerCase())
+            && shouldKeepAuthenticationPopup(parsed.toString(), registeredAsAuthWindow);
           if (isIdentityAuth) {
             destinationResolved = true;
             if (deferredTimeout) clearTimeout(deferredTimeout);
@@ -1083,11 +1315,35 @@ app.on('web-contents-created', (_event, contents) => {
     }
     webPreferences.preload = PRELOAD_WEBVIEW_PATH;
     webPreferences.nodeIntegration = false;
+    webPreferences.nodeIntegrationInSubFrames = false;
+    webPreferences.nodeIntegrationInWorker = false;
     webPreferences.contextIsolation = true;
     webPreferences.sandbox = true;
+    webPreferences.webSecurity = true;
+    webPreferences.allowRunningInsecureContent = false;
+    webPreferences.experimentalFeatures = false;
   });
 
   if (contents.getType() === 'webview') {
+    contents.on('console-message', (event) => {
+      const msgStr = String(event?.message || '');
+      if (
+        msgStr.includes('chrome-extension://') ||
+        msgStr.includes('ERR_FAILED') ||
+        msgStr.includes('ERR_ABORTED') ||
+        msgStr.includes('ERR_BLOCKED_BY_CLIENT') ||
+        msgStr.includes('demdex.net') ||
+        msgStr.includes('visitor.publishDestinations()') ||
+        msgStr.includes('utag.js') ||
+        msgStr.includes('cs.ns1p.net') ||
+        msgStr.includes('Unsafe attempt to load URL') ||
+        msgStr.includes('googletagmanager.com') ||
+        msgStr.includes('Script failed to execute')
+      ) {
+        event.preventDefault();
+      }
+    });
+
     contents.on('before-input-event', (event, input) => {
       const command = browserCommandForInput(input);
       if (!command) return;
@@ -1135,6 +1391,8 @@ app.on('web-contents-created', (_event, contents) => {
           }
           return;
         }
+        // Let sign-in redirects complete in their original browsing context.
+        if (isAuthenticationUrl(navigationUrl) || isAuthenticationUrl(contents.getURL())) return;
         const sourcePortal = JOB_PORTAL_HOSTS.find((host) => hostMatches(currentHost, host));
         if (destination && sourcePortal && !hostMatches(destination.hostname.toLowerCase(), sourcePortal)) {
           if (isBackgroundPopup(destination.hostname.toLowerCase())) {
@@ -1151,18 +1409,29 @@ app.on('web-contents-created', (_event, contents) => {
       }
     });
 
+    let recoveryTimer = null;
+    const cancelRecovery = () => {
+      if (recoveryTimer) clearTimeout(recoveryTimer);
+      recoveryTimer = null;
+    };
+    contents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
+      if (isMainFrame) cancelRecovery();
+    });
+    contents.once('destroyed', cancelRecovery);
     contents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       if (errorCode === -3) return; // Ignore normal user navigation cancellations / redirects
-      if (isMainFrame && errorCode === -21) {
+      if (isMainFrame && (errorCode === -21 || errorCode === -2)) {
         const previous = webviewRecoveryState.get(contents);
         const attempt = previous?.url === validatedURL ? previous.attempt + 1 : 1;
         webviewRecoveryState.set(contents, { url: validatedURL, attempt });
         if (attempt > 2) {
-          sendBrowserEvent('The network changed repeatedly while loading this page. Check your connection, then use Retry page.');
+          sendBrowserEvent('The page encountered a temporary network glitch while loading. Check your connection or use Retry page.');
           return;
         }
         console.warn('Webview transient navigation fail-load recovered:', errorDescription, validatedURL);
-        setTimeout(() => {
+        cancelRecovery();
+        recoveryTimer = setTimeout(() => {
+          recoveryTimer = null;
           if (!contents.isDestroyed() && validatedURL) {
             contents.loadURL(validatedURL).catch((error) => console.warn('Webview recovery failed:', error));
           }
@@ -1171,7 +1440,7 @@ app.on('web-contents-created', (_event, contents) => {
     });
 
     contents.on('did-finish-load', () => {
-      webviewRecoveryState.delete(contents);
+      cancelRecovery();
       getAuthSession().cookies.flushStore().catch((error) => console.warn('Cookie flush failed:', error));
     });
   } else if (contents.getType() === 'window') {
@@ -1194,66 +1463,6 @@ app.on('child-process-gone', (_event, details) => {
   sendBrowserEvent(`A ${details.type || 'browser'} process restarted after an error. Retry the current page if needed.`);
 });
 
-let ollamaDaemonProcess = null;
-
-function isOllamaRunning() {
-  return new Promise((resolve) => {
-    const req = http.get('http://127.0.0.1:11434/api/tags', (res) => {
-      resolve(res.statusCode === 200);
-    });
-    req.on('error', () => resolve(false));
-    req.setTimeout(1500, () => {
-      req.destroy();
-      resolve(false);
-    });
-  });
-}
-
-// Enforce zero local history logging for LLM prompts & completions
-process.env.OLLAMA_NOHISTORY = '1';
-
-async function ensureOllamaRunning() {
-  try {
-    const running = await isOllamaRunning();
-    if (running) {
-      return;
-    }
-
-    const localAppData = process.env.LOCALAPPDATA || '';
-    const ollamaAppPath = path.join(localAppData, 'Programs', 'Ollama', 'ollama app.exe');
-
-    if (fs.existsSync(ollamaAppPath)) {
-      // Launch standard Ollama tray application silently without any console window
-      ollamaDaemonProcess = spawn(ollamaAppPath, [], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true,
-      });
-      if (ollamaDaemonProcess && typeof ollamaDaemonProcess.unref === 'function') {
-        ollamaDaemonProcess.unref();
-      }
-      return;
-    }
-
-    // Launch headless hidden process with PowerShell Start-Process WindowStyle Hidden
-    ollamaDaemonProcess = spawn('powershell.exe', [
-      '-WindowStyle', 'Hidden',
-      '-NoProfile',
-      '-Command',
-      'Start-Process -WindowStyle Hidden -FilePath "ollama" -ArgumentList "serve"'
-    ], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    if (ollamaDaemonProcess && typeof ollamaDaemonProcess.unref === 'function') {
-      ollamaDaemonProcess.unref();
-    }
-  } catch (err) {
-    console.warn('[ZeroApply Desktop] Notice: Could not auto-spawn Ollama daemon:', err);
-  }
-}
-
 ipcMain.on('zeroapply-webview-popup-gesture', (event, payload) => {
   if (event.sender.getType() === 'webview' && event.sender.session === getAuthSession()) {
     const candidates = normalizeGestureCandidates(payload?.candidates, event.sender.getURL());
@@ -1263,10 +1472,21 @@ ipcMain.on('zeroapply-webview-popup-gesture', (event, payload) => {
 
 ipcMain.on('zeroapply-webview-window-open', (event, payload) => {
   if (event.sender.getType() !== 'webview' || event.sender.session !== getAuthSession()) return;
+  if (typeof payload?.url === 'string' && isWhatsAppUrl(payload.url)) {
+    notifyWhatsAppIntercepted(payload.url);
+    return;
+  }
   const gesture = popupGestureTimes.get(event.sender);
   if (!gesture || Date.now() - gesture.timestamp > 5_000 || typeof payload?.url !== 'string') return;
+  // Native window.open owns authentication and deferred popup lifecycles.
+  // Opening another tab here races the popup and loses its opener relationship.
+  if (isDeferredPopupUrl(payload.url) || isAuthenticationUrl(payload.url, event.sender.getURL())) return;
   const destination = resolvePopupDestination(payload.url) || resolveGestureDestination(gesture);
   if (!destination || !isAllowedWebviewUrl(destination.toString()) || isLinkedInTrackerUrl(destination.toString())) return;
+  if (isWhatsAppUrl(destination.toString())) {
+    notifyWhatsAppIntercepted(destination.toString());
+    return;
+  }
   sendOpenTab(destination.toString(), event.sender);
 });
 
@@ -1330,6 +1550,44 @@ ipcMain.handle('chrome-agent-select-active-target', async (event) => {
   return true;
 });
 
+// ---------------------------------------------------------------------------
+// Camoufox IPC handlers
+// ---------------------------------------------------------------------------
+
+ipcMain.handle('camoufox-launch', async (event, startUrl) => {
+  requireTrustedIpcSender(event);
+  try {
+    return await launchCamoufox(startUrl);
+  } catch (error) {
+    console.error('Camoufox launch failed:', describeError(error));
+    return { ok: false, error: error instanceof Error ? error.message : 'Camoufox Firefox could not be started.' };
+  }
+});
+
+ipcMain.handle('camoufox-navigate', async (event, targetUrl) => {
+  requireTrustedIpcSender(event);
+  if (!isSafeChromeAgentUrl(targetUrl)) throw new Error('Blocked an unsafe Camoufox navigation address.');
+  if (!camoufoxPage) throw new Error('Camoufox is not running. Launch it first.');
+  await camoufoxPage.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  return true;
+});
+
+ipcMain.handle('camoufox-evaluate', async (event, script) => {
+  requireTrustedIpcSender(event);
+  if (typeof script !== 'string' || !script.trim() || Buffer.byteLength(script, 'utf8') > 2 * 1024 * 1024) {
+    throw new Error('Camoufox automation script is invalid or too large.');
+  }
+  if (!camoufoxPage) throw new Error('Camoufox is not running.');
+  // eslint-disable-next-line no-new-func
+  return camoufoxPage.evaluate(new Function(`return (async () => { ${script} })()`));
+});
+
+ipcMain.handle('camoufox-close', async (event) => {
+  requireTrustedIpcSender(event);
+  await closeCamoufox();
+  return true;
+});
+
 ipcMain.on('secure-storage-get', (event, key) => {
   try {
     requireTrustedIpcSender(event);
@@ -1363,106 +1621,58 @@ ipcMain.handle('secure-storage-remove', async (event, key) => {
   return true;
 });
 
-ipcMain.handle('start-ollama-daemon', async (event) => {
+for (const [channel, operation] of [
+  ['desktop-update-status', 'status'], ['desktop-update-check', 'check'],
+  ['desktop-update-download', 'download'], ['desktop-update-install', 'install'],
+]) {
+  ipcMain.handle(channel, (event) => {
+    requireTrustedIpcSender(event);
+    if (!desktopUpdates) throw new Error('Updates are not ready yet.');
+    return desktopUpdates[operation]();
+  });
+}
+ipcMain.handle('desktop-autoapply-active', (event, active) => {
   requireTrustedIpcSender(event);
-  await ensureOllamaRunning();
-  return isOllamaRunning();
+  if (typeof active !== 'boolean') throw new Error('Invalid activity status.');
+  autoApplyActive = active;
+  desktopUpdates?.activityChanged();
 });
 
-ipcMain.handle('install-ollama-engine', async (event) => {
+ipcMain.handle('embedded-llm-start', async (event) => {
   requireTrustedIpcSender(event);
-  return new Promise((resolve, reject) => {
-    try {
-      console.log('[ZeroApply Desktop] Starting 1-Click Ollama Engine automated setup...');
-      const bundledInstaller = path.join(process.resourcesPath, 'OllamaSetup.exe');
-      const tempInstaller = path.join(app.getPath('temp'), 'OllamaSetup.exe');
-
-      const verifyInstaller = (installerPath) => new Promise((verifyResolve, verifyReject) => {
-        const command = `$signature = Get-AuthenticodeSignature -LiteralPath '${installerPath.replaceAll("'", "''")}'; if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Ollama Inc') { exit 1 }`;
-        execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], (error) => {
-          if (error) verifyReject(new Error('The Ollama installer signature is invalid. Installation was cancelled.'));
-          else verifyResolve();
-        });
-      });
-
-      const runInstallerFile = async (installerPath) => {
-        try {
-          await verifyInstaller(installerPath);
-          console.log(`[ZeroApply Desktop] Running ${installerPath} silently...`);
-          const installer = spawn(installerPath, ['/silent'], {
-            detached: true,
-            stdio: 'ignore',
-          });
-          installer.unref();
-
-          let pollCount = 0;
-          const interval = setInterval(async () => {
-            pollCount++;
-            const running = await isOllamaRunning();
-            if (running) {
-              clearInterval(interval);
-              resolve({ success: true });
-            } else if (pollCount > 40) {
-              clearInterval(interval);
-              resolve({ success: false, error: 'Installation started. Please wait a few seconds and check status.' });
-            }
-          }, 1500);
-        } catch (runErr) {
-          reject(runErr);
-        }
-      };
-
-      if (fs.existsSync(bundledInstaller)) {
-        console.log('[ZeroApply Desktop] Using bundled local OllamaSetup.exe from resources...');
-        runInstallerFile(bundledInstaller);
-        return;
-      }
-
-      const downloadUrl = 'https://ollama.com/download/OllamaSetup.exe';
-      const getFile = (url, redirects = 0) => {
-        https.get(url, (res) => {
-          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-            res.resume();
-            if (redirects >= 5) {
-              reject(new Error('Too many redirects while downloading Ollama.'));
-              return;
-            }
-            const nextUrl = new URL(res.headers.location, url);
-            if (nextUrl.protocol !== 'https:') {
-              reject(new Error('Ollama download redirected to an insecure address.'));
-              return;
-            }
-            getFile(nextUrl.href, redirects + 1);
-            return;
-          }
-          if (res.statusCode !== 200) {
-            res.resume();
-            reject(new Error(`Ollama download failed with HTTP ${res.statusCode}.`));
-            return;
-          }
-          const file = fs.createWriteStream(tempInstaller);
-          res.pipe(file);
-          file.on('error', (error) => {
-            fs.unlink(tempInstaller, () => {});
-            reject(error);
-          });
-          file.on('finish', () => {
-            file.close(() => runInstallerFile(tempInstaller).catch(reject));
-          });
-        }).on('error', (err) => {
-          fs.unlink(tempInstaller, () => {});
-          reject(err);
-        });
-      };
-      getFile(downloadUrl);
-    } catch (err) {
-      reject(err);
-    }
-  });
+  return embeddedModel.start();
+});
+ipcMain.handle('embedded-llm-status', (event) => {
+  requireTrustedIpcSender(event);
+  return embeddedModel.status();
+});
+ipcMain.handle('embedded-llm-generate', async (event, payload) => {
+  requireTrustedIpcSender(event);
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Invalid built-in AI request.');
+  return embeddedModel.generate(payload);
+});
+ipcMain.handle('embedded-llm-stop', (event) => {
+  requireTrustedIpcSender(event);
+  embeddedModel.stop();
 });
 
 app.whenReady().then(async () => {
-  if (!isSmokeTest) ensureOllamaRunning().catch((error) => console.warn('Ollama startup check failed:', error));
+  // Explicit release verification only; normal application startup stays idle.
+  if (isModelVerification) {
+    try {
+      await embeddedModel.start();
+      const answer = await embeddedModel.generate({ prompt: 'What is my city? Answer with just the city.', systemPrompt: 'My city is Hyderabad.', maxTokens: 16 });
+      if (!/Hyderabad/i.test(answer)) throw new Error('Bundled model returned an unexpected verification answer.');
+      embeddedModel.stop();
+      console.log('Packaged built-in AI verification passed.');
+      app.exit(0);
+    } catch (error) {
+      embeddedModel.stop();
+      console.error('Packaged built-in AI verification failed:', error);
+      app.exit(1);
+    }
+    return;
+  }
   configureSession(session.defaultSession);
   getAuthSession();
   try {
@@ -1488,6 +1698,7 @@ app.whenReady().then(async () => {
   }
 
   createWindow(rendererUrl);
+  initializeDesktopUpdates();
   updateCheckTimer = setTimeout(() => {
     void checkForUpdates();
     updateCheckTimer = setInterval(() => void checkForUpdates(), 6 * 60 * 60 * 1000);
@@ -1501,6 +1712,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', async () => {
+  embeddedModel.stop();
   if (updateCheckTimer) clearTimeout(updateCheckTimer);
   if (chromeAgentConnection) {
     void chromeAgentConnection.call('Browser.close').catch(() => {});
@@ -1519,6 +1731,9 @@ app.on('before-quit', async () => {
 });
 
 app.on('will-quit', async () => {
+  try {
+    await closeCamoufox();
+  } catch {}
   try {
     await getAuthSession().cookies.flushStore();
   } catch {
