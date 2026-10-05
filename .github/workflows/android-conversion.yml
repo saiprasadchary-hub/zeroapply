@@ -1,0 +1,75 @@
+name: ZeroApply existing mobile view APK
+on:
+  pull_request:
+    paths: ['android-conversion/**', '.github/workflows/android-conversion.yml', 'src/**', 'AgentBrowser/**', 'package-lock.json']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: node --test android-conversion/test/adapters.test.mjs
+      - run: npx vite build --config android-conversion/vite.config.ts
+      - run: npm ci --prefix android-conversion --ignore-scripts
+      - name: Create Android project
+        working-directory: android-conversion
+        run: npx cap add android
+      - name: Apply ZeroApply branding and privacy settings
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          manifest = Path('android-conversion/android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text().replace('android:allowBackup="true"', 'android:allowBackup="false"')
+          text = text.replace('<application', '<application android:usesCleartextTraffic="false"', 1)
+          manifest.write_text(text)
+          for folder in Path('android-conversion/android/app/src/main/res').glob('mipmap-*'):
+              if folder.is_dir():
+                  for name in ['ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png']:
+                      shutil.copyfile('public/logo_square.png', folder / name)
+          PY
+      - name: Build APK
+        working-directory: android-conversion/android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Verify Android signature and prepare download
+        run: |
+          APK=android-conversion/android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          mkdir -p android-download
+          cp "$APK" android-download/ZeroApply-Android.apk
+          sha256sum android-download/*.apk > android-download/SHA256SUMS.txt
+      - name: Test existing mobile view on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: |
+            adb install android-download/ZeroApply-Android.apk
+            adb shell am start -n com.zeroapply.app.android/.MainActivity
+            sleep 10
+            python3 android-conversion/test/android-smoke.py
+            adb exec-out screencap -p > android-download/zeroapply-android.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ZeroApply-existing-view-Android-APK
+          path: android-download/*
+          retention-days: 90
