@@ -44,7 +44,7 @@ if browser is None:
 tap(browser)
 time.sleep(2)
 nodes = snapshot('browser')
-if not any('Your job browser' in node.get('text', '') for node in nodes):
+if not any('LinkedIn with phone AI' in node.get('text', '') for node in nodes):
     raise SystemExit('Android browser explanation did not open')
 log = subprocess.check_output(['adb', 'logcat', '-d', '-s', 'AndroidRuntime:E'], text=True)
 if 'FATAL EXCEPTION' in log:

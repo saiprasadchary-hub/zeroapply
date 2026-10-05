@@ -17,7 +17,7 @@ export function adaptAndroidSource(source, id) {
   if (path.endsWith('/src/components/PersonaForm.tsx')) {
     const handler = /const handleAutoApplyClick = \(\) => \{[\s\S]*?\n  \};/;
     if (!handler.test(source)) throw new Error('Android AutoApply guard needs review.');
-    return source.replace(handler, `const handleAutoApplyClick = (): void => {\n    onSaveToast('AutoApply and built-in AI are available in the desktop app. Android support is not ready yet.');\n  };`).replace(/<BrowserSelector[\s\S]*?\/>/, '<p className="text-sm text-zinc-600">AutoApply runs in the desktop app. Android supports your profile, resume and application tracking.</p>');
+    return source.replace(handler, `const handleAutoApplyClick = (): void => {\n    if (!persona.fullName.trim() || !persona.email.trim()) { onSaveToast('Add your name and email before starting LinkedIn AutoApply.'); return; }\n    void initWebLlmEngine('review-start').catch((error: unknown): void => onSaveToast(error instanceof Error ? error.message : 'Phone AI could not start.'));\n    onLaunchBrowser?.('autoApply', 'linkedin');\n  };`).replace(/<BrowserSelector[\s\S]*?\/>/, '<p className="text-sm text-zinc-600">LinkedIn uses this phone’s browser and built-in AI. First use needs a one-time 1.1 GB download. Review answers before submitting.</p>');
   }
   if (path.endsWith('/src/resume/ResumeStudio.tsx')) {
     if (!source.includes('return DEFAULT_RESUME_DOCUMENT;')) throw new Error('Android blank resume initialization needs review.');

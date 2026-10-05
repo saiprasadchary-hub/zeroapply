@@ -11,11 +11,13 @@ test('Android removes seeded personal information from both profile defaults', (
     assert.match(output, /fullName: ''/);
   }
 });
-test('Android blocks desktop startup before model initialization and browser dispatch', () => {
+test('Android requires a real profile and starts phone AI only from reviewed startup', () => {
   const output = adaptAndroidSource(readFileSync('src/components/PersonaForm.tsx', 'utf8'), '/src/components/PersonaForm.tsx');
   const handler = output.match(/const handleAutoApplyClick = [\s\S]*?\n  \};/)[0];
   assert.match(handler, /onSaveToast/);
-  assert.doesNotMatch(handler, /initWebLlmEngine|onLaunchBrowser/);
+  assert.match(handler, /!persona.fullName.trim\(\)|!persona.email.trim\(\)/);
+  assert.match(handler, /initWebLlmEngine\('review-start'\)/);
+  assert.match(handler, /onLaunchBrowser\?\.\('autoApply',\s*'linkedin'\)/);
 });
 test('Unsupported source changes fail the build instead of leaking seeded data', () => {
   assert.throws(() => adaptAndroidSource('changed', '/src/App.tsx'));
