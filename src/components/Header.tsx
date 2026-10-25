@@ -1,3 +1,4 @@
+import { AgentHealthDetails } from './AgentHealthDetails';
 import React, { useEffect, useState } from 'react';
 import { User, Globe, Bell, FileText, Cpu, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import type { NavTab } from './MobileBottomNav';
@@ -143,6 +144,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
         </div>
       </div>
 
+      <AgentHealthDetails />
       {/* Right-Side User Profile & Mobile LLM Indicator */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <div

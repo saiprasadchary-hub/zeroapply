@@ -33,6 +33,15 @@ export interface PersonaData {
   targetRoles: string[];
   employmentStatus?: 'fresher' | 'currently_working';
   currentCompany?: string;
+  verifiedScreeningAnswers?: Record<string, string>; // Explicit user-provided answers keyed by exact question
+  availability?: {
+    timeZone?: string;
+    start?: string;
+    end?: string;
+    nightShift?: boolean;
+    rotatingShift?: boolean;
+    overlap?: Partial<Record<'pacific' | 'eastern' | 'central' | 'mountain' | 'india', boolean>>;
+  };
   workingHoursPreference?: 'daytime' | 'flexible';
   expectedSalaryLpa?: number; // Desired annual salary in LPA, independent of current CTC
   currentCtcLpa?: number; // in LPA / Lakhs Per Annum (0 for fresher, e.g., 8 = ₹8 LPA)

@@ -1,3 +1,5 @@
+import { dismissSubmissionReceipt } from '../recovery/postSubmissionDismissal';
+import { captureSubmissionEvidence, saveSubmissionEvidence, type SubmissionAnswer } from '../tracker/submissionEvidenceStore';
 import { ApplicationLogger } from '../tracker/applicationLogger';
 import { resolveScreeningFact } from '../localLlm/screeningFacts';
 import { SUBMISSION_EVIDENCE_SCRIPT } from '../normalApply/submissionEvidence';
@@ -23,7 +25,6 @@ import { stepNavigator } from '../navigation/wizardStepNavigator';
 import { WorkflowStateMachine } from './stateMachine';
 import { liveTelemetry } from '../telemetry/liveTelemetry';
 import { detectSecurityChallenge, waitForChallengeResolution } from '../security';
-import { questionMemory } from '../memory/questionMemoryBank';
 import { attachResumeFile } from '../fileUpload/fileUploadBridge';
 import { getStoredResume } from '../fileUpload/resumeFileAdapter';
 import { omniVision } from '../vision';
@@ -37,6 +38,7 @@ import { scanAndHandleWhatsApp } from './whatsappHandler';
 import { ensureLinkedInSafeSession } from '../stealth/linkedinSafetyGuard';
 
 export interface OrchestratorOptions {
+  allowSubmit?: boolean;
   companyName?: string;
   jobTitle?: string;
   maxSteps?: number;
@@ -52,6 +54,8 @@ export interface OrchestrationResult {
   fieldsFilled: number;
   stepsExecuted: number;
   error?: string;
+  evidenceId?: string;
+  evidenceError?: string;
 }
 
 export class AutoApplyOrchestrator {
@@ -66,6 +70,28 @@ export class AutoApplyOrchestrator {
     let totalFieldsFilled = 0;
     let stepsCount = 0;
     let detectedPlatform = 'Generic Portal';
+
+    const savedAnswers = new Map<string, SubmissionAnswer>();
+    let evidenceId: string | undefined;
+    let evidenceError: string | undefined;
+    const preserveReceipt = async (): Promise<void> => {
+      if (evidenceId) return;
+      try {
+        const jobUrl = await webview.executeJavaScript<string>('location.href');
+        const bundle = await captureSubmissionEvidence(webview, {
+          applicant: { name: persona.fullName, email: persona.email }, jobUrl,
+          companyName: options.companyName || '', jobTitle: options.jobTitle || '', answers: [...savedAnswers.values()],
+        });
+        await saveSubmissionEvidence(bundle);
+        evidenceId = bundle.id;
+        liveTelemetry.emit({ type: 'check', title: bundle.screenshotError || 'Application receipt and answers saved.', status: 'completed' });
+      } catch (error: unknown) {
+        evidenceError = error instanceof Error ? error.message : 'Application receipt could not be saved.';
+        liveTelemetry.emit({ type: 'check', title: `Application confirmed; receipt storage failed: ${evidenceError}`, status: 'failed' });
+      }
+      const dismissal = await dismissSubmissionReceipt(webview);
+      if (dismissal.clicked) liveTelemetry.emit({ type: 'click', title: dismissal.reason, status: dismissal.dismissed ? 'completed' : 'paused' });
+    };
 
     try {
       sm.transition('analyzing');
@@ -176,6 +202,7 @@ export class AutoApplyOrchestrator {
 
           // Run application on external tab
           const extResult = await this.runApplication(extView, persona, {
+            allowSubmit: options.allowSubmit,
             maxSteps,
             stepDelayMs,
           });
@@ -267,7 +294,8 @@ export class AutoApplyOrchestrator {
           };
         }
         if (await webview.executeJavaScript<boolean>(SUBMISSION_EVIDENCE_SCRIPT).catch(() => false)) {
-          return { outcome: 'submitted', platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount };
+          await preserveReceipt();
+          return { outcome: 'submitted', evidenceId, evidenceError, platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount };
         }
         const hasApplicationScope = await webview.executeJavaScript<boolean>(`(() => {
           if (!/(^|[.])linkedin[.]com$/i.test(location.hostname)) return true;
@@ -386,7 +414,6 @@ export class AutoApplyOrchestrator {
 
               // Persist novel answer to Question Memory Bank for 0ms recurring resolution
               if (answerVal && field.label) {
-                questionMemory.addOrUpdateEntry(field.label, answerVal, 'llm', res.confidence || 0.9);
               }
             }
 
@@ -673,7 +700,7 @@ export class AutoApplyOrchestrator {
         let audit = await auditFormFields(webview);
         let auditPasses = 0;
 
-        while ((!audit.ready || (audit.unansweredQuestions && audit.unansweredQuestions.length > 0)) && auditPasses < 3) {
+        while ((!audit.ready || (audit.unansweredQuestions || []).some(question => question.isRequired || question.hasError)) && auditPasses < 3) {
           const unanswered = (audit.unansweredQuestions || []).filter(
             (u) => u.inputType !== 'file' && !/resume|cv\b/i.test(u.label)
           );
@@ -732,7 +759,6 @@ export class AutoApplyOrchestrator {
                 source = res.source === 'persona' ? 'persona' : 'ollama';
 
                 if (answerVal && ff.label) {
-                  questionMemory.addOrUpdateEntry(ff.label, answerVal, 'llm', res.confidence || 0.9);
                 }
               }
 
@@ -773,6 +799,20 @@ export class AutoApplyOrchestrator {
           audit = await auditFormFields(webview);
         }
 
+        if (!audit.ready || audit.missingRequired.length || audit.errors.length || (audit.unansweredQuestions || []).some(question => question.isRequired || question.hasError)) {
+          const error = `Required answers did not pass verification: ${[...audit.missingRequired, ...audit.errors].join('; ') || 'unresolved questions'}`;
+          liveTelemetry.emit({ type: 'status', title: error, status: 'paused' });
+          return { outcome: 'skipped', platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount, error };
+        }
+
+        // Save actual persisted values after the final audit, including prefilled answers.
+        const persistedFields = await scanFormFields(webview).catch(() => []);
+        for (const field of persistedFields) {
+          if (field.label && field.currentValue && !/password|file/i.test(field.inputType || '')) {
+            savedAnswers.set(field.label, { question: field.label, answer: field.currentValue, source: 'verified form value' });
+          }
+        }
+
         // 3. Detect Forward Wizard Button (Next / Review / Submit / Done)
         let forwardBtn = await stepNavigator.detectForwardButton(webview);
 
@@ -805,6 +845,7 @@ export class AutoApplyOrchestrator {
           // Check if already completed / submitted
           const isDone = await webview.executeJavaScript<boolean>(SUBMISSION_EVIDENCE_SCRIPT).catch(() => false);
           if (isDone) {
+            await preserveReceipt();
             await ensureVisualCursor(webview);
             await webview.executeJavaScript(`
               (async () => {
@@ -876,13 +917,17 @@ export class AutoApplyOrchestrator {
               status: 'completed',
             });
             return {
-              outcome: 'submitted',
+              outcome: 'submitted', evidenceId, evidenceError,
               platform: detectedPlatform,
               fieldsFilled: totalFieldsFilled,
               stepsExecuted: stepsCount,
             };
           }
           break;
+        }
+
+        if (forwardBtn.action === 'submit' && options.allowSubmit !== true) {
+          return { outcome: 'skipped', platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount, error: 'Application is ready for review; final submission is disabled for this run.' };
         }
 
         // Human review pause before advancing step (600ms - 1100ms)
@@ -932,6 +977,7 @@ export class AutoApplyOrchestrator {
           }
 
           if (isSubmittedConfirmed) {
+            await preserveReceipt();
             await ensureVisualCursor(webview);
             await webview.executeJavaScript(`
               (async () => {
@@ -1007,7 +1053,7 @@ export class AutoApplyOrchestrator {
               status: 'completed',
             });
             return {
-              outcome: 'submitted',
+              outcome: 'submitted', evidenceId, evidenceError,
               platform: detectedPlatform,
               fieldsFilled: totalFieldsFilled,
               stepsExecuted: stepsCount,
@@ -1024,10 +1070,13 @@ export class AutoApplyOrchestrator {
         }
 
         if (forwardBtn.action === 'done') {
+          const confirmed = await webview.executeJavaScript<boolean>(SUBMISSION_EVIDENCE_SCRIPT).catch(() => false);
+          if (!confirmed) return { outcome: 'skipped', platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount, error: 'Done button found without a confirmed application receipt.' };
+          await preserveReceipt();
           await stepNavigator.advance(webview);
           sm.transition('done');
           return {
-            outcome: 'submitted',
+            outcome: 'submitted', evidenceId, evidenceError,
             platform: detectedPlatform,
             fieldsFilled: totalFieldsFilled,
             stepsExecuted: stepsCount,

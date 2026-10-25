@@ -1,3 +1,4 @@
+import { SubmissionEvidencePanel } from './SubmissionEvidencePanel';
 import React, { useState, useEffect } from 'react';
 import { QALogger, type QALogRecord } from '../agent/tracker/qaLogger';
 import { 
@@ -323,6 +324,7 @@ export const SubmissionCheck: React.FC = () => {
     <div className="flex-1 bg-[#FAFAFA] flex flex-col h-full overflow-y-auto p-3.5 sm:p-6 md:p-8 font-sans pb-16 sm:pb-8">
       <div className="max-w-4xl mx-auto w-full space-y-4 sm:space-y-6">
         
+        <SubmissionEvidencePanel />
         {/* Top View Selector: Divided into 2 Types: Notification & Submission Check */}
         <div className="flex items-center justify-between border-b border-zinc-200/80 pb-3.5">
           <div className="flex items-center gap-1.5 bg-zinc-200/60 p-1 rounded-2xl border border-zinc-300/50 shadow-2xs">

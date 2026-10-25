@@ -1,3 +1,4 @@
+import { chromium } from 'playwright-core';
 import assert from 'node:assert/strict';
 import { buildSearchUrl } from '../src/agent/searchAgent';
 import { analyzePage } from '../src/agent/vision/pageAnalyzer';
@@ -130,81 +131,27 @@ assert.equal(navButton.action, 'next');
 console.log('✅ stepNavigator accurately detects multi-step wizard buttons.');
 
 console.log('--- TEST 5: full orchestrated application simulation ---');
-let simulatedStep = 1;
-const mockOrchestrationWebview: WebviewTarget = {
-  executeJavaScript: async <T>(code: string): Promise<T> => {
-    let res: any = true;
-    if (code.includes('getAllElementsInScope') || code.includes('processedElements') || code.includes('input:not([type="hidden"])')) {
-      if (simulatedStep <= 2) {
-        res = [
-          {
-            id: 'phone-input',
-            selector: '[data-za-id="phone"]',
-            tagName: 'input',
-            inputType: 'tel',
-            label: 'Phone number',
-            placeholder: '',
-            name: 'phoneNumber',
-            currentValue: '',
-            required: true,
-            hasError: false,
-            rect: { x: 10, y: 10, width: 200, height: 30 },
-          },
-        ];
-      } else {
-        res = [];
-      }
-    } else if (code.includes("el.closest('.jobs-search-box") || code.includes('isSearchBarOrNav')) {
-      res = false;
-    } else if (code.includes('platform = \'other\'')) {
-      res = {
-        url: 'https://www.linkedin.com/jobs/view/1234567890/',
-        title: 'Senior Frontend Engineer at Stripe',
-        state: simulatedStep === 1 ? 'job_detail' : 'easy_apply_modal',
-        platform: 'linkedin',
-        hasActiveModal: simulatedStep > 1,
-        applyButton: {
-          exists: simulatedStep === 1,
-          type: 'easy_apply',
-          text: 'Easy Apply',
-          selector: 'button.jobs-apply-button',
-          isModalTrigger: true,
-        },
-        jobTitle: 'Senior Frontend Engineer',
-        companyName: 'Stripe',
-      };
-    } else if (code.includes('formSelectors')) {
-      res = true;
-    } else if (code.includes('config.selector') || code.includes('React synthetic input') || code.includes('formFiller') || code.includes('new CustomEvent')) {
-      res = { success: true };
-    } else if (code.includes('candidateButtons')) {
-      if (simulatedStep === 1) {
-        res = { exists: true, action: 'next', selector: '[data-za-step-btn="true"]', text: 'next', disabled: false };
-      } else if (simulatedStep === 2) {
-        res = { exists: true, action: 'submit', selector: '[data-za-step-btn="true"]', text: 'submit application', disabled: false };
-      } else {
-        res = { exists: false, action: 'none', selector: '', text: '', disabled: false };
-      }
-    } else if (code.includes('btn.click()') || code.includes('targetBtn.click()')) {
-      simulatedStep++;
-      res = true;
-    } else if (code.includes('your application was sent') || code.includes('application submitted')) {
-      res = simulatedStep >= 2;
-    }
-
-    return res as unknown as T;
-  },
-};
-
-const orchestratorResult = await orchestrator.runApplication(mockOrchestrationWebview, mockPersona, {
-  maxSteps: 5,
-  stepDelayMs: 10,
-});
-
-console.log('Orchestrator Result:', orchestratorResult);
-assert.equal(orchestratorResult.outcome, 'submitted');
-assert.ok(orchestratorResult.fieldsFilled >= 1);
-console.log('✅ Orchestrator successfully executed complete multi-step application workflow!');
+const fixtureBrowser = await chromium.launch({ channel: 'chrome', headless: true });
+try {
+  const page = await fixtureBrowser.newPage();
+  await page.route('https://www.linkedin.com/**', route => route.fulfill({ contentType: 'text/html', body: `<dialog open style="width:700px;height:400px"><h2>Apply to Fixture Company</h2><label for="email">Email address</label><input id="email" type="email" required><label for="expected">Expected salary in INR*</label><input id="expected" type="number" value="0" required><label for="years">Please select your total years of professional experience:*</label><select id="years" required><option value="" disabled>Select an option</option><option value="0" selected>0 year</option></select><label for="months">Please select your total additional months of experience:*</label><select id="months" required><option value="" disabled>Select an option</option><option value="0" selected>0 month</option></select><div><label for="optional">Optional department</label><select id="optional"><option value="" selected>Select an option</option><option value="other">Other</option></select></div><footer><button id="next">Review</button></footer></dialog><script>
+    document.querySelector('#next').onclick = () => {
+      if (!document.querySelector('#email').checkValidity()) return;
+      window.salaryAndExperience = { expected: document.querySelector('#expected').value, years: document.querySelector('#years').value, months: document.querySelector('#months').value };
+      if (window.salaryAndExperience.expected !== '700000' || window.salaryAndExperience.years !== '0' || window.salaryAndExperience.months !== '0') return;
+      document.querySelector('dialog').innerHTML = '<h2>Review your application</h2><footer><button id="submit">Submit application</button></footer>';
+      document.querySelector('#submit').onclick = () => { setTimeout(() => { document.querySelector('dialog').innerHTML = '<h2>Your application was sent to Fixture Company!</h2>'; }, 1200); };
+    };
+  </script>` }));
+  await page.goto('https://www.linkedin.com/jobs/view/1234567890/');
+  const target = { executeJavaScript: <T>(code: string): Promise<T> => page.evaluate<T>(code), getURL: () => page.url() } as WebviewTarget;
+  const result = await orchestrator.runApplication(target, { ...mockPersona, employmentStatus: 'fresher', experienceYears: 0, currentCtcLpa: 0, expectedSalaryLpa: 7 }, { maxSteps: 5, stepDelayMs: 10, allowSubmit: true });
+  assert.equal(result.outcome, 'submitted', JSON.stringify(result));
+  assert.ok(result.fieldsFilled >= 1);
+  assert.deepEqual(await page.evaluate('window.salaryAndExperience'), { expected: '700000', years: '0', months: '0' }, 'The exact fresher/expected-salary case must pass through Review and confirmation without pausing');
+  assert.match(await page.locator('dialog').innerText(), /Your application was sent/);
+  console.log('✅ Real browser fixture completed field filling, Next, review and confirmed submission.');
+} finally { await fixtureBrowser.close(); }
 
 console.log('--- TEST 6: BatchRunner card iteration and skipping ---');
 let currentCardIndex = -1;
@@ -277,11 +224,21 @@ const mockBatchWebview: WebviewTarget = {
   },
 };
 
-const batchResult = await batchRunner.runBatch(mockBatchWebview, mockPersona, {
-  maxApplications: 5,
-  delayBetweenJobsMs: 0,
-  allowExternalApply: false,
-});
+const originalRunApplication = orchestrator.runApplication;
+let batchOrchestrations = 0;
+orchestrator.runApplication = async () => {
+  batchOrchestrations++;
+  return { outcome: 'submitted', platform: 'LinkedIn', fieldsFilled: 1, stepsExecuted: 2 };
+};
+let batchResult;
+try {
+  batchResult = await batchRunner.runBatch(mockBatchWebview, mockPersona, {
+    maxApplications: 5,
+    delayBetweenJobsMs: 0,
+    allowExternalApply: false,
+  });
+} finally { orchestrator.runApplication = originalRunApplication; }
+assert.equal(batchOrchestrations, 2, 'Only eligible cards should invoke orchestration');
 
 console.log('Batch Result:', batchResult);
 assert.equal(batchResult.totalAttempted, 3, 'Should attempt 3 cards');

@@ -1,4 +1,3 @@
-import { isGenderQuestion } from '../autofill/genderAnswer';
 import { AppStateMachine } from '../stateMachine/appStateMachine';
 import type { PersonaData } from '../../types';
 import { QuestionMemoryBank } from '../memory/questionMemory';
@@ -72,18 +71,6 @@ export class AgentEngine {
             const res = await resolveQuestion(field, persona);
             answerVal = res.answer;
             sourceVal = res.source;
-          }
-
-          if (!answerVal && !isGenderQuestion(`${field.contextHint || ''} ${field.label || field.name}`) && (field.inputType === 'radio' || (field.options && field.options.length > 0))) {
-            if (field.options && field.options.length > 0) {
-              const affirmative = field.options.find(o => /^(yes|agree|confirm|true)$/i.test(o.trim()))
-                || field.options.find(o => /yes|agree|confirm|true/i.test(o.trim()))
-                || field.options[0];
-              answerVal = affirmative;
-            } else {
-              answerVal = 'Yes';
-            }
-            sourceVal = 'fallback';
           }
 
           if (answerVal) {

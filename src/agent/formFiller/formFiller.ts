@@ -1,4 +1,4 @@
-import { buildTypeaheadSelectionScript, buildTypeaheadVerificationScript } from './typeaheadSelection';
+import { selectTypeaheadOption } from './typeaheadSelection';
 import { executeSyntheticInteraction } from '../domScanner/syntheticInteraction';
 import { matchSelectOption } from './optionMatching';
 import { OPTION_MATCHERS_SCRIPT } from './optionMatchingScript';
@@ -107,15 +107,7 @@ export async function fillField(
       return false;
     })()`).catch(() => false);
     if (isTypeahead) {
-      const dispatched = await webview.executeJavaScript<boolean>(buildTypeaheadSelectionScript(allSelectors, value)).catch(() => false);
-      let selected = false;
-      if (dispatched) {
-        for (let attempt = 0; attempt < 30; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-          selected = await webview.executeJavaScript<boolean>(buildTypeaheadVerificationScript(allSelectors, value)).catch(() => false);
-          if (selected) break;
-        }
-      }
+      const selected = await selectTypeaheadOption(webview, allSelectors, value);
       return { success: selected, selector, value, error: selected ? undefined : 'Matching autocomplete suggestion was not selected and confirmed.' };
     }
 

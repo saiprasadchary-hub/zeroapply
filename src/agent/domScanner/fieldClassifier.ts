@@ -1,3 +1,4 @@
+import { resolveScreeningFact } from '../localLlm/screeningFacts';
 /**
  * ZeroApply DOM Scanner - Advanced Field Classifier
  * Semantically classifies discovered DOM form fields into 20+ standardized candidate attributes,
@@ -7,7 +8,6 @@
 import type { PersonaData } from '../../types';
 import { isGenderQuestion, resolveGenderAnswer } from '../autofill/genderAnswer';
 import { resolveGeographicDetailsSync } from '../location/geoIntelligence';
-import { analyzeErrorConstraint } from '../localLlm/errorConstraintAnalyzer';
 import { matchBestOption } from '../localLlm/answerParser';
 
 /**
@@ -18,21 +18,11 @@ export function resolveSkillExperienceFromResume(
   options?: string[],
   persona?: PersonaData
 ): string {
-  const baseYears = persona?.experienceYears !== undefined ? String(persona.experienceYears) : '2';
-
-  // Binary Yes/No question
-  if (options && options.some(o => /^(yes|no)$/i.test(o.trim()))) {
-    const match = matchBestOption('Yes', options);
-    return match?.option || 'Yes';
-  }
-
-  // If specific options provided (e.g. ranges: "1-3 years", "3-5 years")
-  if (options && options.length > 0) {
-    const match = matchBestOption(baseYears, options);
-    if (match?.option) return match.option;
-  }
-
-  return baseYears;
+  if (!persona) return '';
+  const fact = resolveScreeningFact(text, persona);
+  if (fact !== undefined) return fact;
+  if (options?.some(option => /^(yes|no)$/i.test(option.trim()))) return '';
+  return persona.experienceYears === undefined ? '' : String(persona.experienceYears);
 }
 
 export interface ScannedField {
@@ -242,6 +232,12 @@ export function extractDegreeFromResume(persona?: PersonaData): string {
  * Classifies a single scanned field and optionally binds persona value.
  */
 export function classifySingleField(field: ScannedField, persona?: PersonaData): ClassifiedField {
+  const classified = classifySingleFieldUnchecked(field, persona);
+  const fact = persona ? resolveScreeningFact(field.label || '', persona) : undefined;
+  return fact === undefined ? classified : { ...classified, mappedValue: fact };
+}
+
+function classifySingleFieldUnchecked(field: ScannedField, persona?: PersonaData): ClassifiedField {
   // Combine context hint (legend / section heading), helper text, and error message with field labels
   const context = (field.contextHint || '').toLowerCase();
   const helper = (field.helperText || '').toLowerCase();
@@ -1059,71 +1055,6 @@ export function classifyFields(fields: ScannedField[], persona?: PersonaData): C
       return classified;
     }
 
-    // Universal validation error constraint handler (e.g. decimal, integer, URL, phone, etc.)
-    const activeErr = classified.errorMessage || '';
-    if (activeErr) {
-      const analysis = analyzeErrorConstraint(activeErr);
-      if (analysis.category === 'decimal') {
-        const currentVal = classified.mappedValue ? Number(classified.mappedValue) : NaN;
-        const isCurrentNonNumeric = isNaN(currentVal);
-        const min = analysis.targetMinValue ?? 0;
-        const violatesMin = !isCurrentNonNumeric && (currentVal < min || (currentVal === min && /(?:larger|greater|more)\s*than/i.test(activeErr)));
-        if (isCurrentNonNumeric || violatesMin) {
-          classified.mappedValue = min > 0 ? `${(min + 1.0).toFixed(1)}` : '1.0';
-        }
-      } else if (analysis.category === 'whole_number' || analysis.category === 'min_numeric') {
-        const min = analysis.targetMinValue ?? 1;
-        const currentVal = classified.mappedValue ? Number(classified.mappedValue) : NaN;
-        const isCurrentNonNumeric = isNaN(currentVal);
-        const violatesMin = !isCurrentNonNumeric && (currentVal < min || (currentVal === min && /(?:larger|greater|more)\s*than/i.test(activeErr)));
-
-        if (isCurrentNonNumeric || violatesMin) {
-          const isCompField = classified.fieldType === 'salary' || /salary|compensation|pay|ctc|remuneration|wage/i.test(classified.label || '');
-          if (isCompField && persona) {
-            const isCurrentCtc = /current\s*(?:ctc|salary|compensation|pay|rate|package)|present\s*(?:ctc|salary|compensation|pay|rate)|existing\s*ctc/i.test(classified.label || '');
-            const isFresher = persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working');
-            let baseLpa: number;
-            if (isCurrentCtc) {
-              baseLpa = isFresher ? 0 : (persona.currentCtcLpa !== undefined ? persona.currentCtcLpa : (persona.minSalary || 8));
-            } else {
-              baseLpa = (persona?.expectedSalaryLpa ?? persona?.minSalary) || 12;
-            }
-
-            if (baseLpa <= 150 && min >= 100 && baseLpa > 0) {
-              // Convert LPA shorthand (e.g. 8) to full INR value (e.g. 800000)
-              classified.mappedValue = String(baseLpa * 100000);
-            } else {
-              const safeMin = /(?:larger|greater|more)\s*than/i.test(activeErr) ? min + 1 : min;
-              classified.mappedValue = String(Math.max(baseLpa, safeMin));
-            }
-          } else if (/\b(?:experience|years?|yrs?)\b/i.test(classified.label || '') && !/expected|example/i.test(classified.label || '') && persona) {
-            const safeMin = /(?:larger|greater|more)\s*than/i.test(activeErr) ? min + 1 : min;
-            classified.mappedValue = String(Math.max(persona.experienceYears || 2, safeMin));
-          } else {
-            const safeMin = /(?:larger|greater|more)\s*than/i.test(activeErr) ? min + 1 : min;
-            classified.mappedValue = String(safeMin);
-          }
-        }
-      } else if (analysis.category === 'url' && persona) {
-        if (/portfolio|personal\s*website|personal\s*site|homepage/i.test(classified.label || '')) {
-          const rawP = (persona.portfolio || persona.portfolioUrl || '').trim();
-          const hasP = Boolean(rawP && rawP !== 'N/A' && !/^(none|nil|no|false)$/i.test(rawP));
-          classified.mappedValue = hasP ? rawP : (persona.linkedinUrl || persona.githubUrl || 'https://linkedin.com');
-        } else {
-          classified.mappedValue = persona.linkedinUrl || persona.portfolioUrl || persona.githubUrl || 'https://linkedin.com';
-        }
-      } else if (analysis.category === 'phone' && persona) {
-        classified.mappedValue = persona.phone || '+91 9876543210';
-      } else if (analysis.category === 'email' && persona) {
-        classified.mappedValue = persona.email || 'candidate@example.com';
-      } else if (analysis.category === 'required_selection' && classified.options && classified.options.length > 0) {
-        const affirmative = classified.options.find(o => /^(yes|agree|confirm|true|followed)$/i.test(o.trim()))
-          || classified.options.find(o => /yes|agree|confirm|true|followed/i.test(o.trim()));
-        const validNonPlaceholder = classified.options.find(o => !/^(select|choose|select an option|please select|--)$/i.test(o.trim()));
-        classified.mappedValue = affirmative || validNonPlaceholder || classified.options[0];
-      }
-    }
-
     // Sanity check: If options are binary Yes/No, mappedValue must be 'Yes' or 'No'
     if (classified.options && classified.options.some((o) => /^(yes|no)$/i.test(o.trim()))) {
       if (classified.mappedValue && !/^(yes|no)$/i.test(classified.mappedValue)) {
@@ -1134,6 +1065,10 @@ export function classifyFields(fields: ScannedField[], persona?: PersonaData): C
           classified.mappedValue = 'Yes';
         }
       }
+    }
+    if (persona) {
+      const fact = resolveScreeningFact(classified.label || '', persona);
+      if (fact !== undefined) classified.mappedValue = fact;
     }
     return classified;
   });

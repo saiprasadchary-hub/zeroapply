@@ -1,3 +1,4 @@
+import { beginInference, finishInference } from '../telemetry/agentHealth';
 export interface WebLlmEngineState {
   isReady: boolean;
   isLoading: boolean;
@@ -68,5 +69,13 @@ export async function generateWebLlmResponse(prompt: string, systemPrompt = '', 
   await ensureEmbeddedModelReady();
   const generate = typeof window === 'undefined' ? undefined : window.zeroApply?.generateEmbeddedLlm;
   if (!generate) throw new Error('Built-in AI requires the desktop app.');
-  return generate({ prompt, systemPrompt, temperature, maxTokens, images });
+  const id = beginInference(currentState.modelName || 'Local AI', Boolean(images?.length));
+  try {
+    const answer = await generate({ prompt, systemPrompt, temperature, maxTokens, images });
+    finishInference(id);
+    return answer;
+  } catch (error: unknown) {
+    finishInference(id, error instanceof Error ? error.message : 'Local AI request failed.');
+    throw error;
+  }
 }

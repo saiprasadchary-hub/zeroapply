@@ -1,3 +1,5 @@
+import type { WebviewTarget } from '../domScanner/injectedScanner';
+
 /** Commit an autocomplete suggestion; typing its label alone is not a selection. */
 export function buildTypeaheadSelectionScript(selectors: string[], value: string): string {
   return `(async () => {
@@ -12,7 +14,8 @@ export function buildTypeaheadSelectionScript(selectors: string[], value: string
       };
       const visible = el => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
       let input = find();
-      if (!input || input.tagName !== 'INPUT') return false;
+      if (!input) return false;
+      const isInput = input.tagName === 'INPUT';
       const lists = () => {
         const current = find();
         if (!current) return [];
@@ -23,7 +26,8 @@ export function buildTypeaheadSelectionScript(selectors: string[], value: string
       };
       diagnostics.stage = 'opening-suggestions';
       input.focus();
-      if (normalize(input.value) !== normalize(target) || !lists().length) {
+      if (!isInput) { input.click(); }
+      if (isInput && (normalize(input.value) !== normalize(target) || !lists().length)) {
         const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
         if (setter) setter.call(input, target); else input.value = target;
         // React ignores same-value input events unless its tracked previous value changes.
@@ -46,8 +50,8 @@ export function buildTypeaheadSelectionScript(selectors: string[], value: string
       // Focusing a suggestion first can blur the input and destroy React's popup.
       // Move the visible cursor without moving focus, then activate the nested button once.
       if (window.__zeroapplyCursor?.moveToElement) {
-        if (!await window.__zeroapplyCursor.moveToElement(clickable, 'Select location: ' + target)) return false;
-      } else { clickable.scrollIntoView({ block: 'nearest' }); }
+        if (!await window.__zeroapplyCursor.moveToElement(clickable, 'Select option: ' + target, { scroll: false })) { diagnostics.stage = 'cursor-could-not-reach-suggestion'; return false; }
+      }
       if (!clickable.isConnected) return false;
       const rect = clickable.getBoundingClientRect();
       const event = { bubbles: true, cancelable: true, composed: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0 };
@@ -60,7 +64,7 @@ export function buildTypeaheadSelectionScript(selectors: string[], value: string
       // Use only the index of the already-validated exact match, never a blind Enter.
       await new Promise(resolve => setTimeout(resolve, 300));
       input = find();
-      if (input && lists().length) {
+      if (isInput && input && lists().length) {
         const options = lists().flatMap(list => Array.from(list.querySelectorAll('[role="option"]'))).filter(visible);
         const targetIndex = options.findIndex(option => normalize(option.innerText || option.textContent) === normalize(target));
         const activeId = input.getAttribute('aria-activedescendant');
@@ -97,12 +101,24 @@ export function buildTypeaheadVerificationScript(selectors: string[], value: str
     const normalize = value => String(value || '').toLowerCase().replace(/\\s+/g, ' ').trim();
     for (const selector of ${JSON.stringify(selectors)}) {
       let input; try { input = document.querySelector(selector); } catch { continue; }
-      if (!input || input.tagName !== 'INPUT') continue;
-      if (normalize(input.value) !== normalize(${JSON.stringify(value)}) || input.getAttribute('aria-invalid') === 'true') return false;
+      if (!input) continue;
+      const actual = input.tagName === 'INPUT' ? input.value : input.getAttribute('aria-valuetext') || input.innerText || input.textContent;
+      if (normalize(actual) !== normalize(${JSON.stringify(value)}) || input.getAttribute('aria-invalid') === 'true') return false;
       const owned = (input.getAttribute('aria-controls') || input.getAttribute('aria-owns') || '').split(/\\s+/).filter(Boolean);
       const menus = owned.map(id => document.getElementById(id)).filter(menu => menu && menu.getClientRects().length && getComputedStyle(menu).visibility !== 'hidden');
       return !menus.some(menu => Array.from(menu.querySelectorAll('[role="option"]')).some(option => option.getClientRects().length));
     }
     return false;
   })()`;
+}
+
+/** Shared by direct form filling and generic synthetic interaction. */
+export async function selectTypeaheadOption(view: WebviewTarget, selectors: string[], value: string): Promise<boolean> {
+  const dispatched = await view.executeJavaScript<boolean>(buildTypeaheadSelectionScript(selectors, value)).catch(() => false);
+  if (!dispatched) return false;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    if (await view.executeJavaScript<boolean>(buildTypeaheadVerificationScript(selectors, value)).catch(() => false)) return true;
+  }
+  return false;
 }

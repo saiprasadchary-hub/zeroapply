@@ -58,9 +58,10 @@ memory.clear();
 memory.seedFromPersona(mockPersona);
 
 // Exact lookup
-const exact = memory.lookup('Legal authorization to work');
+const exact = memory.lookup('years of experience');
 assert.equal(exact.hit, true, 'Exact lookup should hit');
-assert.equal(exact.answer, 'Yes');
+assert.equal(exact.answer, '6');
+assert.equal(memory.lookup('Legal authorization to work').hit, false, 'Authorization requires an explicit user answer');
 
 // Fuzzy lookup with synonym expansion & phrasing change
 const fuzzyYrs = memory.lookup('How many yrs exp do you have?');
@@ -68,8 +69,7 @@ assert.equal(fuzzyYrs.hit, true, 'Fuzzy lookup with yrs exp should hit');
 assert.equal(fuzzyYrs.answer, '6');
 
 const fuzzySpons = memory.lookup('Do you require visa sponsorship now or in the future?');
-assert.equal(fuzzySpons.hit, true, 'Fuzzy lookup for sponsorship should hit');
-assert.equal(fuzzySpons.answer, 'No');
+assert.equal(fuzzySpons.hit, false, 'Sponsorship must not be seeded without a user answer');
 
 console.log('✅ QuestionMemoryBank: Exact and fuzzy retrieval verified.');
 
@@ -90,7 +90,8 @@ const prompt = buildQuestionPrompt({
   options: ['Yes, I am authorized', 'No, I need sponsorship'],
   inputType: 'select',
 });
-assert.ok(prompt.systemPrompt.includes('Respond with EXACTLY one matching option'), 'System prompt should include guardrails');
+assert.ok(prompt.systemPrompt.includes('return exactly one supplied non-placeholder option'), 'System prompt should require a valid supplied option');
+assert.ok(prompt.systemPrompt.includes('output exactly UNKNOWN'), 'Unsupported answers must remain unknown');
 assert.ok(prompt.userPrompt.includes('Alex Vance'), 'User prompt should include candidate name');
 
 // Answer Parser tests

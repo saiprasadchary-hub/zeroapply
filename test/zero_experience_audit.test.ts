@@ -1,0 +1,30 @@
+import { resolveScreeningFact } from '../src/agent/localLlm/screeningFacts';
+import type { PersonaData } from '../src/types';
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright-core';
+import { auditFormFields } from '../src/agent/formFiller/formAuditor';
+import type { WebviewTarget } from '../src/agent/domScanner/injectedScanner';
+const fresher = { employmentStatus: 'fresher', experienceYears: 0 } as PersonaData;
+assert.equal(resolveScreeningFact('Please select your total additional months of experience:*', fresher), '0');
+assert.equal(resolveScreeningFact('Total additional months of experience', { ...fresher, employmentStatus: 'currently_working', experienceYears: 2.5 }), '6');
+assert.equal(resolveScreeningFact('Total months of professional experience', { ...fresher, employmentStatus: 'currently_working', experienceYears: 2.5 }), '30');
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+try {
+  const page = await browser.newPage();
+  const view = { executeJavaScript: <T>(script: string): Promise<T> => page.evaluate<T>(script) } as WebviewTarget;
+  await page.setContent('<dialog open><label for="years">Total years of experience*</label><select required id="years"><option value="" disabled>Select an option</option><option value="0" selected>0 year</option></select><label for="months">Additional months of experience*</label><select required id="months"><option value="" disabled>Select an option</option><option value="0" selected>0 month</option></select><button>Review</button></dialog>');
+  let result = await auditFormFields(view);
+  assert.equal(result.ready, true, JSON.stringify(result));
+  assert.deepEqual(result.missingRequired, []);
+  await page.locator('#months').evaluate((select: HTMLSelectElement) => { select.selectedIndex = 0; });
+  result = await auditFormFields(view);
+  assert.equal(result.ready, false, 'Real blank placeholder must still block Review');
+  assert.ok(result.missingRequired.some(label => label.includes('Additional months')), 'Audit must identify the actual field label');
+  await page.setContent('<dialog open><label for="years">Experience*</label><select id="years" required><option value="0" selected>Select an option</option><option value="1">1 year</option></select></dialog>');
+  assert.equal((await auditFormFields(view)).ready, false, 'Placeholder using zero as its internal value remains invalid');
+  await page.setContent('<dialog open><label for="count">Count*</label><select id="count" required><option value="0" selected>0</option><option value="1">1</option></select></dialog>');
+  assert.equal((await auditFormFields(view)).ready, true, 'A literal zero can be a valid option label');
+  await page.locator('#count').evaluate(select => select.setAttribute('aria-invalid', 'true'));
+  assert.equal((await auditFormFields(view)).ready, false, 'Actual validation errors still block navigation');
+  console.log('Zero experience audit passed: valid 0-year/month and numeric zero accepted, real placeholders/errors blocked, native labels retained.');
+} finally { await browser.close(); }

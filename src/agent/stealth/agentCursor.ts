@@ -430,7 +430,7 @@ export function getVisualCursorScript(
   return `
 (() => {
   const existingRoot = document.getElementById('zeroapply-codex-cursor-root');
-  if (window.__zeroapplyCursor && existingRoot?.dataset.layerVersion === '2' && (document.body?.contains(existingRoot) || document.documentElement.contains(existingRoot))) {
+  if (window.__zeroapplyCursor && existingRoot?.dataset.layerVersion === '3' && (document.body?.contains(existingRoot) || document.documentElement.contains(existingRoot))) {
     return;
   }
   window.__zeroapplyCursorLayerObserver?.disconnect();
@@ -2526,7 +2526,7 @@ export function getVisualCursorScript(
   root.appendChild(container);
   
   safeMountCursor();
-  root.dataset.layerVersion = '2';
+  root.dataset.layerVersion = '3';
   root.setAttribute('popover', 'manual');
   root.style.margin = '0'; root.style.padding = '0'; root.style.border = '0'; root.style.background = 'transparent';
   let lastModal = null;
@@ -2987,11 +2987,11 @@ export function getVisualCursorScript(
         });
       });
     },
-    moveToElement: async (selector, badge) => {
+    moveToElement: async (selector, badge, options) => {
       ensureDomAttached();
       const el = findCursorTarget(selector);
       if (!el || !el.isConnected) return false;
-      el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
+      if (options?.scroll !== false) el.scrollIntoView({ behavior: 'instant', block: options?.scrollBlock || 'center', inline: 'nearest' });
       const position = () => {
         if (!el.isConnected) return null;
         const rect = el.getBoundingClientRect();

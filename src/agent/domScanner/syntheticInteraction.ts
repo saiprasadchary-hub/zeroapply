@@ -1,3 +1,5 @@
+import { selectTypeaheadOption } from '../formFiller/typeaheadSelection';
+import type { WebviewTarget } from './injectedScanner';
 /**
  * ZeroApply Universal Synthetic Interaction Engine (Production Grade)
  * 
@@ -152,78 +154,6 @@ window.__zeroapplySynthetic = {
   },
 
   // 4. Custom Combobox & Portal Driver (Radix, MUI, React-Select, Ant Design)
-  async fillTypeahead(selector, desiredValue) {
-    const el = document.querySelector(selector);
-    if (!el) return { success: false, error: 'Combobox not found: ' + selector };
-
-    try {
-      if (typeof el.scrollIntoView === 'function') {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-
-      el.focus();
-      el.click();
-
-      // Wait 180ms for portal popup to mount
-      await new Promise((r) => setTimeout(r, 180));
-
-      const target = desiredValue.toLowerCase().trim();
-
-      // Look for mounted options in portal or DOM
-      function findActiveOptions() {
-        const portal = document.querySelector(
-          '[data-radix-popper-content-wrapper], [role="listbox"], .select__menu, .ant-select-dropdown:not(.ant-select-dropdown-hidden), .artdeco-typeahead__results'
-        );
-        const root = portal || document;
-        return Array.from(root.querySelectorAll('[role="option"], .select__option, .typeahead-result, li[data-value], .ant-select-item-option-content'));
-      }
-
-      let options = findActiveOptions();
-
-      // Try direct match from open menu
-      let match = options.find((opt) => (opt.innerText || opt.textContent || '').toLowerCase().trim() === target);
-      if (!match) {
-        match = options.find((opt) => (opt.innerText || opt.textContent || '').toLowerCase().includes(target));
-      }
-
-      if (match) {
-        match.scrollIntoView({ block: 'nearest' });
-        match.click();
-        return { success: true, actionTaken: 'Clicked combobox option: ' + (match.innerText || desiredValue) };
-      }
-
-      // If typing is required to filter options
-      if (el.tagName === 'INPUT' || el.querySelector('input')) {
-        const inputEl = el.tagName === 'INPUT' ? el : el.querySelector('input');
-        const prefix = desiredValue.slice(0, Math.min(5, desiredValue.length));
-        
-        inputEl.value = prefix;
-        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-        await new Promise((r) => setTimeout(r, 280));
-
-        options = findActiveOptions();
-        match = options.find((opt) => (opt.innerText || opt.textContent || '').toLowerCase().includes(target)) || options[0];
-
-        if (match) {
-          match.click();
-          return { success: true, actionTaken: 'Selected filtered option: ' + (match.innerText || desiredValue) };
-        }
-      }
-
-      // Fallback: Dispatch full value and close
-      if (el.tagName === 'INPUT') {
-        el.value = desiredValue;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        el.dispatchEvent(new Event('blur', { bubbles: true }));
-      }
-
-      return { success: true, actionTaken: 'Applied combobox value: ' + desiredValue };
-    } catch (err) {
-      return { success: false, error: String(err) };
-    }
-  },
-
   // 5. Checkbox & Switch Toggler
   async toggleCheckbox(selector, shouldCheck) {
     const el = document.querySelector(selector);
@@ -320,12 +250,16 @@ window.__zeroapplySynthetic = {
 `;
 
 export async function executeSyntheticInteraction(
-  webview: any,
+  webview: WebviewTarget,
   widgetType: string,
   selector: string,
   value: string
 ): Promise<InteractionResult> {
   try {
+    if (widgetType === 'combobox') {
+      const success = await selectTypeaheadOption(webview, [selector], value);
+      return { success, actionTaken: success ? 'Selected and verified matching dropdown option' : 'Dropdown selection was not confirmed', error: success ? undefined : 'No committed matching option was found.' };
+    }
     // Inject synthetic helper into webview context
     await webview.executeJavaScript(SYNTHETIC_INJECTION_SCRIPT + '\nvoid 0;');
 
@@ -337,8 +271,7 @@ export async function executeSyntheticInteraction(
       script = `window.__zeroapplySynthetic.selectOption('${safeSelector}', '${safeValue}')`;
     } else if (widgetType === 'radiogroup') {
       script = `window.__zeroapplySynthetic.selectRadio('${safeSelector}', '${safeValue}')`;
-    } else if (widgetType === 'combobox') {
-      script = `window.__zeroapplySynthetic.fillTypeahead('${safeSelector}', '${safeValue}')`;
+
     } else if (widgetType === 'checkboxgroup') {
       script = `window.__zeroapplySynthetic.selectCheckboxGroup('${safeSelector}', '${safeValue}')`;
     } else if (widgetType === 'checkbox' || widgetType === 'switch') {
@@ -348,13 +281,13 @@ export async function executeSyntheticInteraction(
       script = `window.__zeroapplySynthetic.fillTextInput('${safeSelector}', '${safeValue}')`;
     }
 
-    const res = await webview.executeJavaScript(script);
+    const res = await webview.executeJavaScript<InteractionResult>(script);
     return res || { success: true, actionTaken: 'Executed interaction' };
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       success: false,
       actionTaken: 'Interaction failed',
-      error: err?.message || String(err),
+      error: err instanceof Error ? err.message : String(err),
     };
   }
 }

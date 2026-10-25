@@ -16,6 +16,8 @@ export function createOptionMatchers(): {
 
   function optionPolarity(value: string): 'yes' | 'no' | null {
     const text = normalizeOption(value);
+    if (/^yes\s*[,.:–—-]/i.test(text)) return 'yes';
+    if (/^no\s*[,.:–—-]/i.test(text)) return 'no';
     if (['yes', 'true', 'ja', 'sí', 'si', 'oui', 'sim', 'да', 'हाँ', 'evet'].includes(text)) return 'yes';
     if (['no', 'false', 'nein', 'non', 'não', 'нет', 'नहीं', 'hayır'].includes(text)) return 'no';
     return null;

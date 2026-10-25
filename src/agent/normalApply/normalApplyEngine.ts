@@ -1,3 +1,4 @@
+import { captureSubmissionEvidence, saveSubmissionEvidence } from '../tracker/submissionEvidenceStore';
 import type { PersonaData } from '../../types';
 import { TabLifecycleManager } from './tabLifecycleManager';
 import { ExternalAtsDetector } from './externalAtsDetector';
@@ -97,7 +98,7 @@ export class NormalApplyEngine {
         extView,
         persona,
         target.jobTitle,
-        config
+        { ...config, companyName: target.companyName }
       );
 
       // 5. Verify submission status
@@ -115,6 +116,21 @@ export class NormalApplyEngine {
         isConfirmed ? `External application confirmed: ${confirmationReason}` : 'External application in progress or awaiting completion.'
       );
 
+      let evidenceId: string | undefined;
+      let evidenceError: string | undefined;
+      if (isConfirmed) {
+        try {
+          const bundle = await captureSubmissionEvidence(extView, {
+            applicant: { name: persona.fullName, email: persona.email }, jobUrl: finalUrl,
+            companyName: target.companyName, jobTitle: target.jobTitle, answers: fillProgress.answers || [],
+          });
+          await saveSubmissionEvidence(bundle); evidenceId = bundle.id;
+        } catch (error: unknown) {
+          evidenceError = error instanceof Error ? error.message : 'Could not save application proof.';
+          callbacks.notifyLog?.(`Application confirmed; proof could not be saved: ${evidenceError}`, 'warning');
+        }
+      }
+
       // 6. Record Application Telemetry and Quota
       ApplicationLogger.log({
         portal: atsProfile.displayName,
@@ -123,6 +139,7 @@ export class NormalApplyEngine {
         status: isConfirmed ? 'SUCCESS' : fillProgress.totalFieldsFilled > 0 ? 'PARTIAL' : 'FAILED',
         jobUrl: target.jobUrl || finalUrl,
         url: finalUrl,
+        evidenceId, evidenceError,
         details: fillProgress.error,
         fieldsFilled: fillProgress.totalFieldsFilled,
         totalFields: Math.max(fillProgress.totalFieldsFilled, 5),

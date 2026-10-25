@@ -131,7 +131,8 @@ assert.equal(resumedActionCalls, 0, 'resume must verify an interrupted submit in
 const easyBatchSource = readFileSync('src/agent/autoApply/autoApplyEngine.ts', 'utf8');
 const standardBatchSource = readFileSync('src/agent/All supported forms/standardFormsEngine.ts', 'utf8');
 const agentBrowserSource = readFileSync('AgentBrowser/AgentBrowser.tsx', 'utf8');
-assert.match(easyBatchSource, /allowSubmit\s*&&\s*!workflow\.haltBatch/);
+assert.match(easyBatchSource, /allowSubmit: effectiveSubmit/);
+assert.match(readFileSync('src/agent/workflow/orchestrator.ts', 'utf8'), /options\.allowSubmit !== true/);
 assert.match(standardBatchSource, /allowSubmit\s*&&\s*!workflow\.haltBatch/);
 assert.match(agentBrowserSource, /Browser interruption detected\. Auto-restarting/);
 assert.match(agentBrowserSource, /Reconnecting to the current Chrome page/);

@@ -28,6 +28,7 @@ export interface TabBridgeCallbacks {
 }
 
 export interface NormalApplyConfig {
+  companyName?: string;
   maxSteps?: number;
   stepDelayMs?: number;
   allowSubmit?: boolean;

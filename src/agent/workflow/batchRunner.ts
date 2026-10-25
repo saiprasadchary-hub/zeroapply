@@ -11,6 +11,7 @@ import { orchestrator } from './orchestrator';
 import { liveTelemetry } from '../telemetry/liveTelemetry';
 
 export interface BatchOptions {
+  allowSubmit?: boolean;
   maxApplications?: number;
   delayBetweenJobsMs?: number;
   allowExternalApply?: boolean;
@@ -91,6 +92,7 @@ export class BatchRunner {
 
       if (pageInfo.applyButton.type === 'easy_apply' || pageInfo.hasActiveModal) {
         const result = await orchestrator.runApplication(webview, persona, {
+          allowSubmit: options.allowSubmit === true,
           maxSteps: 10,
           stepDelayMs: delayBetweenJobsMs,
         });

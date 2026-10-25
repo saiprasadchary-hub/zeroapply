@@ -1,3 +1,5 @@
+import { dismissSubmissionReceipt } from '../recovery/postSubmissionDismissal';
+import { detectAtsArchitecture } from '../domScanner/atsDetector';
 import { SUBMISSION_EVIDENCE_SCRIPT } from '../normalApply/submissionEvidence';
 import { assertSiteAccessible } from '../security/siteAccess';
 import type { PersonaData } from '../../types';
@@ -116,7 +118,9 @@ export class AutoApplyEngine {
       // Recover a late receipt without reopening or resubmitting the application.
       if (await view.executeJavaScript<boolean>(SUBMISSION_EVIDENCE_SCRIPT).catch(() => false)) {
         const receipt = await view.executeJavaScript<{ title: string; company: string; url: string }>(`(() => {
-          const text = document.body.innerText || '';
+          const roots = [document];
+          for (let i = 0; i < roots.length; i++) for (const el of roots[i].querySelectorAll('*')) if (el.shadowRoot) roots.push(el.shadowRoot);
+          const text = roots.map(root => root === document ? document.body?.innerText || '' : root.textContent || '').join(' ');
           const match = text.match(/your application (?:was|has been) sent to ([^!\\n]+)/i);
           return { title: document.title.split('|')[0].trim(), company: match?.[1]?.trim() || '', url: location.href };
         })()`);
@@ -125,7 +129,8 @@ export class AutoApplyEngine {
             status: 'SUCCESS', submissionEvidence: 'LinkedIn application-sent confirmation visible on page.' });
           processTracker.recordSubmissionCheck(true, 'Late application-sent receipt verified; no repeat submission.');
           this.notifyStatus(`Application confirmed: ${receipt.title} at ${receipt.company}.`);
-          this.notifyLog('Recovered the visible submission receipt without sending another click.', 'success');
+          await dismissSubmissionReceipt(view);
+          this.notifyLog('Recovered the visible submission receipt without sending another submit click.', 'success');
           return;
         }
       }
@@ -141,7 +146,6 @@ export class AutoApplyEngine {
 
       // Step 0: Detect target ATS architecture dynamically
       try {
-        const { detectAtsArchitecture } = await import('../domScanner/atsDetector');
         const ats = await detectAtsArchitecture(view);
         if (ats && ats.platform !== 'generic_portal') {
           platformLabel = ats.displayName;
@@ -494,6 +498,7 @@ export class AutoApplyEngine {
           // Execute full orchestrated application with 3D Visual Cursor, OmniVision, and Local Qwen 2.5
           const configuredDelay = options.stepDelayMs ?? 400;
           const appResult = await orchestrator.runApplication(view, persona, {
+            allowSubmit: effectiveSubmit,
             companyName: cardMeta?.company,
             jobTitle: cardMeta?.title,
             maxSteps: 12,
@@ -586,6 +591,7 @@ export class AutoApplyEngine {
               })()
             `).catch(() => {});
             await new Promise((r) => setTimeout(r, 500));
+            await dismissSubmissionReceipt(view);
             await ensureAllModalsClosed(view);
 
             // Log application
@@ -595,6 +601,7 @@ export class AutoApplyEngine {
               companyName: cardMeta?.company || 'Target Company',
               status: 'SUCCESS',
               jobUrl: cardMeta?.url,
+              evidenceId: appResult.evidenceId, evidenceError: appResult.evidenceError,
               fieldsFilled: appResult.fieldsFilled || 5,
               totalFields: appResult.fieldsFilled || 5,
             });
@@ -749,6 +756,7 @@ export class AutoApplyEngine {
         // Execute full orchestrated application with 3D Purple Visual Cursor & Local Qwen
         await ensureVisualCursor(view);
         const appRes = await orchestrator.runApplication(view, persona, {
+          allowSubmit: effectiveSubmit,
           companyName: singleCompany,
           jobTitle: singleJobTitle,
           maxSteps: 12,
@@ -835,6 +843,7 @@ export class AutoApplyEngine {
             })()
           `).catch(() => {});
           await new Promise((r) => setTimeout(r, 400));
+          await dismissSubmissionReceipt(view);
           await ensureAllModalsClosed(view);
 
           ApplicationLogger.log({
@@ -843,6 +852,7 @@ export class AutoApplyEngine {
             companyName: singleCompany,
             status: 'SUCCESS',
             jobUrl: singleJobUrl,
+            evidenceId: appRes.evidenceId, evidenceError: appRes.evidenceError,
             fieldsFilled: appRes.fieldsFilled,
             totalFields: Math.max(appRes.fieldsFilled, 5),
           });

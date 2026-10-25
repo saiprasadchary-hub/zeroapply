@@ -11,6 +11,8 @@ export interface ApplicationLogRecord {
   jobUrl?: string;
   url?: string;
   submissionEvidence?: string;
+  evidenceId?: string;
+  evidenceError?: string;
   details?: string;
 }
 
@@ -92,6 +94,8 @@ class ApplicationLoggerService {
       jobUrl: entry.jobUrl || entry.url,
       url: entry.url,
       submissionEvidence: entry.submissionEvidence,
+      evidenceId: entry.evidenceId,
+      evidenceError: entry.evidenceError,
       details: entry.details,
     };
 

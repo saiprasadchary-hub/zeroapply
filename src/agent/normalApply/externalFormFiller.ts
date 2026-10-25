@@ -1,3 +1,4 @@
+import type { SubmissionAnswer } from '../tracker/submissionEvidenceStore';
 import { isGenderQuestion, resolveGenderAnswer } from '../autofill/genderAnswer';
 import type { PersonaData } from '../../types';
 import { scanFormFields } from '../domScanner/injectedScanner';
@@ -9,13 +10,13 @@ import { attachResumeFile } from '../fileUpload/fileUploadBridge';
 import { stepNavigator } from '../navigation/wizardStepNavigator';
 import { liveTelemetry } from '../telemetry/liveTelemetry';
 import { processTracker } from '../tracker/processTracker';
-import { questionMemory } from '../memory/questionMemoryBank';
 import { ensureVisualCursor } from '../stealth/agentCursor';
 import { SubmissionVerifier } from './submissionVerifier';
 import type { NormalApplyConfig } from './normalApplyTypes';
 import { scanAndHandleWhatsApp } from '../workflow/whatsappHandler';
 
 export interface FormFillProgress {
+  answers?: SubmissionAnswer[];
   totalFieldsFilled: number;
   stepsCount: number;
   submitted: boolean;
@@ -38,6 +39,7 @@ export class ExternalFormFiller {
   ): Promise<FormFillProgress> {
     const { maxSteps = 15, stepDelayMs = 600, allowSubmit = true, auditMaxPasses = 3 } = config;
 
+    const verifiedAnswers = new Map<string, SubmissionAnswer>();
     let totalFieldsFilled = 0;
     let stepsCount = 0;
     let submitted = false;
@@ -133,12 +135,11 @@ export class ExternalFormFiller {
           let source: 'persona' | 'ollama' = 'persona';
 
           if (!answerVal) {
-            const res = await resolveQuestion({ ...field, jobContext: { jobTitle } }, persona);
+            const res = await resolveQuestion({ ...field, jobContext: { jobTitle, companyName: config.companyName } }, persona);
             answerVal = res.answer;
             source = res.source === 'persona' ? 'persona' : 'ollama';
 
             if (answerVal && field.label) {
-              questionMemory.addOrUpdateEntry(field.label, answerVal, 'llm', res.confidence || 0.9);
             }
           }
 
@@ -202,7 +203,7 @@ export class ExternalFormFiller {
       }
       let auditPasses = 0;
 
-      while ((!audit.ready || (audit.unansweredQuestions && audit.unansweredQuestions.length > 0)) && auditPasses < auditMaxPasses) {
+      while ((!audit.ready || (audit.unansweredQuestions || []).some(question => question.isRequired || question.hasError)) && auditPasses < auditMaxPasses) {
         const unanswered = (audit.unansweredQuestions || []).filter(
           (u) => u.isRequired || u.hasError || ((audit.unansweredQuestions?.length || 0) <= 3)
         );
@@ -236,7 +237,7 @@ export class ExternalFormFiller {
           if (isUnanswered) {
             let answerVal = ff.mappedValue;
             if (!answerVal) {
-              const res = await resolveQuestion({ ...ff, jobContext: { jobTitle } }, persona);
+              const res = await resolveQuestion({ ...ff, jobContext: { jobTitle, companyName: config.companyName } }, persona);
               answerVal = res.answer;
             }
 
@@ -259,6 +260,13 @@ export class ExternalFormFiller {
       }
 
       // 5. Detect forward action button (Next / Continue / Review / Submit)
+      const persisted = await scanFormFields(view).catch(() => []);
+      for (const field of persisted) {
+        if (field.label && field.currentValue && !/password|file/i.test(field.inputType || '')) {
+          verifiedAnswers.set(field.label, { question: field.label, answer: field.currentValue, source: 'verified form value' });
+        }
+      }
+
       let forwardBtn = await stepNavigator.detectForwardButton(view);
 
       // Deep ATS search fallback if default detector didn't find button
@@ -359,6 +367,7 @@ export class ExternalFormFiller {
     }
 
     return {
+      answers: [...verifiedAnswers.values()],
       totalFieldsFilled,
       stepsCount,
       submitted,

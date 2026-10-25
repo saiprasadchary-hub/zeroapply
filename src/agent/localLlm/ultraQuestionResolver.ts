@@ -1,3 +1,5 @@
+import { getScopedQuestionMemory } from '../memory/scopedQuestionMemory';
+import { resolveScreeningFact } from './screeningFacts';
 /**
  * ZeroApply Ultra Cognitive Reasoning Engine (Production Grade)
  * 
@@ -11,7 +13,6 @@
 
 import type { PersonaData } from '../../types';
 import { isGenderQuestion, resolveGenderAnswer } from '../autofill/genderAnswer';
-import { questionMemory } from '../memory/questionMemoryBank';
 import { generateOllamaAnswer, checkOllamaStatus } from './ollamaClient';
 import { resolveGeographicDetailsSync } from '../location/geoIntelligence';
 import { buildResumeChunks, findRelevantResumeContext } from '../memory/resumeContextRetriever';
@@ -60,293 +61,14 @@ export interface CognitiveAnswerResult {
 
 /**
  * TIER 0: Disqualification Armor 2.0
- * Exhaustive safeguard guaranteeing automated ATS filters never discard candidate.
+ * Legacy compatibility entry point; personal facts are resolved from saved evidence.
  */
-export function evaluateDisqualificationArmor(question: string, options?: string[]): {
-  isKnockout: boolean;
-  guaranteedAnswer?: string;
-  reason?: string;
+export function evaluateDisqualificationArmor(_question: string, _options?: string[]): {
+  isKnockout: boolean; guaranteedAnswer?: string; reason?: string;
 } {
-  const q = (question || '')
-    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035`]/g, "'")
-    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
-    .toLowerCase()
-    .trim();
-
-  // 1. Legal Authorization to Work
-  // Affirmative case: "Are you authorized to work?" -> YES
-  if (/(?:authorized|eligible|legal right|permit) to work/i.test(q) && !/require.*(?:sponsorship|visa)/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Work authorization must always be affirmative to clear automated filter.',
-    };
-  }
-
-  // 2. Visa Sponsorship Requirements
-  // Negative case: "Will you now or in the future require visa sponsorship?" -> NO
-  if (/require.*sponsorship|need.*visa.*sponsorship|future.*sponsorship/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('No', options),
-      reason: 'Sponsorship requirement set to No to clear initial ATS screening.',
-    };
-  }
-  // Reverse case: "Are you able to work without sponsorship?" -> YES
-  if (/work without.*sponsorship|authorized without.*visa/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Affirmative response for working without sponsorship.',
-    };
-  }
-
-  // 3. Criminal Background & Disciplinary Actions
-  if (/felony|criminal|misdemeanor|convicted|guilty.*plea/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('No', options),
-      reason: 'Background safeguard: Always No.',
-    };
-  }
-  if (/terminated for cause|fired|asked to resign|disciplinary|involuntary.*separation/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('No', options),
-      reason: 'Disciplinary safeguard: Always No.',
-    };
-  }
-
-  // 4. Non-Compete / Restrictive Covenants & NDAs
-  if (/non-?compete|non.*solicit|restrictive covenant|conflict of interest|breach.*agreement/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('No', options),
-      reason: 'No active non-compete preventing immediate employment.',
-    };
-  }
-
-  // 5. Age Requirement (18+)
-  if (/18 years of age|at least 18|legal age/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Candidate meets legal age requirement.',
-    };
-  }
-
-  // 6. Willingness to Relocate / Hybrid / On-site / Travel / Background Check / Shifts
-  if (
-    /willing to work|comfortable with|open to remote|willing to relocate|background check|drug test|drug screen|medical exam|able to travel|flexible hours|overtime|on-call|weekend|rotational/i.test(
-      q
-    )
-  ) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Affirmative response guarantees proceeding to human interview.',
-    };
-  }
-
-  // 7. Relatives / Nepotism Conflict of Interest
-  if (/relative.*work|family.*employed|conflict of interest/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('No', options),
-      reason: 'No family or nepotism conflict of interest.',
-    };
-  }
-
-  // 8. Driver's License & Mobility (ALWAYS YES)
-  if (
-    /(?:driver|driving)s?[\u2019'‘]?[s]?\s*licen[sc]e|clean\s*driving\s*record|reliable\s*transport(?:ation)?|valid\s*(?:driver|driving)\s*licen[sc]e|\bvalid\s*licen[sc]e\b|\bdriver'?s\s*lic/i.test(q) ||
-    (/\blicen[sc]e\b/i.test(q) && /driver|driving|vehicle|car|transport|valid/i.test(q))
-  ) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Candidate possesses valid driver license/mobility.',
-    };
-  }
-
-  // 9. Essential Functions & Accommodation
-  if (/essential functions|perform the job.*accommodation/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Able to perform all essential job functions.',
-    };
-  }
-
-  // 9.5. Minimum Education / Degree Completion (ALWAYS YES for binary Yes/No questions)
-  if (
-    /(?:completed|hold|possess|have)\s*(?:the\s*following\s*level\s*of\s*education|a\s*(?:bachelor|master|degree|diploma)|education)|level\s*of\s*education.*(?:bachelor|degree)/i.test(q) &&
-    (!options || options.some(o => /^(yes|no)$/i.test(o.trim())))
-  ) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Candidate meets minimum educational threshold.',
-    };
-  }
-
-  // 10. ITAR / Export Control / U.S. Person / Security Clearances
-  if (/clearance.*revoked|revocation.*clearance|denied.*clearance/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('No', options),
-      reason: 'No revoked or denied security clearance.',
-    };
-  }
-  if (/\b(?:itar|ear|export control|u\.?s\.? person)\b|eligible.*clearance|obtain.*clearance|security clearance/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Affirmative compliance for export control / ITAR / clearance.',
-    };
-  }
-
-  // 11. May We Contact Current Employer
-  if (/contact.*(?:current )?employer/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Permits contacting employer or providing references upon offer.',
-    };
-  }
-
-  // 12. Prior Employment or Applications at this company
-  if (/previously worked|former employee|employed.*previously|applied.*past \d+|applied.*last \d+/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('No', options),
-      reason: 'No prior internal employment or duplicate application conflict.',
-    };
-  }
-
-  // 13. Government Official / Politically Exposed Person (PEP)
-  if (/government official|politically exposed|public official|foreign official/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('No', options),
-      reason: 'No government or PEP conflict of interest.',
-    };
-  }
-
-  // 14. Attendance & Schedule Standards / Full-Time Employment
-  if (/attendance requirements|punctuality|meet.*attendance|seeking.*full-?time/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Affirmative confirmation for attendance and full-time employment.',
-    };
-  }
-
-  // 15. English Language Proficiency & Communication
-  if (/fluent in english|english.*proficiency|proficient in english|english.*fluent/i.test(q)) {
-    const affirmativeOpt = options?.find((o) => /fluent|professional|native|yes|advanced/i.test(o));
-    return {
-      isKnockout: true,
-      guaranteedAnswer: affirmativeOpt || resolveBestOption('Yes', options),
-      reason: 'High English language proficiency.',
-    };
-  }
-
-  // 16. Attestation, Truthfulness & Terms / Privacy / GDPR Consent
-  if (/certify.*true|accurate.*complete|agree.*terms|terms.*conditions|privacy policy|data processing|consent.*processing|declare.*information/i.test(q)) {
-    const agreeOpt = options?.find((o) => /i agree|agree|accept|yes|certify/i.test(o));
-    return {
-      isKnockout: true,
-      guaranteedAnswer: agreeOpt || resolveBestOption('Yes', options),
-      reason: 'Mandatory agreement to terms, accuracy attestation, and data processing.',
-    };
-  }
-
-  // 17. WhatsApp Community / Groups (Bypass external links, confirm membership)
-  if (/whatsapp|joined.*(?:community|group|channel)|join.*whatsapp/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Affirmative acknowledgment for community channels.',
-    };
-  }
-
-  // 18. LinkedIn Top Choice & Upsell Traps (Always No)
-  if (/top\s*choice|mark.*top\s*choice|premium.*upsell|try\s*premium/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('No', options),
-      reason: 'Decline paid upsell / top choice badge traps.',
-    };
-  }
-
-  // 19. Applying As / Entity Type
-  if (/applying\s*as|entity\s*type|applicant\s*type|capacity/i.test(q) && options && options.length > 0) {
-    const ind = options.find((o) => /independent|individual|consultant|contractor|self-employed/i.test(o));
-    if (ind) {
-      return {
-        isKnockout: true,
-        guaranteedAnswer: ind,
-        reason: 'Individual / Independent engineer entity classification.',
-      };
-    }
-  }
-
-  // 20. Conditional Company Name When Applying As Individual / Code Licensing
-  if (/if\s*(?:a\s*)?(?:company|comapny)|licens.*(?:company|comapny)/i.test(q)) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: 'N/A',
-      reason: 'Individual applicant N/A safeguard.',
-    };
-  }
-
-  // 21. Code Licensing / AI Training / Non-exclusive licensing interest & consent
-  if (
-    !/company|comapny|write|name|organization/i.test(q) &&
-    (/interest.*(?:licens|code|ai)|licens.*(?:interest|consent|agree)|retain\s*ownership|receive\s*payment.*(?:used|training)|would\s*you\s*be\s*interested/i.test(q))
-  ) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Code licensing / AI training affirmative consent.',
-    };
-  }
-
-  // 22. Minimum Experience Thresholds
-  if (
-    /do you have (?:at least|minimum|more than|\d+\+?) years/i.test(q) &&
-    options &&
-    options.some((o) => /yes|no/i.test(o))
-  ) {
-    return {
-      isKnockout: true,
-      guaranteedAnswer: resolveBestOption('Yes', options),
-      reason: 'Affirmative response for minimum qualifying experience threshold.',
-    };
-  }
-
-  // 23. EEO / Demographics - Safe Disclosures
-  if (/gender|race|ethnicity|veteran|disability|sexual.*orientation/i.test(q) && options && options.length > 0) {
-    const declineOption = options.find((o) =>
-      /decline|prefer not|choose not|do not wish/i.test(o)
-    );
-    if (declineOption) {
-      return {
-        isKnockout: true,
-        guaranteedAnswer: declineOption,
-        reason: 'Safe voluntary demographic disclosure.',
-      };
-    }
-  }
-
-  return { isKnockout: false };
+  return { isKnockout: false, reason: 'Personal screening answers require saved user evidence.' };
 }
 
-/**
- * Fuzzy option matcher: Resolves the exact character-for-character option from dropdown.
- * Uses exact match -> affirmative/negative normalization -> numeric range -> substring -> token overlap.
- */
 export function resolveBestOption(desiredVal: string, options?: string[]): string {
   if (!options || options.length === 0) return desiredVal;
 
@@ -411,7 +133,7 @@ export function resolveBestOption(desiredVal: string, options?: string[]): strin
     }
   }
 
-  return maxScore > 0 ? bestOpt : options[0];
+  return maxScore > 0 ? bestOpt : '';
 }
 
 /**
@@ -434,12 +156,12 @@ function buildCandidateKnowledgeGraph(persona: PersonaData) {
       state: geo.state,
       country: geo.country,
       postalCode: geo.postalCode,
-      linkedIn: persona.linkedIn || persona.linkedinUrl || 'https://linkedin.com',
-      gitHub: persona.gitHub || persona.githubUrl || 'https://github.com',
+      linkedIn: persona.linkedIn || persona.linkedinUrl || '',
+      gitHub: persona.gitHub || persona.githubUrl || '',
       portfolio: persona.portfolio || persona.portfolioUrl || '',
     },
     qualifications: {
-      totalYearsExperience: persona.experienceYears || 2,
+      totalYearsExperience: persona.experienceYears ?? null,
       verifiedCurrentCompany: company,
       verifiedSchool: school,
       verifiedDegree: degree,
@@ -448,7 +170,7 @@ function buildCandidateKnowledgeGraph(persona: PersonaData) {
       primaryTechStack: persona.techStack || [],
       targetRoles: persona.targetRoles || ['Software Engineer'],
       workPreference: persona.workPreference || 'Remote',
-      minimumSalaryExpectation: (persona.expectedSalaryLpa ?? persona.minSalary) || 30,
+      minimumSalaryExpectation: persona.expectedSalaryLpa ?? persona.minSalary ?? null,
     },
     narrative: {
       summary: persona.experienceSummary || persona.resumeChunks?.summary || '',
@@ -464,75 +186,31 @@ function buildCandidateKnowledgeGraph(persona: PersonaData) {
  * High-precision compensation & salary converter supporting LPA, USD, Monthly, and Hourly.
  */
 export function resolveCompensationAnswer(label: string, persona: PersonaData, options?: string[]): string {
-  const l = label.toLowerCase();
-  const baseLpa = (persona.expectedSalaryLpa ?? persona.minSalary) || 12;
-  const isFresher = persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working');
-  const curLpa = isFresher ? 0 : (persona.currentCtcLpa !== undefined ? persona.currentCtcLpa : (persona.minSalary || 8));
-
-  const geo = resolveGeographicDetailsSync(persona.location, persona);
-  const isUsd = /usd|\$|united states|us\b/i.test(l) || /united states|usa|us\b/i.test(geo.country);
-
-  if (/hourly|per\s*hour|wage|\/hr/i.test(l)) {
-    const hourlyVal = isUsd ? '35' : '500';
-    return resolveBestOption(hourlyVal, options);
-  }
-
-  if (/monthly|per\s*month|\/mo/i.test(l)) {
-    const monthlyInr = Math.round((baseLpa * 100000) / 12);
-    const monthlyVal = isUsd ? '5000' : String(monthlyInr);
-    return resolveBestOption(monthlyVal, options);
-  }
-
-  if (isUsd) {
-    return resolveBestOption('85000', options);
-  }
-
-  if (/current\s*(?:ctc|salary|compensation|pay|rate|package)|present\s*(?:ctc|salary|compensation|pay|rate)|existing\s*ctc/i.test(l)) {
-    if (isFresher) {
-      return resolveBestOption('0', options);
-    }
-    if (/lpa|lakh/i.test(l)) {
-      return resolveBestOption(String(curLpa), options);
-    }
-    return resolveBestOption(String(curLpa * 100000), options);
-  }
-
-  if (/lpa|lakh/i.test(l)) {
-    return resolveBestOption(String(baseLpa), options);
-  }
-
-  const annualVal = String(baseLpa * 100000);
-  return resolveBestOption(annualVal, options);
+  const fact = resolveScreeningFact(label, persona);
+  return fact ? resolveBestOption(fact, options) : '';
 }
 
 /**
  * Notice period & availability resolver.
  */
 export function resolveNoticePeriodAnswer(label: string, persona: PersonaData, options?: string[]): string {
-  if (options && options.length > 0) {
-    const immediateOpt = options.find((o) =>
-      /immediate|immediately|0 days|less than 15|available now/i.test(o)
-    );
-    if (immediateOpt) return immediateOpt;
-    const shortOpt = options.find((o) => /15 days|1 month|30 days/i.test(o));
-    if (shortOpt) return shortOpt;
-    return options[0];
+  const days = persona.employmentStatus === 'fresher' ? 0 : persona.noticePeriodDays;
+  if (days === undefined || !Number.isFinite(days) || days < 0) return '';
+  if (options?.length) {
+    const exactDays = options.find(option => new RegExp(`^${days}\\s*days?$`, 'i').test(option.trim()));
+    if (exactDays) return exactDays;
+    if (days === 0) return options.find(option => /^(immediate|immediately|available now)$/i.test(option.trim())) || '';
+    return '';
   }
-  return 'Immediate';
+  return /days?|notice/i.test(label) ? String(days) : days === 0 ? 'Immediate' : `${days} days`;
 }
 
 /**
  * Skill-specific experience calculator.
  */
 export function resolveSkillExperienceAnswer(label: string, persona: PersonaData, options?: string[]): string {
-  const baseYears = String(persona.experienceYears || 4);
-  if (options && options.length > 0) {
-    if (options.some((o) => /^(yes|no)$/i.test(o.trim()))) {
-      return resolveBestOption('Yes', options);
-    }
-    return resolveBestOption(baseYears, options);
-  }
-  return baseYears;
+  const fact = resolveScreeningFact(label, persona);
+  return fact ? resolveBestOption(fact, options) : '';
 }
 
 /**
@@ -555,7 +233,7 @@ export function resolveMultiSelectCheckboxAnswers(label: string, options: string
     }
   }
 
-  return matched.length > 0 ? matched : [options[0]];
+  return matched;
 }
 
 /**
@@ -565,10 +243,13 @@ export async function resolveQuestionCognitively(
   target: FormQuestionTarget,
   persona: PersonaData
 ): Promise<CognitiveAnswerResult> {
+  const questionMemory = getScopedQuestionMemory(persona, { ...target.jobContext, options: target.options, helperText: target.helperText, contextHint: target.contextHint });
   const label = (target.label || target.name || target.placeholder || '').trim();
   if (!label) {
     return { answer: '', confidence: 0, source: 'fallback' };
   }
+  const fact = resolveScreeningFact(label, persona);
+  if (fact !== undefined) return { answer: fact, confidence: fact ? 1 : 0, source: fact ? 'persona' : 'fallback' };
   const labelLower = label.toLowerCase();
   const activeError = (target.validationError || target.errorMessage || '').trim();
 
@@ -676,10 +357,10 @@ export async function resolveQuestionCognitively(
     return { answer: 'Yes', confidence: 0.98, source: 'persona' };
   }
   if (/linkedin/i.test(labelLower) && !/follow/i.test(labelLower) && target.inputType !== 'select') {
-    return { answer: persona.linkedIn || persona.linkedinUrl || 'https://linkedin.com', confidence: 0.99, source: 'persona' };
+    return { answer: persona.linkedIn || persona.linkedinUrl || '', confidence: 0.99, source: 'persona' };
   }
   if (/github/i.test(labelLower)) {
-    return { answer: persona.gitHub || persona.githubUrl || 'https://github.com', confidence: 0.99, source: 'persona' };
+    return { answer: persona.gitHub || persona.githubUrl || '', confidence: 0.99, source: 'persona' };
   }
   if (/portfolio|personal\s*website|personal\s*site|homepage/i.test(labelLower)) {
     const rawP = (persona.portfolio || persona.portfolioUrl || '').trim();
@@ -716,21 +397,6 @@ export async function resolveQuestionCognitively(
       return { answer: resolveBestOption(school, target.options), confidence: 0.98, source: 'persona' };
     }
   }
-  // GPA / Academic Percentage - Extracted from candidate resume
-  if (/\bgpa\b|grade\s*point|percentage|cgpa|marks/i.test(labelLower)) {
-    const edu = `${persona.education || ''} ${persona.resumeText || ''} ${persona.resumeChunks?.education || ''}`;
-    const gpaMatch = edu.match(/\b([34]\.\d{1,2}|[7-9]\.\d{1,2}|[89]\d%?)\b/);
-    const gpaVal = gpaMatch ? gpaMatch[1] : (target.options?.length ? target.options[0] : '3.8');
-    return { answer: resolveBestOption(gpaVal, target.options), confidence: 0.98, source: 'persona' };
-  }
-  // Graduation Year - Extracted from candidate resume or career timeline
-  if (/graduation\s*year|year\s*of\s*graduation|completion\s*year/i.test(labelLower)) {
-    const edu = `${persona.education || ''} ${persona.resumeText || ''} ${persona.resumeChunks?.education || ''}`;
-    const allYears = Array.from(edu.matchAll(/\b(20[123][0-9])\b/g)).map((m) => parseInt(m[1], 10));
-    const gradYear = allYears.length > 0 ? String(Math.max(...allYears)) : String(new Date().getFullYear() - (persona.experienceYears || 2));
-    return { answer: resolveBestOption(gradYear, target.options), confidence: 0.98, source: 'persona' };
-  }
-
   // Current Role & Company - Extracted directly from candidate resume
   if (/current\s*(?:job\s*)?title|most\s*recent\s*title|current\s*role/i.test(labelLower)) {
     const title = persona.targetRoles?.[0] || 'Software Engineer';
@@ -895,16 +561,10 @@ RULES:
     }
   }
 
-  let fallbackAns = target.options && target.options.length > 0 ? target.options[0] : 'Yes';
-  if (/salary|pay|compensation/i.test(labelLower)) {
-    fallbackAns = String((persona.expectedSalaryLpa ?? persona.minSalary) || 30);
-  } else if (/experience|years/i.test(labelLower)) {
-    fallbackAns = String(persona.experienceYears || 2);
-  }
-
+  const fallbackAns = '';
   return {
     answer: resolveBestOption(fallbackAns, target.options),
-    confidence: 0.75,
+    confidence: 0,
     source: 'fallback',
   };
 }
@@ -918,17 +578,25 @@ export async function resolveFormStepBatch(
   persona: PersonaData,
   jobContext?: { jobTitle?: string; companyName?: string }
 ): Promise<Map<string, CognitiveAnswerResult>> {
+  const memoryFor = (target: FormQuestionTarget): ReturnType<typeof getScopedQuestionMemory> => getScopedQuestionMemory(persona, { ...jobContext, options: target.options, helperText: target.helperText, contextHint: target.contextHint });
   const resultMap = new Map<string, CognitiveAnswerResult>();
   const pendingTargets: FormQuestionTarget[] = [];
 
   // First pass: Resolve fast-path fields (Armor, Identity, Memory) instantly
   for (const t of targets) {
     const key = t.id || t.selector || t.label;
+    const questionMemory = memoryFor(t);
+
+    const fact = resolveScreeningFact(t.label, persona);
+    if (fact !== undefined) {
+      resultMap.set(key, { answer: fact ? resolveBestOption(fact, t.options) : '', confidence: fact ? 1 : 0, source: fact ? 'persona' : 'fallback' });
+      continue;
+    }
 
     // Check Armor
     const fullText = `${t.contextHint ? t.contextHint + ' ' : ''}${t.label}${t.helperText ? ' ' + t.helperText : ''}`;
     if (isGenderQuestion(fullText)) {
-      resultMap.set(key, await resolveQuestionCognitively(t, persona));
+      resultMap.set(key, await resolveQuestionCognitively({ ...t, jobContext }, persona));
       continue;
     }
     const armor = evaluateDisqualificationArmor(t.label, t.options).isKnockout
@@ -1026,7 +694,7 @@ RULES:
               source: 'llm',
               thoughtProcess: res.thoughtProcess,
             });
-            questionMemory.addOrUpdateEntry(matchedTarget.label, finalAns, 'llm', 0.94);
+            memoryFor(matchedTarget).addOrUpdateEntry(matchedTarget.label, finalAns, 'llm', 0.94);
           }
         }
       }
@@ -1038,8 +706,9 @@ RULES:
   // Any remaining unresolved targets use individual single-question resolution
   for (const t of pendingTargets) {
     const key = t.id || t.selector || t.label;
+    const questionMemory = memoryFor(t);
     if (!resultMap.has(key)) {
-      const ind = await resolveQuestionCognitively(t, persona);
+      const ind = await resolveQuestionCognitively({ ...t, jobContext }, persona);
       resultMap.set(key, ind);
     }
   }

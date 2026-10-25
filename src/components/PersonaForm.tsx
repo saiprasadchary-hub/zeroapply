@@ -1,3 +1,4 @@
+import { isValidTimeZone } from '../agent/localLlm/availabilityFacts';
 import { initWebLlmEngine } from '../agent/llm/webLlmEngine';
 import React, { useState, useRef } from 'react';
 import type { PersonaData, PersonaTone, WorkLocation } from '../types';
@@ -1172,6 +1173,38 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
               </p>
             </div>
           </div>
+
+          <fieldset className="space-y-3 border border-zinc-200 rounded-2xl p-4">
+            <legend className="text-sm font-bold px-1">Availability &amp; working hours</legend>
+            <p className="text-xs text-zinc-500">AutoApply uses these saved choices for shift and time-zone questions. Leave unknown preferences unanswered.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label className="text-xs font-semibold">Local time zone
+                <input aria-label="Local time zone" aria-invalid={Boolean(persona.availability?.timeZone && !isValidTimeZone(persona.availability.timeZone))} list="availability-zones" value={persona.availability?.timeZone ?? ''} placeholder="Asia/Kolkata"
+                  onChange={e => handleInputChange('availability', { ...persona.availability, timeZone: e.target.value })}
+                  className="w-full mt-1 border border-zinc-200 rounded-lg p-2" />
+                {persona.availability?.timeZone && !isValidTimeZone(persona.availability.timeZone) && <span role="alert" className="text-rose-700">Enter a valid time zone, such as Asia/Kolkata.</span>}
+                <datalist id="availability-zones">{['Asia/Kolkata', 'America/Los_Angeles', 'America/New_York', 'Europe/London', 'UTC'].map(zone => <option key={zone} value={zone} />)}</datalist>
+              </label>
+              <label className="text-xs font-semibold">Available from
+                <input aria-label="Available from" type="time" value={persona.availability?.start ?? ''} onChange={e => handleInputChange('availability', { ...persona.availability, start: e.target.value })} className="w-full mt-1 border border-zinc-200 rounded-lg p-2" />
+              </label>
+              <label className="text-xs font-semibold">Available until
+                <input aria-label="Available until" type="time" value={persona.availability?.end ?? ''} onChange={e => handleInputChange('availability', { ...persona.availability, end: e.target.value })} className="w-full mt-1 border border-zinc-200 rounded-lg p-2" />
+              </label>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(['nightShift', 'rotatingShift'] as const).map(key => <label key={key} className="text-xs font-semibold">{key === 'nightShift' ? 'Night shifts' : 'Rotating shifts'}
+                <select aria-label={key === 'nightShift' ? 'Night shifts' : 'Rotating shifts'} value={persona.availability?.[key] === undefined ? '' : String(persona.availability[key])} onChange={e => handleInputChange('availability', { ...persona.availability, [key]: e.target.value === '' ? undefined : e.target.value === 'true' })} className="w-full mt-1 border border-zinc-200 rounded-lg p-2">
+                  <option value="">Not specified</option><option value="true">Yes</option><option value="false">No</option>
+                </select>
+              </label>)}
+              {(['pacific', 'eastern', 'central', 'mountain', 'india'] as const).map(zone => <label key={zone} className="text-xs font-semibold capitalize">{zone} time overlap
+                <select aria-label={`${zone} time overlap`} value={persona.availability?.overlap?.[zone] === undefined ? '' : String(persona.availability.overlap[zone])} onChange={e => handleInputChange('availability', { ...persona.availability, overlap: { ...persona.availability?.overlap, [zone]: e.target.value === '' ? undefined : e.target.value === 'true' } })} className="w-full mt-1 border border-zinc-200 rounded-lg p-2">
+                  <option value="">Not specified</option><option value="true">Yes</option><option value="false">No</option>
+                </select>
+              </label>)}
+            </div>
+          </fieldset>
 
           {/* Section 8: Autonomous Apply Setup & Launch Hub */}
           <div className="space-y-4 bg-gradient-to-b from-white to-zinc-50/80 border border-zinc-200/90 rounded-2xl p-4 sm:p-5 shadow-xs">

@@ -75,7 +75,12 @@ export class QuestionMemoryBank {
   private static instance: QuestionMemoryBank | null = null;
   private memory = new Map<string, MemoryEntry>();
 
-  public constructor() {
+  private readonly storageKey: string;
+
+  public constructor(private readonly scope?: string, private readonly persistent = true) {
+    let hash = 2166136261;
+    for (const character of scope || '') hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
+    this.storageKey = scope ? `zeroapply_question_memory_v2:${hash.toString(16)}` : QUESTION_MEMORY_STORAGE_KEY;
     this.loadFromStorage();
   }
 
@@ -99,7 +104,7 @@ export class QuestionMemoryBank {
     source: MemoryEntry['source'] = 'custom',
     confidence = 1.0
   ): void {
-    const key = normalizeQuestion(question);
+    const key = this.scope ? question.toLowerCase().replace(/\s+/g, ' ').trim() : normalizeQuestion(question);
     if (!key || answer === undefined || answer === null || String(answer).trim() === '') return;
 
     const existing = this.memory.get(key);
@@ -131,7 +136,7 @@ export class QuestionMemoryBank {
   }
 
   public get(question: string): MemoryEntry | undefined {
-    const key = normalizeQuestion(question);
+    const key = this.scope ? question.toLowerCase().replace(/\s+/g, ' ').trim() : normalizeQuestion(question);
     return this.memory.get(key);
   }
 
@@ -148,12 +153,6 @@ export class QuestionMemoryBank {
     };
 
     // Standard Persona Q&A seeds
-    add('legal authorization to work', 'Yes');
-    add('legally authorized to work in the united states', 'Yes');
-    add('require visa sponsorship now or in the future', 'No');
-    add('will you require visa sponsorship', 'No');
-    add('do you require visa sponsorship', 'No');
-    add('require sponsorship', 'No');
     add('how many years experience do you have', persona.experienceYears || 0);
     add('years of experience', persona.experienceYears || 0);
     add('total years of experience', persona.experienceYears || 0);
@@ -234,7 +233,7 @@ export class QuestionMemoryBank {
    * Performs an exact or fuzzy lookup across stored memory questions.
    */
   public lookup(rawQuestion: string, threshold = 0.55): LookupResult {
-    const normalizedTarget = normalizeQuestion(rawQuestion);
+    const normalizedTarget = this.scope ? rawQuestion.toLowerCase().replace(/\s+/g, ' ').trim() : normalizeQuestion(rawQuestion);
     if (!normalizedTarget) {
       return { hit: false, answer: '', confidence: 0 };
     }
@@ -252,6 +251,8 @@ export class QuestionMemoryBank {
         hitCount: entry.hitCount,
       };
     }
+
+    if (this.scope) return { hit: false, answer: '', confidence: 0 };
 
     // 2. Keyword Jaccard/Token Overlap Match
     const targetTokens = new Set(tokenize(normalizedTarget));
@@ -340,10 +341,11 @@ export class QuestionMemoryBank {
    * Synchronizes memory bank to persistent storage.
    */
   public saveToStorage(): void {
+    if (!this.persistent) return;
     try {
       if (typeof localStorage !== 'undefined') {
         const serialized = Array.from(this.memory.entries());
-        localStorage.setItem(QUESTION_MEMORY_STORAGE_KEY, JSON.stringify(serialized));
+        localStorage.setItem(this.storageKey, JSON.stringify(this.scope ? { scope: this.scope, entries: serialized } : serialized));
       }
     } catch {}
   }
@@ -352,11 +354,14 @@ export class QuestionMemoryBank {
    * Hydrates memory bank from persistent storage.
    */
   public loadFromStorage(): void {
+    if (!this.persistent) return;
     try {
       if (typeof localStorage !== 'undefined') {
-        const raw = localStorage.getItem(QUESTION_MEMORY_STORAGE_KEY);
+        const raw = localStorage.getItem(this.storageKey);
         if (raw) {
-          const parsed = JSON.parse(raw);
+          const stored: unknown = JSON.parse(raw);
+          const envelope = stored as { scope?: string; entries?: unknown };
+          const parsed: unknown = this.scope ? (envelope?.scope === this.scope ? envelope.entries : []) : stored;
           if (Array.isArray(parsed)) {
             for (const item of parsed) {
               if (Array.isArray(item) && item.length === 2 && typeof item[0] === 'string' && item[1]?.answer) {

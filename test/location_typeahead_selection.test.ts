@@ -33,5 +33,34 @@ try {
   await page.setContent('<input id="city" value="Hyderabad, Telangana, India" aria-autocomplete="list" aria-owns="cities"><div id="cities" role="listbox"><div role="option"><button>Wrong city</button></div></div>');
   assert.equal((await fillField(target, field, 'Hyderabad, Telangana, India')).success, false, 'Matching text alone must not pass selection');
   assert.equal(await page.locator('#cities').isVisible(), true);
+  // LinkedIn removes its floating suggestions when a scrollIntoView call scrolls the modal.
+  // The cursor must approach a visible suggestion without scrolling its container.
+  await page.setContent('<input id="city" aria-autocomplete="list" aria-owns="cities"><div id="cities" role="listbox" hidden></div>');
+  await page.evaluate(() => {
+    const input = document.querySelector('input')!;
+    const list = document.querySelector('#cities')! as HTMLElement;
+    const state = window as unknown as { suggestionScrolls: number };
+    state.suggestionScrolls = 0;
+    const originalScroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function(options?: boolean | ScrollIntoViewOptions): void {
+      if (this.closest('#cities')) {
+        state.suggestionScrolls++;
+        list.hidden = true; list.replaceChildren();
+        return;
+      }
+      originalScroll.call(this, options);
+    };
+    input.addEventListener('input', () => {
+      list.hidden = false;
+      list.innerHTML = '<div role="option"><button>Hyderabad, Telangana, India</button></div>';
+      list.querySelector('button')!.onclick = () => {
+        input.value = 'Hyderabad, Telangana, India'; input.dataset.selected = input.value;
+        list.hidden = true; list.replaceChildren();
+      };
+    });
+  });
+  assert.equal((await fillField(target, field, 'Hyderabad, Telangana, India')).success, true, 'Cursor movement must not scroll away the suggestion before activation');
+  assert.equal(await page.evaluate('window.suggestionScrolls'), 0);
+  assert.equal(await page.locator('#city').getAttribute('data-selected'), 'Hyderabad, Telangana, India');
   console.log('Location typeahead passed: delayed suggestions, nested button, duplicate exact labels, closed menu, unmatched suggestion rejected.');
 } finally { await browser.close(); }

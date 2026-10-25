@@ -114,8 +114,8 @@ async function runWhatsAppTests() {
 
   const classified = classifySingleField(whatsappField, mockPersona);
   assert.equal(classified.fieldType, 'terms', 'WhatsApp checkbox must be classified as terms/consent');
-  assert.equal(classified.mappedValue, 'true', 'WhatsApp checkbox must map to "true" to fulfill form without blocking');
-  console.log('   ✓ WhatsApp checkbox mapped to "true" (satisfies submission requirement without opening link)\n');
+  assert.equal(classified.mappedValue, '', 'Joining a group requires explicit evidence');
+  console.log('   ✓ WhatsApp membership stays unresolved without user evidence\n');
 
   // Test 5: Deterministic Question Resolution for WhatsApp Questions
   console.log('5. Testing Deterministic Question Resolution for WhatsApp questions...');
@@ -129,8 +129,8 @@ async function runWhatsAppTests() {
     required: true,
   };
   const radioRes = await resolveQuestion(whatsappRadioQuestion, mockPersona);
-  assert.equal(radioRes.answer, 'Yes', 'Radio question asking if candidate joined WhatsApp must answer "Yes"');
-  assert.equal(radioRes.confidence, 1.0, 'Confidence must be 1.0');
+  assert.equal(radioRes.answer, '', 'Unknown group membership must stay unresolved');
+  assert.equal(radioRes.confidence, 0);
 
   // Case B: Checkbox asking to join WhatsApp
   const whatsappCheckboxQuestion = {
@@ -140,9 +140,9 @@ async function runWhatsAppTests() {
     required: true,
   };
   const chkRes = await resolveQuestion(whatsappCheckboxQuestion, mockPersona);
-  assert.equal(chkRes.answer, 'true', 'Checkbox question asking if candidate joined WhatsApp must answer "true"');
-  assert.equal(chkRes.confidence, 1.0, 'Confidence must be 1.0');
-  console.log('   ✓ WhatsApp join questions resolved affirmatively to bypass blocking\n');
+  assert.equal(chkRes.answer, '', 'Unknown confirmation must stay unresolved');
+  assert.equal(chkRes.confidence, 0);
+  console.log('   ✓ WhatsApp join questions remain unresolved without user evidence\n');
 
   // Test 6: notifyAndCopyWhatsAppLink Execution
   console.log('6. Testing notifyAndCopyWhatsAppLink execution...');

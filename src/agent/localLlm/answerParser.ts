@@ -161,29 +161,11 @@ export function parseAnswer(rawOutput: string, context: ParseContext = {}): Pars
   if (validationError) {
     const analysis = analyzeErrorConstraint(validationError);
 
-    if (analysis.category === 'decimal') {
+    if (analysis.isNumericConstraint) {
       const num = parseNumericValue(cleaned);
-      const min = analysis.targetMinValue ?? 0;
-      if (!num || parseFloat(num) <= min) {
-        const val = min > 0 ? min + 1.0 : 1.0;
-        return { answer: `${val.toFixed(1)}`, confidence: 0.98 };
-      }
-      return { answer: num.includes('.') ? num : `${num}.0`, confidence: 0.98 };
-    }
-
-    if (analysis.category === 'whole_number' || analysis.category === 'min_numeric') {
-      const num = parseNumericValue(cleaned);
-      const min = analysis.targetMinValue ?? 1;
-      const parsedInt = num ? parseInt(num, 10) : min;
-      const finalVal = isNaN(parsedInt) || parsedInt < min ? min : parsedInt;
-      return { answer: String(finalVal), confidence: 0.98 };
-    }
-
-    if (analysis.category === 'max_numeric' && analysis.targetMaxValue !== undefined) {
-      const num = parseNumericValue(cleaned);
-      const parsedVal = num ? parseFloat(num) : analysis.targetMaxValue;
-      const finalVal = isNaN(parsedVal) || parsedVal > analysis.targetMaxValue ? analysis.targetMaxValue : parsedVal;
-      return { answer: String(finalVal), confidence: 0.98 };
+      if (!num) return { answer: '', confidence: 0 };
+      // Formatting may change; the candidate's factual value must not.
+      return { answer: analysis.category === 'decimal' && !num.includes('.') ? `${num}.0` : num, confidence: 0.95 };
     }
 
     if (analysis.category === 'max_length' && analysis.targetMaxLength) {
@@ -205,13 +187,7 @@ export function parseAnswer(rawOutput: string, context: ParseContext = {}): Pars
       }
     }
 
-    if (analysis.isNumericConstraint) {
-      const num = parseNumericValue(cleaned);
-      if (num) {
-        return { answer: num, confidence: 0.95 };
-      }
-      return { answer: '1', confidence: 0.95 };
-    }
+
   }
 
   // Number / numeric field

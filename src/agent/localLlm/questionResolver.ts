@@ -1,3 +1,5 @@
+import { reportAnswerEvidence } from '../telemetry/agentHealth';
+import { getScopedQuestionMemory } from '../memory/scopedQuestionMemory';
 import { resolveScreeningFact } from './screeningFacts';
 import { isGenderQuestion, resolveGenderAnswer } from '../autofill/genderAnswer';
 /**
@@ -9,7 +11,6 @@ import { isGenderQuestion, resolveGenderAnswer } from '../autofill/genderAnswer'
  */
 
 import type { PersonaData } from '../../types';
-import { questionMemory } from '../memory/questionMemoryBank';
 import { buildResumeChunks, findRelevantResumeContext } from '../memory/resumeContextRetriever';
 import { buildQuestionPrompt } from './promptBuilder';
 import { parseAnswer, matchBestOption } from './answerParser';
@@ -54,10 +55,17 @@ function resolveMatch(val: string, options?: string[]): string {
   return match?.option || '';
 }
 
-export async function resolveQuestion(
+export async function resolveQuestion(field: QuestionFieldTarget, persona: PersonaData): Promise<ResolvedAnswer> {
+  const result = await resolveQuestionInternal(field, persona);
+  reportAnswerEvidence(field.label, result.answer ? result.source : 'unresolved', result.resumeContext || (result.source === 'persona' ? 'Saved applicant profile or explicit screening answer' : undefined));
+  return result;
+}
+
+async function resolveQuestionInternal(
   field: QuestionFieldTarget,
   persona: PersonaData
 ): Promise<ResolvedAnswer> {
+  const questionMemory = getScopedQuestionMemory(persona, { ...field.jobContext, options: field.options, helperText: field.helperText, contextHint: field.contextHint });
   const rawLabel = (field.label || field.name || field.placeholder || '').trim();
   if (!rawLabel) {
     return { answer: '', confidence: 0, source: 'fallback' };
@@ -200,98 +208,6 @@ export async function resolveQuestion(
           source: 'memory',
         };
       }
-    }
-  }
-
-  // Active validation error guard: Universal error recovery across all ATS platforms
-  if (errorAnalysis && errorAnalysis.category !== 'generic') {
-    if (errorAnalysis.category === 'decimal') {
-      const min = errorAnalysis.targetMinValue ?? 0;
-      let val = min > 0 ? min + 1.0 : 1.0;
-      if (/salary|rate|pay|comp|ctc|stipend|remuneration/i.test(labelLower)) {
-        val = /hourly/i.test(labelLower) ? 25.0 : ((persona.expectedSalaryLpa ?? persona.minSalary) || 25.0);
-      } else if (/\b(?:experience|years?|yrs?)\b/i.test(labelLower) && !/expected|example/i.test(labelLower)) {
-        val = (persona.experienceYears ?? 0);
-      }
-      const ans = `${val.toFixed(1)}`;
-      questionMemory.addOrUpdateEntry(label, ans, 'persona', 0.98);
-      return { answer: ans, confidence: 0.98, source: 'persona' };
-    }
-
-    if (errorAnalysis.category === 'whole_number' || errorAnalysis.category === 'min_numeric') {
-      const min = errorAnalysis.targetMinValue ?? 1;
-      const isStrictlyGreater = /(?:larger|greater|more)\s*than/i.test(activeError);
-      const safeMin = isStrictlyGreater ? min + 1 : min;
-      let val = safeMin;
-
-      if (/salary|rate|pay|comp|ctc|stipend|remuneration/i.test(labelLower)) {
-        if (/hourly/i.test(labelLower)) {
-          val = 25;
-        } else {
-          const baseLpa = (persona.expectedSalaryLpa ?? persona.minSalary) || 12;
-          if (baseLpa <= 150 && min >= 100) {
-            val = baseLpa * 100000;
-          } else {
-            val = Math.max(baseLpa, safeMin);
-          }
-        }
-      } else if (/\b(?:experience|years?|yrs?)\b/i.test(labelLower) && !/expected|example/i.test(labelLower)) {
-        val = Math.max(persona.experienceYears ?? 0, safeMin);
-      }
-      const ans = String(val);
-      questionMemory.addOrUpdateEntry(label, ans, 'persona', 0.98);
-      return { answer: ans, confidence: 0.98, source: 'persona' };
-    }
-
-    if (errorAnalysis.category === 'url') {
-      if (/portfolio|personal\s*website|personal\s*site|homepage/i.test(labelLower)) {
-        const rawP = (persona.portfolio || persona.portfolioUrl || '').trim();
-        const hasP = Boolean(rawP && rawP !== 'N/A' && !/^(none|nil|no|false)$/i.test(rawP));
-        if (hasP) {
-          return { answer: rawP, confidence: 0.98, source: 'persona' };
-        }
-      }
-      const url = persona.linkedinUrl || persona.portfolioUrl || persona.githubUrl || 'https://linkedin.com';
-      return { answer: url, confidence: 0.98, source: 'persona' };
-    }
-
-    if (errorAnalysis.category === 'phone') {
-      const phone = persona.phone || '+91 9876543210';
-      return { answer: phone, confidence: 0.98, source: 'persona' };
-    }
-
-    if (errorAnalysis.category === 'email') {
-      return { answer: persona.email || 'candidate@example.com', confidence: 0.98, source: 'persona' };
-    }
-
-    if (errorAnalysis.category === 'postal') {
-      const geo = resolveGeographicDetailsSync(persona.location, persona);
-      return { answer: geo.postalCode, confidence: 0.98, source: 'persona' };
-    }
-
-    if (errorAnalysis.category === 'required_selection' && field.options && field.options.length > 0) {
-      const affirmative = field.options.find(o => /^(yes|agree|confirm|true|followed)$/i.test(o.trim()))
-        || field.options.find(o => /yes|extensive|proficient|reference|hands-on|agree|confirm|followed/i.test(o));
-      const validNonPlaceholder = field.options.find(o => !/^(select|choose|select an option|please select|--)$/i.test(o.trim()));
-      const ans = affirmative || validNonPlaceholder || field.options[0];
-      return { answer: ans, confidence: 0.98, source: 'persona' };
-    }
-
-    if (errorAnalysis.category === 'min_length') {
-      const minLen = errorAnalysis.targetMinLength || 50;
-      let richAnswer = persona.experienceSummary ||
-        `Experienced software engineer with ${persona.experienceYears ?? 0}+ years delivering high-reliability production applications using ${(persona.techStack || []).join(', ')}. Proven track record of developing scalable architectures and driving technical innovation.`;
-      while (richAnswer.length < minLen) {
-        richAnswer += ` Dedicated to technical excellence, continuous learning, and creating impactful software solutions.`;
-      }
-      return { answer: richAnswer, confidence: 0.95, source: 'persona' };
-    }
-
-    if (errorAnalysis.category === 'max_length' && errorAnalysis.targetMaxLength) {
-      const maxLen = errorAnalysis.targetMaxLength;
-      const base = persona.targetRoles?.[0] || 'Software Engineer';
-      const ans = base.length > maxLen ? base.slice(0, maxLen).trim() : base;
-      return { answer: ans, confidence: 0.95, source: 'persona' };
     }
   }
 
@@ -506,7 +422,7 @@ export async function resolveQuestion(
   if (/graduat.*(?:year|date)|expected.*graduat|year.*graduat/i.test(labelLower)) {
     const edu = `${persona.education || ''} ${persona.resumeText || ''} ${persona.resumeChunks?.education || ''}`;
     const allYears = Array.from(edu.matchAll(/\b(20[123][0-9])\b/g)).map((m) => parseInt(m[1], 10));
-    const gradYear = allYears.length > 0 ? String(Math.max(...allYears)) : '2025';
+    const gradYear = allYears.length > 0 ? String(Math.max(...allYears)) : '';
     const ans = resolveMatch(gradYear, field.options);
     questionMemory.addOrUpdateEntry(label, ans, 'persona', 0.98);
     return { answer: ans, confidence: 0.98, source: 'persona' };
@@ -516,7 +432,7 @@ export async function resolveQuestion(
   if (/\bgpa\b|grades|academic.*percentage/i.test(labelLower)) {
     const edu = `${persona.education || ''} ${persona.resumeText || ''}`;
     const gpaMatch = edu.match(/\b([34]\.\d{1,2}|[7-9]\.\d{1,2}|[89]\d%?)\b/);
-    const gpaVal = gpaMatch ? gpaMatch[1] : (field.options?.length ? field.options[0] : '3.8');
+    const gpaVal = gpaMatch ? gpaMatch[1] : '';
     const ans = resolveMatch(gpaVal, field.options);
     questionMemory.addOrUpdateEntry(label, ans, 'persona', 0.95);
     return { answer: ans, confidence: 0.95, source: 'persona' };
@@ -816,37 +732,12 @@ export async function resolveQuestion(
         }
       }
     }
-    const affirmative = field.options.find((o) => /^(yes|agree|authorized)/i.test(o));
-    const fallbackAnswer = affirmative || field.options[0];
+    const fallbackAnswer = '';
     return { answer: fallbackAnswer, confidence: 0.7, source: 'fallback' };
   }
 
-  if (errorAnalysis) {
-    if (errorAnalysis.category === 'decimal') {
-      const min = errorAnalysis.targetMinValue ?? 0;
-      return { answer: min > 0 ? `${(min + 1.0).toFixed(1)}` : '1.0', confidence: 0.9, source: 'fallback' };
-    }
-    if (errorAnalysis.category === 'whole_number' || errorAnalysis.category === 'min_numeric') {
-      const min = errorAnalysis.targetMinValue ?? 1;
-      return { answer: String(min), confidence: 0.9, source: 'fallback' };
-    }
-    if (errorAnalysis.category === 'url') {
-      return { answer: persona.linkedinUrl || 'https://linkedin.com', confidence: 0.9, source: 'fallback' };
-    }
-    if (errorAnalysis.category === 'phone') {
-      return { answer: persona.phone || '+91 9876543210', confidence: 0.9, source: 'fallback' };
-    }
-    if (errorAnalysis.category === 'email') {
-      return { answer: persona.email || 'candidate@example.com', confidence: 0.9, source: 'fallback' };
-    }
-    if (errorAnalysis.category === 'postal') {
-      const geo = resolveGeographicDetailsSync(persona.location, persona);
-      return { answer: geo.postalCode, confidence: 0.9, source: 'fallback' };
-    }
-  }
-
-  if (field.inputType === 'number') {
-    return { answer: String(persona.experienceYears ?? 0), confidence: 0.7, source: 'fallback' };
+  if (errorAnalysis || field.inputType === 'number') {
+    return { answer: '', confidence: 0, source: 'fallback' };
   }
 
   // Fallback for location/geographic inputs
@@ -867,12 +758,6 @@ export async function resolveQuestion(
     return { answer: geo.city, confidence: 0.95, source: 'fallback' };
   }
 
-  // Fallback for salary / hourly rate
-  if (/salary|compensation|expected.*pay|stipend|ctc|hourly|hourly.*rate|expected.*rate|rate.*per.*hour|\bwage\b|\bhourly\b/i.test(labelLower)) {
-    const hourlyVal = /hourly|per.*hour|\brate\b/i.test(labelLower) ? '25' : String((persona.expectedSalaryLpa ?? persona.minSalary) || '25');
-    return { answer: hourlyVal, confidence: 0.9, source: 'fallback' };
-  }
-
   if (relevantContext && relevantContext.length > 0 && relevantContext.length < 60) {
     const isEduChunk = /education|b\.?tech|m\.?tech|bachelor|master|degree|college|university|school/i.test(relevantContext);
     const isEduQuery = /education|degree|school|university|college|study|gpa|major/i.test(labelLower);
@@ -883,7 +768,7 @@ export async function resolveQuestion(
     }
   }
 
-  return { answer: 'Yes', confidence: 0.6, source: 'fallback' };
+  return { answer: '', confidence: 0, source: 'fallback' };
 }
 
 /**

@@ -21,7 +21,7 @@ assert.equal(
 );
 
 const viteConfig = fs.readFileSync('vite.config.ts', 'utf8');
-assert.match(viteConfig, /ignored: \['\*\*\/dist\/\*\*', '\*\*\/release\*\/\*\*'\]/);
+for (const directory of ['**/dist/**', '**/release*/**', '**/output/**', '**/tmp/**']) assert.ok(viteConfig.includes(directory), `Generated directory must be ignored: ${directory}`);
 
 const mainEntry = fs.readFileSync('src/main.tsx', 'utf8');
 const errorBoundary = fs.readFileSync('src/components/AppErrorBoundary.tsx', 'utf8');

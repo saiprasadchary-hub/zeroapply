@@ -487,10 +487,6 @@ function configureSession(targetSession) {
 
   // Strip all Electron/automation headers before requests leave the app
   const chromeUA = buildCleanChromeUA();
-  const majorMatch = chromeUA.match(/Chrome\/(\d+)/);
-  const chromeMajor = majorMatch ? majorMatch[1] : '130';
-  const secChUaBrand = `"Google Chrome";v="${chromeMajor}", "Chromium";v="${chromeMajor}", "Not_A Brand";v="24"`;
-
   targetSession.webRequest.onBeforeSendHeaders((details, callback) => {
     const requestHeaders = { ...details.requestHeaders };
     // Remove all Electron identity headers
@@ -498,10 +494,6 @@ function configureSession(targetSession) {
     delete requestHeaders['x-electron-version'];
     // Rewrite the User-Agent on every outgoing request
     requestHeaders['User-Agent'] = chromeUA;
-    // Spoof Client Hint headers to match a real Chrome browser
-    requestHeaders['sec-ch-ua'] = secChUaBrand;
-    requestHeaders['sec-ch-ua-mobile'] = '?0';
-    requestHeaders['sec-ch-ua-platform'] = '"macOS"';
     if (!requestHeaders['Accept-Language']) {
       requestHeaders['Accept-Language'] = 'en-US,en;q=0.9';
     }

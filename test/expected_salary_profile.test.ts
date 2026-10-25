@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { chromium } from 'playwright-core';
+import { resolveScreeningFact } from '../src/agent/localLlm/screeningFacts';
+import { resolveQuestion } from '../src/agent/localLlm/questionResolver';
+import { resolveQuestionCognitively, resolveFormStepBatch } from '../src/agent/localLlm/ultraQuestionResolver';
+import { classifyFields, type ScannedField } from '../src/agent/domScanner/fieldClassifier';
+import { fillField } from '../src/agent/formFiller/formFiller';
+import type { PersonaData } from '../src/types';
+import type { WebviewTarget } from '../src/agent/domScanner/injectedScanner';
+const persona = { fullName: 'Salary Fixture', email: 'fixture@example.test', location: 'Hyderabad, India', employmentStatus: 'fresher', currentCtcLpa: 0, expectedSalaryLpa: 7, minSalary: 3, experienceYears: 0, techStack: [], targetRoles: ['Engineer'] } as PersonaData;
+const label = 'Please enter your expected ctc in INR';
+assert.equal(resolveScreeningFact(label, persona), '700000');
+assert.equal(resolveScreeningFact('Expected CTC in LPA', persona), '7');
+assert.equal(resolveScreeningFact('Expected monthly salary in INR', persona), '58333');
+assert.equal(resolveScreeningFact('Current CTC in INR', persona), '0');
+assert.equal(resolveScreeningFact(label, { ...persona, expectedSalaryLpa: undefined, minSalary: 7 }), '700000', 'Older saved expected salary remains supported');
+assert.equal((await resolveQuestion({ label, inputType: 'number' }, persona)).answer, '700000');
+assert.equal((await resolveQuestionCognitively({ label, inputType: 'number' }, persona)).answer, '700000');
+assert.equal((await resolveFormStepBatch([{ id: 'expected', label, inputType: 'number' }], persona)).get('expected')?.answer, '700000');
+const field = { id: 'expected', selector: '#expected', label, name: 'expected', inputType: 'number', tagName: 'input', placeholder: '', required: true, currentValue: '0', hasError: false, helperText: 'Please enter your expected annual compensation in INR. Example: 350000' } as ScannedField;
+const classified = classifyFields([field], persona)[0];
+assert.equal(classified.mappedValue, '700000');
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+try {
+  const page = await browser.newPage({ viewport: { width: 1100, height: 560 } });
+  await page.setContent('<main style="font:18px system-ui;padding:48px"><h1>Expected CTC · regression fixture</h1><p>Saved expected salary: 7 LPA · Fresher current CTC: 0</p><label for="expected">Please enter your expected ctc in INR</label><p>Expected annual compensation in INR</p><input style="font:24px system-ui;padding:14px;width:80%" id="expected" type="number" value="0" required></main>');
+  const view: WebviewTarget = { executeJavaScript: <T>(script: string): Promise<T> => page.evaluate<T>(script) };
+  assert.equal((await fillField(view, classified, classified.mappedValue!, persona)).success, true);
+  assert.equal(await page.locator('#expected').inputValue(), '700000', 'Correct the stale zero already in the form');
+  await mkdir('output/upgrades', { recursive: true });
+  await page.screenshot({ path: 'output/upgrades/expected-salary-fixed.png' });
+  console.log('Expected salary passed: 7 LPA → 700000 INR for a fresher, current CTC stays 0, single/batch resolvers agree and browser field replaces stale 0.');
+} finally { await browser.close(); }

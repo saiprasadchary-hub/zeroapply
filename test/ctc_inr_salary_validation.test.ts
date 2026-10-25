@@ -13,6 +13,8 @@ const mockPersona: PersonaData = {
   phone: '+91 9876543210',
   location: 'Hyderabad, India',
   experienceYears: 2,
+  employmentStatus: 'currently_working',
+  currentCtcLpa: 8,
   minSalary: 8, // 8 LPA = ₹8,00,000 INR
   workPreference: 'Remote',
   tone: 'Confident',
@@ -137,7 +139,7 @@ const recoveredFromMemory = await resolveQuestion({
 }, mockPersona);
 
 assert.equal(recoveredFromMemory.answer, '800000', 'Must self-heal poisoned memory answer to 800000');
-assert.equal(questionMemory.get(poisonedKey)?.answer, '800000', 'Memory Bank must be updated to 800000');
+assert.equal(questionMemory.get(poisonedKey)?.answer, '8', 'Legacy unscoped memory must be ignored rather than modified');
 console.log('✅ Question Memory Bank auto-corrected poisoned "8" to "800000".');
 
 // -----------------------------------------------------------------------------

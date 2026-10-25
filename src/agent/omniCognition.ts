@@ -104,7 +104,7 @@ export async function executeOmniCognitionFormStep(
     // 3. Synthetic Interaction Injection
     for (const field of pendingFields) {
       const key = field.id || field.selector || field.label;
-      const resolution = batchResolutions.get(key) || (await resolveQuestionCognitively(field, persona));
+      const resolution = batchResolutions.get(key) || (await resolveQuestionCognitively({ ...field, jobContext }, persona));
 
       if (resolution && resolution.answer) {
         const interaction = await executeSyntheticInteraction(
@@ -138,7 +138,7 @@ export async function executeOmniCognitionFormStep(
     if (newConditionalFields.length > 0) {
       console.log(`⚡ [OmniCognition] Detected ${newConditionalFields.length} newly hydrated conditional fields. Resolving...`);
       for (const condField of newConditionalFields) {
-        const res = await resolveQuestionCognitively(condField, persona);
+        const res = await resolveQuestionCognitively({ ...condField, jobContext }, persona);
         if (res.answer) {
           const interaction = await executeSyntheticInteraction(
             webview,

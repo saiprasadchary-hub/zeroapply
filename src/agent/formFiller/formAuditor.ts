@@ -37,7 +37,7 @@ export const FORM_AUDITOR_SCRIPT = `
 
     // Multilingual placeholder pattern: matches default "Select an option" text across
     // English, German, Spanish, French, Portuguese, Italian, Dutch, Hindi, and common UI patterns.
-    const PLACEHOLDER_RE = /^(select|choose|select an option|please select|pick|--|0|option auswählen|auswählen|bitte auswählen|bitte wählen|wählen sie|eine option|seleccionar|seleccione|elegir|elige una opción|sélectionner|choisir|choisissez|veuillez sélectionner|selecionar|escolher|selezionare|scegliere|selecteer|kies|कृपया चुनें|चुनें|विकल्प चुनें)$/i;
+    const PLACEHOLDER_RE = /^(select|choose|select an option|please select|pick|--|option auswählen|auswählen|bitte auswählen|bitte wählen|wählen sie|eine option|seleccionar|seleccione|elegir|elige una opción|sélectionner|choisir|choisissez|veuillez sélectionner|selecionar|escolher|selezionare|scegliere|selecteer|kies|कृपया चुनें|चुनें|विकल्प चुनें)$/i;
 
     function getAttr(el, attr) {
       if (!el || typeof el.getAttribute !== 'function') return '';
@@ -246,8 +246,12 @@ export const FORM_AUDITOR_SCRIPT = `
         if (elRole === 'option') continue;
         if (el.parentElement && safeClosest(el.parentElement, '[role="combobox"], [role="listbox"]')) continue;
 
-        const val = (el.value || el.textContent || '').trim();
-        const isPlaceholder = !val || PLACEHOLDER_RE.test(val);
+        const selectedOption = el.tagName === 'SELECT' ? el.selectedOptions?.[0] : null;
+        // Option values are opaque IDs: "0" can mean a valid 0-year/month answer.
+        // Conversely an empty native value is invalid even when textContent lists real options.
+        const val = (selectedOption ? selectedOption.textContent : el.value || el.textContent || '').trim();
+        const isPlaceholder = !val || PLACEHOLDER_RE.test(val) || (el.tagName === 'SELECT' &&
+          (!selectedOption || !String(el.value).trim() || selectedOption.disabled || selectedOption.closest('optgroup')?.disabled));
 
         // Extract available options from the dropdown for downstream LLM / formFiller matching
         let dropdownOptions;
@@ -266,7 +270,7 @@ export const FORM_AUDITOR_SCRIPT = `
         const gTitle = gItem ? gItem.querySelector('.M7eMe, [role="heading"], .freebirdFormviewerComponentsQuestionBaseTitle')?.textContent?.replace(/\\s*\\*.*$/, '').trim() : '';
 
         const container = safeClosest(el, '.fb-form-element, .jobs-easy-apply-form-element, .jobs-easy-apply-form-section__grouping, [data-test-form-element], fieldset, [class*="group"], [class*="section"]') || el.parentElement;
-        const label = (gTitle || getAttr(el, 'aria-label') || container?.querySelector('label, .fb-form-element-label, [class*="label"]')?.textContent || el.name || el.placeholder || '').trim();
+        const label = (gTitle || Array.from(el.labels || []).map(label => label.textContent || '').join(' ') || getAttr(el, 'aria-label') || container?.querySelector('label, .fb-form-element-label, [class*="label"]')?.textContent || el.name || el.placeholder || '').trim();
 
         const isReq = el.required ||
           getAttr(el, 'aria-required') === 'true' ||
