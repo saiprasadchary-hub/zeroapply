@@ -113,6 +113,23 @@ export class AutoApplyEngine {
 
       await assertSiteAccessible(view);
 
+      // Recover a late receipt without reopening or resubmitting the application.
+      if (await view.executeJavaScript<boolean>(SUBMISSION_EVIDENCE_SCRIPT).catch(() => false)) {
+        const receipt = await view.executeJavaScript<{ title: string; company: string; url: string }>(`(() => {
+          const text = document.body.innerText || '';
+          const match = text.match(/your application (?:was|has been) sent to ([^!\\n]+)/i);
+          return { title: document.title.split('|')[0].trim(), company: match?.[1]?.trim() || '', url: location.href };
+        })()`);
+        if (receipt.company) {
+          ApplicationLogger.log({ portal: platformLabel, jobTitle: receipt.title, companyName: receipt.company, jobUrl: receipt.url,
+            status: 'SUCCESS', submissionEvidence: 'LinkedIn application-sent confirmation visible on page.' });
+          processTracker.recordSubmissionCheck(true, 'Late application-sent receipt verified; no repeat submission.');
+          this.notifyStatus(`Application confirmed: ${receipt.title} at ${receipt.company}.`);
+          this.notifyLog('Recovered the visible submission receipt without sending another click.', 'success');
+          return;
+        }
+      }
+
       // Enforce Daily Application Safety Quota
       if (!dailyQuotaManager.canApply()) {
         const stats = dailyQuotaManager.getDailyStats();
@@ -477,6 +494,8 @@ export class AutoApplyEngine {
           // Execute full orchestrated application with 3D Visual Cursor, OmniVision, and Local Qwen 2.5
           const configuredDelay = options.stepDelayMs ?? 400;
           const appResult = await orchestrator.runApplication(view, persona, {
+            companyName: cardMeta?.company,
+            jobTitle: cardMeta?.title,
             maxSteps: 12,
             stepDelayMs: configuredDelay,
             isCancelled: () => !this.isRunning,
@@ -612,7 +631,7 @@ export class AutoApplyEngine {
           } else {
             // Unsubmitted / in-progress modal: DO NOT close, DO NOT dismiss! Keep open for user review!
             this.notifyLog(`Easy Apply for "${cardMeta?.title}" is open on screen (${appResult.outcome}). Modal kept open for user review.`, 'warning');
-            this.notifyStatus(`Application paused for "${cardMeta?.title}". Review form on screen.`);
+            this.notifyStatus(`Application paused for "${cardMeta?.title}": ${appResult.error || 'Review form on screen.'}`);
             break;
           }
         }
@@ -625,8 +644,8 @@ export class AutoApplyEngine {
         // Detect job metadata from page
         const singleMetaScript = `
           (() => {
-            const title = document.querySelector('#detail-job-title, .jobs-unified-top-card__job-title, h1, h2, .job-details__title')?.textContent?.trim() || '';
-            const company = document.querySelector('#detail-company-name, .jobs-unified-top-card__company-name, .job-details__company, .company-name')?.textContent?.trim() || '';
+            const title = document.querySelector('#detail-job-title, .jobs-unified-top-card__job-title, .job-details__title')?.textContent?.trim() || document.title.split('|')[0].trim();
+            const company = document.querySelector('#detail-company-name, .jobs-unified-top-card__company-name, .job-details__company, .company-name')?.textContent?.trim() || document.title.split('|')[1]?.trim() || '';
             return { title, company };
           })()
         `;
@@ -730,6 +749,8 @@ export class AutoApplyEngine {
         // Execute full orchestrated application with 3D Purple Visual Cursor & Local Qwen
         await ensureVisualCursor(view);
         const appRes = await orchestrator.runApplication(view, persona, {
+          companyName: singleCompany,
+          jobTitle: singleJobTitle,
           maxSteps: 12,
           stepDelayMs: 400,
           isCancelled: () => !this.isRunning,
@@ -832,7 +853,7 @@ export class AutoApplyEngine {
         } else {
           // Unsubmitted / in-progress modal: DO NOT close, DO NOT dismiss! Keep open for user review!
           this.notifyLog(`Easy Apply for "${singleJobTitle}" is open on screen (${appRes.outcome}). Modal kept open for user review.`, 'warning');
-          this.notifyStatus(`Application paused for "${singleJobTitle}". Review form on screen.`);
+          this.notifyStatus(`Application paused for "${singleJobTitle}": ${appRes.error || 'Review form on screen.'}`);
         }
       }
     } catch (err: unknown) {

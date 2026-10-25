@@ -157,13 +157,13 @@ export class QuestionMemoryBank {
     add('how many years experience do you have', persona.experienceYears || 0);
     add('years of experience', persona.experienceYears || 0);
     add('total years of experience', persona.experienceYears || 0);
-    add('minimum expected salary', persona.minSalary || 0);
-    add('desired salary', persona.minSalary || 0);
-    add('compensation expectations', persona.minSalary || 0);
+    add('minimum expected salary', (persona.expectedSalaryLpa ?? persona.minSalary) || 0);
+    add('desired salary', (persona.expectedSalaryLpa ?? persona.minSalary) || 0);
+    add('compensation expectations', (persona.expectedSalaryLpa ?? persona.minSalary) || 0);
 
     const isFresher = persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working');
     const curLpa = isFresher ? 0 : (persona.currentCtcLpa !== undefined ? persona.currentCtcLpa : (persona.minSalary || 8));
-    const expLpa = persona.minSalary || 12;
+    const expLpa = (persona.expectedSalaryLpa ?? persona.minSalary) || 12;
 
     add('current ctc', curLpa);
     add('current ctc in lpa', curLpa);

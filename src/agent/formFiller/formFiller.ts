@@ -1,3 +1,4 @@
+import { buildTypeaheadSelectionScript, buildTypeaheadVerificationScript } from './typeaheadSelection';
 import { executeSyntheticInteraction } from '../domScanner/syntheticInteraction';
 import { matchSelectOption } from './optionMatching';
 import { OPTION_MATCHERS_SCRIPT } from './optionMatchingScript';
@@ -96,6 +97,27 @@ export async function fillField(
       })()
     `).catch(() => {});
     await new Promise((r) => setTimeout(r, 120));
+
+    const isTypeahead = await webview.executeJavaScript<boolean>(`(() => {
+      for (const selector of ${JSON.stringify(allSelectors)}) {
+        try { const el = document.querySelector(selector);
+          if (el?.tagName === 'INPUT' && (el.getAttribute('aria-autocomplete') === 'list' || el.getAttribute('data-testid') === 'typeahead-input')) return true;
+        } catch {}
+      }
+      return false;
+    })()`).catch(() => false);
+    if (isTypeahead) {
+      const dispatched = await webview.executeJavaScript<boolean>(buildTypeaheadSelectionScript(allSelectors, value)).catch(() => false);
+      let selected = false;
+      if (dispatched) {
+        for (let attempt = 0; attempt < 30; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+          selected = await webview.executeJavaScript<boolean>(buildTypeaheadVerificationScript(allSelectors, value)).catch(() => false);
+          if (selected) break;
+        }
+      }
+      return { success: selected, selector, value, error: selected ? undefined : 'Matching autocomplete suggestion was not selected and confirmed.' };
+    }
 
     // 1. Radio Button Groups (Native Radios or Custom Radio Cards)
     if (inputType === 'radio' && field.isCustomComponent) {
@@ -295,7 +317,8 @@ export async function fillField(
             try { clickTarget.dispatchEvent(new Event('change', { bubbles: true })); } catch(e) {}
           }
 
-          return true;
+          await new Promise(resolve => setTimeout(resolve, 180));
+          return targetEl.tagName === 'INPUT' ? targetEl.checked === true : targetEl.getAttribute('aria-checked') === 'true';
         })()
       `;
       const clicked = await webview.executeJavaScript<boolean>(radioClickScript);
@@ -455,34 +478,6 @@ export async function fillField(
       `).catch(() => false);
 
       await new Promise((r) => setTimeout(r, 350));
-      if (!selectResult && (field.tagName === 'input' || inputType === 'combobox')) {
-        // Fall back to direct synthetic text typing for typeahead inputs
-        await cursorMoveAndType(webview, selector, value, { label: `ZeroApply AI: Fill ${cleanLabel}` });
-        await webview.executeJavaScript(buildSyntheticEventScript(allSelectors, value, 'text', hints)).catch(() => false);
-        await new Promise((r) => setTimeout(r, 200));
-        await webview.executeJavaScript(`
-          (() => {
-            const candidateSels = ${JSON.stringify(allSelectors)};
-            let el = null;
-            for (const s of candidateSels) {
-              try { el = document.querySelector(s); if (el) break; } catch(e) {}
-              if (s.startsWith('#')) {
-                el = document.getElementById(s.slice(1));
-                if (el) break;
-              }
-            }
-            if (el) {
-              const opt = document.querySelector('.basic-typeahead__selectable-list [role="option"], [role="listbox"] [role="option"], .basic-typeahead__selectable-list li, .artdeco-typeahead__result-item');
-              if (opt) opt.click();
-              else {
-                el.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
-                el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-              }
-            }
-          })()
-        `).catch(() => {});
-        return { success: true, selector, value };
-      }
       return { success: Boolean(selectResult), selector, value };
     }
 
@@ -538,7 +533,22 @@ export async function fillField(
     await cursorMoveAndType(webview, selector, finalValue, { label: `ZeroApply AI: Fill ${cleanLabel}` });
     await webview.executeJavaScript(buildSyntheticEventScript(allSelectors, finalValue, inputType, hints)).catch(() => false);
     await new Promise((r) => setTimeout(r, 220 + Math.random() * 200));
-    return { success: true, selector, value: finalValue };
+    const verified = await webview.executeJavaScript<boolean>(`(() => {
+      try {
+        const roots = [document];
+        for (let i = 0; i < roots.length; i++) {
+          for (const node of roots[i].querySelectorAll('*')) if (node.shadowRoot) roots.push(node.shadowRoot);
+          for (const candidate of ${JSON.stringify(allSelectors)}) {
+            let el;
+            try { el = roots[i].querySelector(candidate); } catch { continue; }
+            if (!el || !('value' in el)) continue;
+            return String(el.value).trim() === ${JSON.stringify(finalValue.trim())} && el.getAttribute('aria-invalid') !== 'true';
+          }
+        }
+        return false;
+      } catch { return false; }
+    })()`).catch(() => false);
+    return { success: verified, selector, value: finalValue, error: verified ? undefined : 'Text answer did not persist or is marked invalid.' };
   } catch (err) {
     console.error(`[FormFiller] Error filling field ${field.label}:`, err);
     return { success: false, selector, value, error: String(err) };

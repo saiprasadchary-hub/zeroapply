@@ -719,11 +719,11 @@ export function classifySingleField(field: ScannedField, persona?: PersonaData):
       if (isFresher) {
         baseLpa = 0;
       } else {
-        baseLpa = persona?.currentCtcLpa !== undefined ? persona.currentCtcLpa : (persona?.minSalary !== undefined ? persona.minSalary : 8);
+        baseLpa = persona?.currentCtcLpa !== undefined ? persona.currentCtcLpa : (persona?.minSalary ?? 8);
       }
     } else {
       // Expected CTC / Minimum salary
-      baseLpa = persona?.minSalary !== undefined ? persona.minSalary : 12;
+      baseLpa = (persona?.expectedSalaryLpa ?? persona?.minSalary) ?? 12;
     }
 
     const isExplicitLpa = /\b(?:in\s*lpa|in\s*lakhs?|in\s*lacs?|\blpa\b|\blakhs?\b)\b/i.test(text);
@@ -1086,7 +1086,7 @@ export function classifyFields(fields: ScannedField[], persona?: PersonaData): C
             if (isCurrentCtc) {
               baseLpa = isFresher ? 0 : (persona.currentCtcLpa !== undefined ? persona.currentCtcLpa : (persona.minSalary || 8));
             } else {
-              baseLpa = persona.minSalary || 12;
+              baseLpa = (persona?.expectedSalaryLpa ?? persona?.minSalary) || 12;
             }
 
             if (baseLpa <= 150 && min >= 100 && baseLpa > 0) {

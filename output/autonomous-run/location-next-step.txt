@@ -1,0 +1,752 @@
+Apply to Dhan AI
+
+2/7 pages
+
+Resume
+
+Select or upload a resume in DOC, DOCX, or PDF format that is less than 2MB
+
+PDF
+
+KSPChary_Resume_1Page copy.pdf
+
+10/25/2026
+
+PDF
+
+KSPChary_Resume_1Page copy.pdf
+
+9/26/2026
+
+PDF
+
+KSPChary_Resume_1Page copy.pdf
+
+9/24/2026
+
+PDF
+
+KSPChary_Resume_1Page copy.pdf
+
+9/24/2026
+
+PDF
+
+KSPChary_Resume_1Page copy.pdf
+
+9/24/2026
+
+PDF
+
+KSPChary_Resume_1Page copy.pdf
+
+9/24/2026
+
+PDF
+
+KSPChary_Resume_1Page copy.pdf
+
+9/24/2026
+
+PDF
+
+KSPChary_Resume_1Page copy.pdf
+
+9/24/2026
+
+PDF
+
+KSPChary_Resume_1Page.pdf
+
+9/24/2026
+
+PDF
+
+KSPChary_Resume_1Page.pdf
+
+9/22/2026
+
+PDF
+
+KSPChary_Resume_1Page (1).pdf
+
+9/22/2026
+
+PDF
+
+KSPChary_Resume_Google_AppEngineer.pdf
+
+8/15/2026
+
+PDF
+
+KSPChary_Resume_1Page (1).pdf
+
+8/14/2026
+
+PDF
+
+KSPChary_Resume_1Page.pdf
+
+8/1/2026
+
+PDF
+
+KSPcharyfinal.pdf
+
+4/30/2026
+
+PDF
+
+KSPcharyfinal.pdf
+
+4/30/2026
+
+PDF
+
+Resume for SWE.pdf
+
+4/29/2026
+
+PDF
+
+Resume.pdf
+
+8/27/2025
+
+PDF
+
+Resume.pdf
+
+7/14/2025
+
+PDF
+
+Resume (1).pdf
+
+7/1/2025
+
+PDF
+
+sai prasad.pdf
+
+4/30/2025
+
+PDF
+
+Screenshot 2025-01-31 at 10.27.47 PM (1).pdf
+
+4/30/2025
+
+Upload resume
+Tailor resume with AI
+Back
+Next
+0 notifications
+Skip to search
+Skip to main content
+Skip to primary content
+Skip to aside
+Skip to footer
+There was a problem processing your payment. Update your payment method to continue your plan and claim 50% off Premium for 2 months.
+Home
+Network
+Jobs
+Messaging
+25
+Notifications
+More
+
+Me
+
+For Business
+Learning
+
+Dhan AI
+
+Snowflake Engineer
+
+India · 3 weeks ago · Over 100 applicants
+
+No response insights available yet
+
+Remote
+Full-time
+Easy Apply
+Save
+Use AI to assess how you fit
+
+Show match details
+
+Tailor my resume
+
+Create cover letter
+
+Help me stand out
+
+About the job
+
+This is a remote position.
+
+ Snowflake Engineer
+Experience: 1–3 Years
+Location: Hyderabad / Remote
+Employment Type: Full-time
+About the Role
+
+
+We are looking for a Snowflake Engineer with 1–3 years of hands-on experience in data engineering and cloud data platforms. The ideal candidate should have practical experience working with Snowflake, SQL, Python, and ETL/ELT pipelines and be comfortable working with large datasets.
+
+
+This role is suited for someone who enjoys solving data problems, learning new technologies, and building scalable data solutions. 
+
+
+Key Responsibilities
+ 
+Develop and maintain data pipelines using Snowflake and SQL.
+
+ 
+Write complex SQL queries for data transformation, extraction, and analysis.  
+
+ 
+Build and maintain ETL/ELT pipelines from multiple data sources.
+
+ 
+Work with Snowflake features such as Streams, Tasks, Snow pipe, and stored procedures.
+
+ 
+Develop data transformations and automation using Python.
+
+ 
+Create and maintain tables, views, schemas, and data models in Snowflake.  
+
+ 
+Monitor and troubleshoot data pipelines and resolve data quality issues.  
+
+ 
+Optimize SQL queries and Snowflake workloads for performance and cost.  
+
+ 
+Work with cloud storage and services such as AWS S3, Azure Blob Storage, or GCP.
+
+ 
+Collaborate with senior engineers, analysts, and other stakeholders to understand data requirements.  
+
+ 
+Participate in code reviews, testing, deployment, and technical documentation.  
+
+ 
+Follow best practices for data security, quality, and reliability.  
+
+Required Skills
+ 
+1–3 years of hands-on experience in Data Engineering, Data Warehousing, or a related role.
+
+ 
+Hands-on experience with Snowflake.
+
+ 
+Strong SQL skills.
+
+ 
+Working knowledge of Python.
+
+ 
+Understanding of ETL/ELT pipelines and data integration.
+
+ 
+Basic understanding of data modelling and database concepts.
+
+ 
+Experience working with at least one cloud platform — AWS, Azure, or GCP.
+
+ 
+Familiarity with Git/version control.
+
+ 
+Good analytical and problem-solving skills.  
+
+
+
+
+
+Requirements
+
+ Good to Have
+ 
+Experience with Snowflake Streams, Tasks, Snow pipe, or Dynamic Tables.
+
+ 
+Experience with dbt.
+
+ 
+Familiarity with Apache Airflow or other workflow orchestration tools.
+
+ 
+Exposure to AWS services such as S3, Lambda, Glue, or Redshift.
+
+ 
+Experience with APIs, JSON, or other data formats.  
+
+ 
+Exposure to CI/CD practices.  
+
+ 
+Understanding of data quality and data governance.  
+
+ 
+Snowflake certification.  
+
+What We're Looking For
+ 
+Strong hands-on and practical approach to problem-solving.  
+
+ 
+Ability to understand requirements and translate them into technical solutions.  
+
+ 
+Good communication and collaboration skills.  
+
+ 
+Willingness to learn and work with modern data technologies.  
+
+ 
+Ability to work independently while collaborating with senior team members.  
+
+ 
+Strong attention to detail and data quality.
+… more
+Set alert for similar jobs
+
+Engineer, India
+
+Off
+See how you compare to other applicants
+Based on LinkedIn data. Excludes subsidiaries.
+Applicants for this job
+
+2081
+
+Applicants
+
+73
+
+Applicants in the past day
+
+Applicant seniority level
+
+69% Entry level people applied for this job
+
+23% Senior level people applied for this job
+
+Applicant education level
+
+10% have a Bachelor's Degree (Similar to you)
+
+39% have a Bachelor of Technology
+
+19% have a Bachelor of Engineering
+
+32% have other degrees
+
+Exclusive Job Seeker Insights about Dhan AI
+Powered by Bing
+
+The latest hiring trend
+
+72
+
+Total employees
+
+41%
+
+Company-wide
+
+2 year growth
+
+60%
+
+Information Technology
+
+2 year growth
+
+Chart
+Chart with 25 data points.
+The chart has 1 X axis displaying Time. Data ranges from 2024-10-01 00:00:00 to 2026-10-01 00:00:00.
+The chart has 1 Y axis displaying values. Data ranges from 51 to 78.
+Oct 2024
+Oct 2025
+Oct 2026
+0
+50
+100
+End of interactive chart.
+
+Median employee tenure: 2.3 years
+
+Show Premium Insights
+About the company
+
+Dhan AI
+
+17,539 followers
+
+Follow
+
+Software Development
+
+ • 
+
+51-200 employees
+
+ • 
+
+72 on LinkedIn
+
+​Dhan AI specializes in accelerating business transformation through AI, Big Data, and Cloud solutions.
+
+Show more
+More jobs
+
+Position : Data Engineer with Snowflake & AI Data Solutions Platform Projects Location : Remote (India) 
+
+Synergy Technologies
+
+India (Remote)
+
+Actively reviewing applicants
+
+Promoted
+
+ · 
+
+Posted 1 week ago
+1 week ago
+
+ · 
+
+Easy Apply
+
+Software Engineer
+
+AgileEngine
+
+India (Remote)
+
+Promoted
+
+ · 
+
+Posted 2 weeks ago
+2 weeks ago
+
+Data Operations Engineer(DBT, Snowflake, Terraform, Apache, Python, AWS, SQL) Fulltime - Remote - Night Shift - 8+ Years needed 
+
+Mastek
+
+Chennai (Remote)
+
+Promoted
+
+ · 
+
+Posted 2 weeks ago
+2 weeks ago
+
+ · 
+
+Easy Apply
+
+ Snowflake Azure Data Engineer 
+
+Programmers.io
+
+Hyderabad (Remote)
+
+Actively reviewing applicants
+
+Promoted
+
+ · 
+
+Posted 1 week ago
+1 week ago
+
+ · 
+
+Easy Apply
+
+Data Infrastructure Administrator 
+
+ServiceTitan
+
+India (Remote)
+
+Promoted
+
+ · 
+
+Posted 1 week ago
+1 week ago
+
+Senior Data Engineer – SnapLogic & Snowflake - Remote - Fulltime 
+
+Mastek
+
+Chennai (Remote)
+
+1 school alumni works here
+
+Promoted
+
+ · 
+
+Posted 2 weeks ago
+2 weeks ago
+
+ · 
+
+Easy Apply
+
+Enterprise App Programmer 
+
+NetApp
+
+India (Remote)
+
+Promoted
+
+ · 
+
+Posted 2 weeks ago
+2 weeks ago
+
+Senior Data Engineer
+
+Nuaav
+
+Noida (Hybrid)
+
+Actively reviewing applicants
+
+Promoted
+
+ · 
+
+Posted 2 weeks ago
+2 weeks ago
+
+ · 
+
+Easy Apply
+
+Snowflake Lead/Architect 
+
+Mastech
+
+India (Remote)
+
+Actively reviewing applicants
+
+Promoted
+
+ · 
+
+Posted 1 week ago
+1 week ago
+
+ · 
+
+Easy Apply
+
+4604091-Manager 
+
+EXL
+
+Gurugram
+
+Actively reviewing applicants
+
+Promoted
+
+ · 
+
+Posted 2 days ago
+2 days ago
+
+ · 
+
+Easy Apply
+
+Senior Data Engineer 
+
+Kitopi
+
+Bengaluru (Remote)
+
+Actively reviewing applicants
+
+Promoted
+
+ · 
+
+Posted 1 week ago
+1 week ago
+
+ · 
+
+Easy Apply
+
+Snowflake developer 
+
+CYAN360
+
+India (Remote)
+
+Actively reviewing applicants
+
+Promoted
+
+ · 
+
+Posted 2 days ago
+2 days ago
+
+ · 
+
+Easy Apply
+
+See more jobs like this
+Learn skills to get a new job with these courses
+
+Introduction to Amazon Redshift: Data Management Essentials
+
+1,639 viewers
+
+Data Integration and API Development for AI Applications
+
+4,657 viewers
+
+CompTIA DataSys+ (DS0-002) Cert Prep
+
+799 viewers
+
+Show more on LinkedIn Learning
+
+Looking for talent?
+
+Hire
+
+About
+
+Accessibility
+
+Talent Solutions
+
+Community Guidelines
+
+Careers
+
+Marketing Solutions 
+
+Privacy & Terms
+
+Ad Choices
+
+Advertising
+
+Sales Solutions
+
+Mobile
+
+Small Business
+
+Safety Center
+
+LinkedIn Corporation © 2026
+
+Questions?
+
+Visit our Help Center.
+
+Manage your account and privacy
+
+Go to your Settings.
+
+Recommendation transparency
+
+Learn more about Recommended Content.
+
+Select language
+
+العربية (Arabic)
+বাংলা (Bangla)
+Čeština (Czech)
+Dansk (Danish)
+Deutsch (German)
+Ελληνικά (Greek)
+English (English)
+Español (Spanish)
+فارسی (Persian)
+Suomi (Finnish)
+Français (French)
+हिंदी (Hindi)
+Magyar (Hungarian)
+Bahasa Indonesia (Indonesian)
+Italiano (Italian)
+עברית (Hebrew)
+日本語 (Japanese)
+한국어 (Korean)
+मराठी (Marathi)
+Bahasa Malaysia (Malay)
+Nederlands (Dutch)
+Norsk (Norwegian)
+ਪੰਜਾਬੀ (Punjabi)
+Polski (Polish)
+Português (Portuguese)
+Română (Romanian)
+Русский (Russian)
+Svenska (Swedish)
+తెలుగు (Telugu)
+ภาษาไทย (Thai)
+Tagalog (Tagalog)
+Türkçe (Turkish)
+Українська (Ukrainian)
+Tiếng Việt (Vietnamese)
+简体中文 (Chinese (Simplified))
+正體中文 (Chinese (Traditional))
+✦
+ZeroApply AI: Advancing Step
+LIVE AGENT ACTIVITY
+✦ Local AI
+📋 Copy Process
+−
+Snowflake Engineer
+Dhan AI
+Step 1 · Step 1
+✦
+CURRENT FOCUS QUESTION
+FORM STEP
+Enter city or location
+💡 ANSWER
+PERSONA PROFILE
+Hyderabad, Telangana, India
+RECENT VERIFIED FIELDS
+✓
+Enter city or location
+Hyderabad, Telangana, India
+✓
+Email address
+kspchary077@gmail.com
+✓
+Mobile phone number
++91 83743 70572
+✓
+Phone country code
+India (+91)
+✓
+Last name
+Sai Prasad Chary
+🛡️
+100% Local · Zero Cloud Leakage
+Human-Paced (2.2s)

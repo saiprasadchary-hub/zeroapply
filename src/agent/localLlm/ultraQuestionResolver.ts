@@ -448,7 +448,7 @@ function buildCandidateKnowledgeGraph(persona: PersonaData) {
       primaryTechStack: persona.techStack || [],
       targetRoles: persona.targetRoles || ['Software Engineer'],
       workPreference: persona.workPreference || 'Remote',
-      minimumSalaryExpectation: persona.minSalary || 30,
+      minimumSalaryExpectation: (persona.expectedSalaryLpa ?? persona.minSalary) || 30,
     },
     narrative: {
       summary: persona.experienceSummary || persona.resumeChunks?.summary || '',
@@ -465,7 +465,7 @@ function buildCandidateKnowledgeGraph(persona: PersonaData) {
  */
 export function resolveCompensationAnswer(label: string, persona: PersonaData, options?: string[]): string {
   const l = label.toLowerCase();
-  const baseLpa = persona.minSalary || 12;
+  const baseLpa = (persona.expectedSalaryLpa ?? persona.minSalary) || 12;
   const isFresher = persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working');
   const curLpa = isFresher ? 0 : (persona.currentCtcLpa !== undefined ? persona.currentCtcLpa : (persona.minSalary || 8));
 
@@ -777,7 +777,7 @@ export async function resolveQuestionCognitively(
 
   // Compensation & Salary (Split Current vs Expected)
   if (/current\s*(?:ctc|salary|compensation|pay|rate)/i.test(labelLower)) {
-    const curLpa = persona.minSalary || 12;
+    const curLpa = (persona.expectedSalaryLpa ?? persona.minSalary) || 12;
     const ans = /lpa|lakh/i.test(labelLower) ? String(curLpa) : String(curLpa * 100000);
     const finalAns = resolveBestOption(ans, target.options);
     questionMemory.addOrUpdateEntry(label, finalAns, 'persona', 0.98);
@@ -897,7 +897,7 @@ RULES:
 
   let fallbackAns = target.options && target.options.length > 0 ? target.options[0] : 'Yes';
   if (/salary|pay|compensation/i.test(labelLower)) {
-    fallbackAns = String(persona.minSalary || 30);
+    fallbackAns = String((persona.expectedSalaryLpa ?? persona.minSalary) || 30);
   } else if (/experience|years/i.test(labelLower)) {
     fallbackAns = String(persona.experienceYears || 2);
   }

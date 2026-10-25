@@ -42,7 +42,7 @@ export async function mapPersonaToFields(
         val = String(persona.experienceYears ?? 0);
         break;
       case 'salary':
-        val = String(persona.minSalary ?? 0);
+        val = String((persona.expectedSalaryLpa ?? persona.minSalary) ?? 0);
         break;
       case 'workPreference':
         val = persona.workPreference || 'Remote';

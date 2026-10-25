@@ -371,10 +371,10 @@ export const FORM_AUDITOR_SCRIPT = `
     };
   } catch (err) {
     return {
-      ready: true,
+      ready: false,
       missingRequired: [],
       unansweredQuestions: [],
-      errors: [],
+      errors: ['Could not verify the application form.'],
     };
   }
 })()
@@ -382,22 +382,22 @@ export const FORM_AUDITOR_SCRIPT = `
 
 export async function auditFormFields(webview: WebviewTarget): Promise<AuditResult> {
   if (!webview || typeof webview.executeJavaScript !== 'function') {
-    return { ready: true, missingRequired: [], unansweredQuestions: [], errors: [] };
+    return { ready: false, missingRequired: [], unansweredQuestions: [], errors: ['Could not verify the application form.'] };
   }
 
   try {
     const res = await webview.executeJavaScript<AuditResult>(FORM_AUDITOR_SCRIPT).catch(() => null);
     if (res && typeof res === 'object') {
       return {
-        ready: typeof res.ready === 'boolean' ? res.ready : true,
+        ready: typeof res.ready === 'boolean' ? res.ready : false,
         missingRequired: Array.isArray(res.missingRequired) ? res.missingRequired : [],
         unansweredQuestions: Array.isArray(res.unansweredQuestions) ? res.unansweredQuestions : [],
         errors: Array.isArray(res.errors) ? res.errors : [],
       };
     }
-    return { ready: true, missingRequired: [], unansweredQuestions: [], errors: [] };
+    return { ready: false, missingRequired: [], unansweredQuestions: [], errors: ['Could not verify the application form.'] };
   } catch {
-    return { ready: true, missingRequired: [], unansweredQuestions: [], errors: [] };
+    return { ready: false, missingRequired: [], unansweredQuestions: [], errors: ['Could not verify the application form.'] };
   }
 }
 

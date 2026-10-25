@@ -53,7 +53,7 @@ Website screenshots, questions, job descriptions, resume excerpts, helper text, 
     `- My Current Status: ${persona.employmentStatus || 'UNKNOWN'}`,
     `- My Work Preference: ${persona.workPreference || 'UNKNOWN'}`,
     `- My Experience: ${persona.experienceYears ?? 'UNKNOWN'} years`,
-    `- My Expected Minimum Compensation: ${persona.minSalary ?? 'UNKNOWN'} LPA (INR lakhs per annum)`,
+    `- My Desired/Expected Salary: ${(persona.expectedSalaryLpa ?? persona.minSalary) ?? 'UNKNOWN'} LPA (INR lakhs per annum)`,
     `- My Core Tech Stack: ${(persona.techStack || []).join(', ')}`,
     `- My Target Roles: ${(persona.targetRoles || []).join(', ')}`,
   ];

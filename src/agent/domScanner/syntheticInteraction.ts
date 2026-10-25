@@ -123,12 +123,27 @@ window.__zeroapplySynthetic = {
       // Exact comparison prevents "Male" from matching "Female".
       const radio = radios.find(r => getLabels(r).includes(target));
       if (!radio) return { success: false, error: 'Could not match radio option for: ' + desiredValue };
-      if (typeof radio.scrollIntoView === 'function') radio.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      radio.click();
-      await new Promise(resolve => setTimeout(resolve, 150));
-      const selected = radio.matches('input[type="radio"]')
-        ? radio.checked
-        : radio.getAttribute('aria-checked') === 'true' || radio.getAttribute('data-state') === 'checked';
+      const isSelected = candidate => candidate.matches('input[type="radio"]')
+        ? candidate.checked
+        : candidate.getAttribute('aria-checked') === 'true' || candidate.getAttribute('data-state') === 'checked';
+      if (!isSelected(radio)) {
+        if (window.__zeroapplyCursor?.clickElement) {
+          if (!await window.__zeroapplyCursor.clickElement(radio, 'Select: ' + desiredValue)) return { success: false, error: 'Radio click was blocked' };
+        } else {
+          radio.scrollIntoView({ behavior: 'auto', block: 'center' });
+          radio.click();
+        }
+      }
+      // Controlled forms may replace option nodes after selection. Verify current DOM nodes.
+      let selected = false;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const currentRoots = Array.from(document.querySelectorAll(groupSelector));
+        const currentRadios = currentRoots.flatMap(root => root.matches('input[type="radio"], [role="radio"]')
+          ? [root] : Array.from(root.querySelectorAll('input[type="radio"], [role="radio"]')));
+        selected = currentRadios.some(candidate => getLabels(candidate).includes(target) && isSelected(candidate));
+        if (selected) break;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
       if (!selected) return { success: false, error: 'Radio selection was not confirmed: ' + desiredValue };
       return { success: true, actionTaken: 'Checked radio: ' + desiredValue };
     } catch (err) {

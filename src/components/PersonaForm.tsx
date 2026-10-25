@@ -1153,6 +1153,24 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                 </div>
               </div>
             )}
+            <div className="space-y-1.5 pt-3 border-t border-zinc-100">
+              <label htmlFor="expected-salary-lpa" className="text-[11px] font-bold text-zinc-700">
+                Desired/expected salary (in LPA)
+              </label>
+              <input
+                id="expected-salary-lpa"
+                type="number"
+                min="0"
+                step="0.1"
+                value={persona.expectedSalaryLpa ?? (persona.minSalary > 0 ? persona.minSalary : '')}
+                onChange={(e) => handleInputChange('expectedSalaryLpa', e.target.value === '' ? undefined : Math.max(0, Number(e.target.value)))}
+                placeholder="Enter your expected annual salary"
+                className="w-full px-3 py-2 text-xs border border-zinc-200 rounded-xl bg-zinc-50/50 outline-none focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 font-semibold text-zinc-900"
+              />
+              <p className="text-[10px] text-zinc-500">
+                Used for desired salary and expected CTC questions, for both freshers and currently working applicants. 1 LPA = ₹100,000 per year.
+              </p>
+            </div>
           </div>
 
           {/* Section 8: Autonomous Apply Setup & Launch Hub */}

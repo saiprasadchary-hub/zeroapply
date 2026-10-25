@@ -1,3 +1,4 @@
+import { ApplicationLogger } from '../tracker/applicationLogger';
 import { resolveScreeningFact } from '../localLlm/screeningFacts';
 import { SUBMISSION_EVIDENCE_SCRIPT } from '../normalApply/submissionEvidence';
 /**
@@ -36,6 +37,8 @@ import { scanAndHandleWhatsApp } from './whatsappHandler';
 import { ensureLinkedInSafeSession } from '../stealth/linkedinSafetyGuard';
 
 export interface OrchestratorOptions {
+  companyName?: string;
+  jobTitle?: string;
   maxSteps?: number;
   stepDelayMs?: number;
   openTab?: (url?: string) => Promise<any | null>;
@@ -79,7 +82,28 @@ export class AutoApplyOrchestrator {
 
       // Full-Spectrum OmniVision Perception (Layout, Spatial Elements, and Job Context)
       const pagePerception = await omniVision.perceive(webview).catch(() => null);
-      const activeJobContext = pagePerception?.job;
+      const dialogCompany = await webview.executeJavaScript<string>(`(() => {
+        const roots = [document];
+        for (let i = 0; i < roots.length; i++) {
+          for (const node of roots[i].querySelectorAll('*')) if (node.shadowRoot) roots.push(node.shadowRoot);
+          for (const dialog of roots[i].querySelectorAll('dialog[open], [role="dialog"], .artdeco-modal')) {
+            if (!dialog.getClientRects().length) continue;
+            const match = (dialog.innerText || dialog.textContent || '').match(/^Apply to ([^\\n]+)/im);
+            if (match) return match[1].trim();
+          }
+        }
+        return '';
+      })()`).catch(() => '');
+      const activeJobContext = { ...pagePerception?.job,
+        companyName: dialogCompany || options.companyName || pagePerception?.job?.companyName,
+        jobTitle: options.jobTitle || pagePerception?.job?.jobTitle,
+      };
+      const normalizeCompany = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const company = normalizeCompany(activeJobContext.companyName || '');
+      const screeningContext = { previouslyAppliedToCompany: company && !['company', 'target company'].includes(company)
+        ? ApplicationLogger.getLogs().some(log => log.status === 'SUCCESS' && normalizeCompany(log.companyName) === company)
+          || QALogger.getLogs().some(log => log.status === 'SUBMITTED' && normalizeCompany(log.companyName || log.company) === company)
+        : undefined };
       await webview.executeJavaScript(`window.__zeroapplyHUD?.setJob(${JSON.stringify(activeJobContext?.jobTitle || 'Current application')}, ${JSON.stringify(activeJobContext?.companyName || 'Reading job details')})`).catch(() => {});
 
 
@@ -335,7 +359,7 @@ export class AutoApplyOrchestrator {
           });
 
           sm.transition('filling');
-          for (const field of classified) {
+          for (const field of [...classified].sort((a, b) => a.rect && b.rect ? a.rect.y - b.rect.y || a.rect.x - b.rect.x : 0)) {
             if (field.standardKey === 'top_choice_upsell' && field.currentValue !== 'true') continue;
             // Resume cards/files are handled exclusively by the dedicated resume pipeline below
             if (field.fieldType === 'resume' || field.fieldType === 'resume_upload' || field.inputType === 'file' || /resume|\.pdf|\.docx?|cv\b/i.test(field.label || '')) {
@@ -343,10 +367,11 @@ export class AutoApplyOrchestrator {
             }
             // Determine answer (Persona mapped value or Local Qwen 2.5 LLM resolution)
             if (!field.required && (field.inputType === 'checkbox' || !field.mappedValue)) continue;
-            const screenedFact = resolveScreeningFact(field.label || '', persona);
+            const screenedFact = resolveScreeningFact(field.label || '', persona, screeningContext);
             if (screenedFact === '' && field.required) {
               const error = `Needs a verified profile answer: ${field.label}`;
-              liveTelemetry.emit({ type: 'think', title: error, status: 'completed' });
+              liveTelemetry.emit({ type: 'status', title: error, target: field.label, status: 'paused' });
+              await webview.executeJavaScript(`window.__zeroapplyHUD?.setQuestion(${JSON.stringify(error)}, 'Needs your answer')`).catch(() => {});
               return { outcome: 'skipped', platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount, error };
             }
             let answerVal = screenedFact ?? field.mappedValue;
@@ -408,7 +433,12 @@ export class AutoApplyOrchestrator {
               );
 
               const fillRes = await fillField(webview, field, answerVal, persona);
-              if (fillRes.success) totalFieldsFilled++;
+              if (!fillRes.success) {
+                const error = `Answer did not persist for "${field.label}": ${fillRes.error || 'field verification failed'}`;
+                liveTelemetry.emit({ type: 'status', title: error, target: field.label, status: 'paused' });
+                return { outcome: 'skipped', platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount, error };
+              }
+              totalFieldsFilled++;
 
               // Record filled field in Live Agent Light HUD
               await webview.executeJavaScript(`
@@ -678,7 +708,7 @@ export class AutoApplyOrchestrator {
                    (ff.inputType === 'radio' && !ff.currentValue));
 
             if (isUnanswered) {
-              let answerVal = resolveScreeningFact(ff.label || '', persona) ?? ff.mappedValue;
+              let answerVal = resolveScreeningFact(ff.label || '', persona, screeningContext) ?? ff.mappedValue;
               let source: 'persona' | 'ollama' | 'rule' = 'persona';
 
               const matchingUnanswered = (audit.unansweredQuestions || []).find(
@@ -891,10 +921,10 @@ export class AutoApplyOrchestrator {
             });
           }
 
-          // Wait & poll for submission confirmation view or post-submit upsell from ATS (up to 4500ms)
+          // Wait & poll for submission confirmation view or post-submit upsell from ATS (up to 45 seconds)
           let isSubmittedConfirmed = false;
           const pollStart = Date.now();
-          while (Date.now() - pollStart < 4500) {
+          while (Date.now() - pollStart < 45000) {
             isSubmittedConfirmed = await webview.executeJavaScript<boolean>(SUBMISSION_EVIDENCE_SCRIPT).catch(() => false);
 
             if (isSubmittedConfirmed) break;
@@ -1056,7 +1086,7 @@ export class AutoApplyOrchestrator {
 
             if (shouldRefill) {
               // Resolve question with explicit validationError constraint
-              let answerVal = resolveScreeningFact(rf.label || '', persona) ?? rf.mappedValue;
+              let answerVal = resolveScreeningFact(rf.label || '', persona, screeningContext) ?? rf.mappedValue;
               const numericAns = answerVal ? Number(answerVal) : NaN;
               const violatesConstraint = Boolean(
                 analysis?.isNumericConstraint && (

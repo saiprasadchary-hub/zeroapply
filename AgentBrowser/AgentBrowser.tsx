@@ -382,6 +382,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
   const autoApplyEngineRef = useRef<AutoApplyEngine>(new AutoApplyEngine());
   const standardFormsEngineRef = useRef<StandardFormsEngine>(new StandardFormsEngine());
   const [isAutoApplying, setIsAutoApplying] = useState(false);
+  const [automationStatus, setAutomationStatus] = useState('');
   useEffect(() => {
     void window.zeroApply?.setAutoApplyActive?.(isAutoApplying).catch(() => {});
     return () => { void window.zeroApply?.setAutoApplyActive?.(false).catch(() => {}); };
@@ -1209,6 +1210,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
     const standardFormsEngine = standardFormsEngineRef.current;
 
     autoApplyEngine.setStatusCallback((status) => {
+      setAutomationStatus(status);
       onSaveToast(status);
     });
     standardFormsEngine.setStatusCallback((status) => {
@@ -1936,6 +1938,12 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
             isAdvancing={isAdvancing}
             batchLimit={persona?.applicationLimit ?? 5}
           />
+        )}
+
+        {automationStatus && (
+          <div role="status" aria-live="polite" className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-950">
+            {automationStatus}
+          </div>
         )}
 
         {/* Sign-in advisory banner if user is on an authentication or guest page */}

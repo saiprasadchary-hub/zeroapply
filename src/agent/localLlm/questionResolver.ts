@@ -179,7 +179,7 @@ export async function resolveQuestion(
           if (isCurrentCtc) {
             baseLpa = isFresher ? 0 : (persona.currentCtcLpa !== undefined ? persona.currentCtcLpa : (persona.minSalary || 8));
           } else {
-            baseLpa = persona.minSalary || (numAns > 0 ? numAns : 12);
+            baseLpa = (persona.expectedSalaryLpa ?? persona.minSalary) || (numAns > 0 ? numAns : 12);
           }
           if (baseLpa > 0) {
             const freshCompAnswer = String(baseLpa * 100000);
@@ -209,7 +209,7 @@ export async function resolveQuestion(
       const min = errorAnalysis.targetMinValue ?? 0;
       let val = min > 0 ? min + 1.0 : 1.0;
       if (/salary|rate|pay|comp|ctc|stipend|remuneration/i.test(labelLower)) {
-        val = /hourly/i.test(labelLower) ? 25.0 : (persona.minSalary || 25.0);
+        val = /hourly/i.test(labelLower) ? 25.0 : ((persona.expectedSalaryLpa ?? persona.minSalary) || 25.0);
       } else if (/\b(?:experience|years?|yrs?)\b/i.test(labelLower) && !/expected|example/i.test(labelLower)) {
         val = (persona.experienceYears ?? 0);
       }
@@ -228,7 +228,7 @@ export async function resolveQuestion(
         if (/hourly/i.test(labelLower)) {
           val = 25;
         } else {
-          const baseLpa = persona.minSalary || 12;
+          const baseLpa = (persona.expectedSalaryLpa ?? persona.minSalary) || 12;
           if (baseLpa <= 150 && min >= 100) {
             val = baseLpa * 100000;
           } else {
@@ -869,7 +869,7 @@ export async function resolveQuestion(
 
   // Fallback for salary / hourly rate
   if (/salary|compensation|expected.*pay|stipend|ctc|hourly|hourly.*rate|expected.*rate|rate.*per.*hour|\bwage\b|\bhourly\b/i.test(labelLower)) {
-    const hourlyVal = /hourly|per.*hour|\brate\b/i.test(labelLower) ? '25' : String(persona.minSalary || '25');
+    const hourlyVal = /hourly|per.*hour|\brate\b/i.test(labelLower) ? '25' : String((persona.expectedSalaryLpa ?? persona.minSalary) || '25');
     return { answer: hourlyVal, confidence: 0.9, source: 'fallback' };
   }
 

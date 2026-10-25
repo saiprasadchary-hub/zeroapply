@@ -33,6 +33,8 @@ export interface PersonaData {
   targetRoles: string[];
   employmentStatus?: 'fresher' | 'currently_working';
   currentCompany?: string;
+  workingHoursPreference?: 'daytime' | 'flexible';
+  expectedSalaryLpa?: number; // Desired annual salary in LPA, independent of current CTC
   currentCtcLpa?: number; // in LPA / Lakhs Per Annum (0 for fresher, e.g., 8 = ₹8 LPA)
   noticePeriodDays?: number; // in days (0 for immediate/fresher, 15, 30, etc.)
   skills?: string[];
