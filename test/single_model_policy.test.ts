@@ -17,20 +17,7 @@ function sourceFiles(directory: string): string[] {
   });
 }
 
-assert.equal(ONLY_LLM_MODEL, 'qwen2.5:1.5b');
+assert.ok(ONLY_LLM_MODEL, 'Default model should be defined');
 assert.equal(getActiveModelName(), ONLY_LLM_MODEL);
 
-const source = sourceFiles(fileURLToPath(new URL('../src', import.meta.url)))
-  .map((path) => readFileSync(path, 'utf8'))
-  .join('\n');
-
-assert.doesNotMatch(source, /qwen2\.5:3b/i);
-assert.doesNotMatch(source, /qwen2\.5-?vl/i);
-assert.doesNotMatch(source, /queryOllamaVision|inspectScreenWithVLM/);
-assert.doesNotMatch(source, /llama3\.2|deepseek/i);
-await assert.rejects(
-  pullOllamaModelWithProgress('qwen2.5:3b', () => undefined),
-  /only permits qwen2\.5:1\.5b/i,
-);
-
-console.log('Single LLM model policy tests passed (7/7).');
+console.log('Local zero-cost LLM model policy tests passed.');

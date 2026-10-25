@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "233558169610",
+    "project_id": "zero-apply",
+    "storage_bucket": "zero-apply.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:233558169610:android:599636a5e42bc23942a7f3",
+        "android_client_info": {
+          "package_name": "com.zeroapply.app.android.ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "233558169610-mov6h689t277nodinirseneubs4rftqj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.zeroapply.app.android.ai",
+            "certificate_hash": "7f019ce8330cb1f8895ee6dda51554662461c6d1"
+          }
+        },
+        {
+          "client_id": "233558169610-cuo3nag93apttf23nmjnikr6stf7eqmv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdjzOR6xEV9jgFXc9xK9dJf2zT81bvGmE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "233558169610-abo5c51up1t2e1967d2f9vgakj7ujgva.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

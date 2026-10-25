@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { buildQuestionPrompt } from '../src/agent/localLlm/promptBuilder';
+import { matchBestOption, parseAnswer } from '../src/agent/localLlm/answerParser';
+import type { PersonaData } from '../src/types';
+
+const persona = { fullName: 'Alex', employmentStatus: 'currently_working', currentCompany: 'Example', minSalary: 12, experienceYears: 0, techStack: [], targetRoles: [] } as unknown as PersonaData;
+const prompt = buildQuestionPrompt({ question: 'Expected monthly salary?', persona, helperText: 'INR per month', contextHint: 'Compensation', options: ['Option auswählen', 'Ja', 'Nein'], jobContext: { jobSummary: 'Remote development' } });
+assert.ok(prompt.userPrompt.includes('currently_working'));
+assert.ok(prompt.userPrompt.includes('Example'));
+assert.ok(prompt.userPrompt.includes('INR per month'));
+assert.ok(prompt.userPrompt.includes('Remote development'));
+assert.ok(!prompt.userPrompt.includes('Option auswählen'));
+assert.ok(!prompt.userPrompt.includes('Hyderabad'));
+assert.ok(prompt.systemPrompt.includes('UNKNOWN'));
+assert.equal(matchBestOption('Yes', ['Option auswählen', 'Ja', 'Nein'])?.option, 'Ja');
+assert.equal(matchBestOption('No', ['Ja']), null);
+assert.equal(matchBestOption('unrelated answer', ['Ja', 'Nein']), null);
+assert.equal(matchBestOption('', ['Yes', 'No']), null);
+assert.equal(matchBestOption('4', ['1-3 years', '3-5 years'])?.option, '3-5 years');
+assert.deepEqual(parseAnswer('UNKNOWN', { inputType: 'number', validationError: 'Enter a valid number' }), { answer: '', confidence: 0 });
+assert.deepEqual(parseAnswer('unrelated answer', { options: ['Yes', 'No'] }), { answer: '', confidence: 0 });
+console.log('Grounded LLM prompt and answer regression checks passed');

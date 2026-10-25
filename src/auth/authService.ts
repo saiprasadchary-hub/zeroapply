@@ -1,5 +1,6 @@
 import {
   signInWithPopup,
+  signInWithCredential,
   GoogleAuthProvider,
   browserLocalPersistence,
   setPersistence,
@@ -60,7 +61,15 @@ export class AuthService {
    */
   public static async loginWithGoogle(): Promise<User> {
     await ensurePersistentSession();
-    const result = await signInWithPopup(auth, googleProvider);
+    const bridge = typeof window === 'undefined' ? undefined : window.zeroApply;
+    const result = await (async () => {
+      if (!bridge?.isDesktop || !bridge.loginWithGoogleInChrome) return signInWithPopup(auth, googleProvider);
+      const handoff = await bridge.loginWithGoogleInChrome();
+      if (!handoff.ok) {
+        throw Object.assign(new Error(handoff.error), { code: 'auth/browser-handoff-failed' });
+      }
+      return signInWithCredential(auth, GoogleAuthProvider.credential(handoff.idToken));
+    })();
     await syncUserToFirestore(result.user);
     return result.user;
   }

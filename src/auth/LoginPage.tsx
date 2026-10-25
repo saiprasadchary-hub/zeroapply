@@ -24,17 +24,21 @@ export const LoginPage: React.FC = () => {
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googlePending, setGooglePending] = useState(false);
+  const chromeLogin = Boolean(window.zeroApply?.isDesktop && window.zeroApply.loginWithGoogleInChrome);
   const [resetSent, setResetSent] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
 
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
+      setGooglePending(chromeLogin);
       await loginWithGoogle();
     } catch {
       // Handled in AuthContext
     } finally {
       setLoading(false);
+      setGooglePending(false);
     }
   };
 
@@ -76,7 +80,7 @@ export const LoginPage: React.FC = () => {
       <div className="relative z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-center my-auto">
         
         {/* Left Column: Clean Editorial Product Story */}
-        <div className="lg:col-span-6 flex flex-col justify-center text-left space-y-6">
+        <div className="lg:col-span-6 flex flex-col justify-center text-left space-y-6 order-2 lg:order-1">
           {/* Logo Brand Header */}
           <div className="flex items-center gap-3">
             <img
@@ -132,7 +136,7 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* Right Column: Clean White Card Login */}
-        <div className="lg:col-span-6 flex flex-col items-center">
+        <div className="lg:col-span-6 flex flex-col items-center order-1 lg:order-2">
           <div className="w-full max-w-[420px] bg-white border border-zinc-200/90 rounded-2xl p-6 sm:p-8 shadow-xl shadow-zinc-900/5 flex flex-col">
             
             {/* Card Header */}
@@ -206,8 +210,16 @@ export const LoginPage: React.FC = () => {
                     d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
                   />
                 </svg>
-                <span>Continue with Google</span>
+                <span>{googlePending ? 'Waiting for Google sign-in…' : chromeLogin ? 'Continue with Google in Chrome' : 'Continue with Google'}</span>
               </button>
+            )}
+
+            {googlePending && (
+              <div role="status" className="mb-4 text-center text-xs text-zinc-600">
+                Complete sign-in in Chrome. You’ll return here automatically.
+                <button type="button" onClick={() => void window.zeroApply?.cancelGoogleLogin?.()}
+                  className="ml-2 font-semibold underline">Cancel</button>
+              </div>
             )}
 
             {/* Divider */}

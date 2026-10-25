@@ -1,0 +1,10 @@
+export function isAuthenticationUrl(value: string, baseUrl?: string): boolean;
+export function shouldKeepAuthenticationPopup(value: string, authenticatedPopup: boolean): boolean;
+export function isLinkedInSafetyUrl(value: string, baseUrl?: string): boolean;
+export function isLinkedInTrackerUrl(value: string, baseUrl?: string): boolean;
+export function isBrowserDestination(url: URL | null | undefined): boolean;
+export function isDeferredPopupUrl(value: unknown): boolean;
+export function resolvePopupDestination(value: unknown, baseUrl?: string): URL | null;
+export function normalizeGestureCandidates(rawCandidates: unknown, baseUrl?: string): string[];
+export function resolveGestureDestination(gesture?: { candidates?: string[] } | null): URL | null;
+export function matchesStartupDestination(currentUrl: string, requestedUrl: string): boolean;

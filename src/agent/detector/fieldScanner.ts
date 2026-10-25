@@ -1,315 +1,37 @@
+/**
+ * ZeroApply Detector - Field Scanner Bridge
+ */
+
 export interface ScannedField {
   id: string;
   elementSelector: string;
-  type: 'text' | 'email' | 'tel' | 'number' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'file' | 'custom_dropdown' | 'signature';
+  type: string;
   label: string;
   name: string;
   placeholder: string;
   required: boolean;
-  options?: string[]; // For select, radio, or custom dropdowns
-  value?: string;
-  errorMessage?: string; // Active inline validation error from the form (e.g. "Enter a decimal number larger than 0.0")
+  value: string;
+  options?: string[];
+  disabled?: boolean;
 }
 
-/**
- * Client-side DOM Scanner Script string
- * Injected directly into webview or executed in page context to extract all actionable form fields.
- */
 export const DOM_SCANNER_SCRIPT = `
-(function scanFormFields() {
-  const fields = [];
-  const radioGroups = {};
-  let fieldIdx = 0;
-
-  // 1. Identify active application modal container if open
-  const isVisible = (el) => {
-    if (!el || !el.isConnected) return false;
-    const style = window.getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
-    const rect = el.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
-  };
-  const modals = Array.from(document.querySelectorAll('[role="dialog"], .artdeco-modal, .jobs-easy-apply-modal, .jobs-apply-form')).filter(isVisible);
-  const root = modals.find(m => /easy apply|application|contact info|resume/i.test(String(m.innerText || ''))) || modals[0] || document.body;
-
-  function cleanQuestionText(raw) {
-    if (!raw) return '';
-    let txt = String(raw).replace(/\\s+/g, ' ').trim();
-    // Strip required asterisks, visually hidden badges, or trailing colons
-    txt = txt.replace(/[\\n\\r]+/g, ' ')
-             .replace(/[*]+/g, '')
-             .replace(/\\s*\\(optional\\)\\s*$/i, '')
-             .replace(/\\s*\\(required\\)\\s*$/i, '')
-             .replace(/[:]\\s*$/, '')
-             .trim();
-    return txt;
-  }
-
-  function isGenericPlaceholder(txt) {
-    if (!txt) return true;
-    const lower = txt.toLowerCase().trim();
-    return /^(?:select|please select|choose|--|select an option|select one|choose an option|select...|options)$/i.test(lower) || lower.length < 2;
-  }
-
-  function getLabelText(el) {
-    let foundText = '';
-
-    // 1. Direct label[for="id"]
-    if (el.id) {
-      const labelEl = root.querySelector('label[for="' + CSS.escape(el.id) + '"]');
-      if (labelEl) {
-        const spanVisible = labelEl.querySelector('span[aria-hidden="true"]') || labelEl;
-        foundText = cleanQuestionText(spanVisible.innerText || labelEl.innerText);
-      }
-    }
-
-    // 2. aria-labelledby
-    if (isGenericPlaceholder(foundText)) {
-      const labelledBy = el.getAttribute('aria-labelledby');
-      if (labelledBy) {
-        const idList = labelledBy.split(/\\s+/);
-        const lblTexts = idList.map(id => {
-          const l = document.getElementById(id);
-          return l ? l.innerText.trim() : '';
-        }).filter(Boolean);
-        if (lblTexts.length > 0) foundText = cleanQuestionText(lblTexts.join(' '));
-      }
-    }
-
-    // 3. aria-label or title
-    if (isGenericPlaceholder(foundText)) {
-      const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('title');
-      if (ariaLabel && !isGenericPlaceholder(ariaLabel)) {
-        foundText = cleanQuestionText(ariaLabel);
-      }
-    }
-
-    // 4. Closest label wrapper
-    if (isGenericPlaceholder(foundText)) {
-      const parentLabel = el.closest('label');
-      if (parentLabel) {
-        const span = parentLabel.querySelector('span[aria-hidden="true"], .fb-form-element-label__title--is-required, span') || parentLabel;
-        foundText = cleanQuestionText(span.innerText);
-      }
-    }
-
-    // 5. Parent form element container / LinkedIn fb-form-element
-    if (isGenericPlaceholder(foundText)) {
-      const parentBlock = el.closest('.fb-form-element, .artdeco-form-element, .jobs-easy-apply-form-section__grouping, .fb-dropdown, [class*="form-element"], .display-flex, .form-group');
-      if (parentBlock) {
-        const potentialQuestion = parentBlock.querySelector(
-          '.fb-form-element-label, label span[aria-hidden="true"], label span, legend span, label, legend, .artdeco-dropdown__label, .fb-dropdown__label, .t-14.t-bold, [class*="label"]'
-        );
-        if (potentialQuestion) {
-          foundText = cleanQuestionText(potentialQuestion.innerText);
-        }
-      }
-    }
-
-    if (!isGenericPlaceholder(foundText)) {
-      return foundText;
-    }
-
-    return cleanQuestionText(el.placeholder || el.name || el.id || '');
-  }
-
-  function getRadioQuestionText(el) {
-    const fieldset = el.closest('fieldset');
-    if (fieldset) {
-      const legend = fieldset.querySelector('legend span[aria-hidden="true"]') || fieldset.querySelector('legend');
-      if (legend && legend.innerText.trim()) return cleanQuestionText(legend.innerText);
-    }
-    const rg = el.closest('[role="radiogroup"]');
-    if (rg) {
-      const id = rg.getAttribute('aria-labelledby');
-      if (id) {
-        const lbl = document.getElementById(id);
-        if (lbl) return cleanQuestionText(lbl.innerText);
-      }
-      if (rg.getAttribute('aria-label')) return cleanQuestionText(rg.getAttribute('aria-label'));
-    }
-    // Fallback: Check parent blocks
-    const parentBlock = el.closest('.fb-form-element, .jobs-easy-apply-form-section__grouping, .display-flex, .form-group, .ember-view');
-    if (parentBlock) {
-      const potentialQuestion = parentBlock.querySelector('label span[aria-hidden="true"], legend span, label, legend');
-      if (potentialQuestion) return cleanQuestionText(potentialQuestion.innerText);
-    }
-    return cleanQuestionText(el.name || '');
-  }
-
-  function getOptionText(el) {
-    if (el.id) {
-      const associated = root.querySelector('label[for="' + CSS.escape(el.id) + '"]');
-      if (associated) return cleanQuestionText(associated.innerText || associated.textContent);
-    }
-    const ariaLabel = el.getAttribute('aria-label');
-    if (ariaLabel) return cleanQuestionText(ariaLabel);
-    const wrapped = el.closest('label');
-    if (wrapped) return cleanQuestionText(wrapped.innerText || wrapped.textContent);
-    const ownText = cleanQuestionText(el.innerText || el.textContent || el.value || el.getAttribute('data-value') || '');
-    return ownText;
-  }
-
-  const selector = 'input, textarea, select, canvas, [role="combobox"], [role="radio"], [role="checkbox"], button[aria-haspopup="listbox"], button[data-test-fb-dropdown-trigger], .artdeco-dropdown__trigger';
-  const elements = Array.from(root.querySelectorAll(selector));
-
-  elements.forEach((el) => {
-    const isDropdownTrigger = el.getAttribute('role') === 'combobox' || el.getAttribute('aria-haspopup') === 'listbox' || el.classList.contains('artdeco-dropdown__trigger');
-    const isAriaChoice = el.getAttribute('role') === 'radio' || el.getAttribute('role') === 'checkbox';
-    if ((el.type === 'hidden' || el.type === 'submit' || el.type === 'image') && !isDropdownTrigger) return;
-    if (el.type === 'button' && !isDropdownTrigger && !isAriaChoice) return;
-    
-    // When scanning document root without modal, ignore global search boxes and result lists
-    if (root === document.body) {
-      if (el.closest('header, nav, .global-nav, .jobs-search-box, .search-basic-typeahead, .jobs-search-results-list, .scaffold-layout__list')) {
-        return;
-      }
-    }
-
-    const style = window.getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden') {
-      if (el.type !== 'file' && el.type !== 'radio' && el.type !== 'checkbox' && !isDropdownTrigger) return;
-    }
-
-    fieldIdx++;
-    const id = el.id || ('za_field_' + fieldIdx);
-    if (!el.id) el.id = id;
-
-    const tag = el.tagName.toLowerCase();
-    
-    if (el.type === 'radio' || el.getAttribute('role') === 'radio') {
-      const radioContainer = el.closest('[role="radiogroup"], fieldset, .form-group, .fb-form-element');
-      let containerKey = radioContainer?.getAttribute('data-za-radio-container') || '';
-      if (radioContainer && !containerKey) {
-        containerKey = 'aria_radio_' + fieldIdx;
-        radioContainer.setAttribute('data-za-radio-container', containerKey);
-      }
-      const name = el.name || el.getAttribute('name') || radioContainer?.id || radioContainer?.getAttribute('aria-label') || containerKey || ('aria_radio_' + fieldIdx);
-      if (name) {
-        const groupKey = String(name).replace(/[^a-zA-Z0-9_-]/g, '_');
-        if (!el.name) el.setAttribute('data-za-radio-group', groupKey);
-        if (!radioGroups[groupKey]) {
-          const qText = getRadioQuestionText(el);
-          radioGroups[groupKey] = {
-            id: 'group_' + groupKey,
-            elementSelector: el.name
-              ? 'input[type="radio"][name="' + CSS.escape(el.name) + '"]'
-              : '[role="radio"][data-za-radio-group="' + CSS.escape(groupKey) + '"]',
-            type: 'radio',
-            label: qText || name,
-            name: name,
-            placeholder: '',
-            required: el.required || el.getAttribute('aria-required') === 'true' || radioContainer?.getAttribute('aria-required') === 'true',
-            options: [],
-            value: ''
-          };
-          fields.push(radioGroups[groupKey]);
-        }
-        radioGroups[groupKey].required = radioGroups[groupKey].required || el.required || el.getAttribute('aria-required') === 'true';
-        const optText = getOptionText(el);
-        if (optText && !radioGroups[groupKey].options.includes(optText)) {
-          radioGroups[groupKey].options.push(optText);
-        }
-        if (el.checked || el.getAttribute('aria-checked') === 'true') {
-          radioGroups[groupKey].value = optText || el.value || el.getAttribute('data-value') || '';
-        }
-        return; // Handled by group
-      }
-    }
-
-    let fieldType = 'text';
-    if (tag === 'textarea') fieldType = 'textarea';
-    else if (tag === 'select') fieldType = 'select';
-    else if (tag === 'canvas' || el.classList.contains('signature-pad') || /sign/i.test(el.id || el.className)) fieldType = 'signature';
-    else if (el.type === 'file') fieldType = 'file';
-    else if (el.type === 'checkbox' || el.getAttribute('role') === 'checkbox') fieldType = 'checkbox';
-    else if (el.type === 'email') fieldType = 'email';
-    else if (el.type === 'tel') fieldType = 'tel';
-    else if (el.type === 'number') fieldType = 'number';
-    else if (isDropdownTrigger || el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox') {
-      fieldType = 'custom_dropdown';
-    }
-
-    let options = [];
-    if (tag === 'select') {
-      options = Array.from(el.options)
-        .map(o => (o.text || o.value || '').trim())
-        .filter(t => t && !isGenericPlaceholder(t));
-    } else if (fieldType === 'custom_dropdown') {
-      const controlledIds = String(el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\\s+/).filter(Boolean);
-      const controlledOptions = controlledIds.flatMap(controlledId => {
-        const controlled = document.getElementById(controlledId);
-        return controlled ? Array.from(controlled.querySelectorAll('[role="option"], [role="menuitemradio"], [role="menuitem"], option')) : [];
-      });
-      options = controlledOptions.map(getOptionText).filter(t => t && !isGenericPlaceholder(t));
-      // Check for hidden select or sibling option elements
-      const parentContainer = el.closest('.fb-dropdown, .artdeco-dropdown, [class*="dropdown"], [class*="select"]');
-      if (options.length === 0 && parentContainer) {
-        const hiddenSelect = parentContainer.querySelector('select');
-        if (hiddenSelect && hiddenSelect.options) {
-          options = Array.from(hiddenSelect.options)
-            .map(o => (o.text || o.value || '').trim())
-            .filter(t => t && !isGenericPlaceholder(t));
-        }
-      }
-    }
-
-    // Extract active inline error message (e.g. LinkedIn red validation error "Enter a decimal number larger than 0.0")
-    let errorMessage = '';
-    try {
-      const ariaDescribed = el.getAttribute('aria-describedby') || el.getAttribute('aria-errormessage');
-      if (ariaDescribed) {
-        const ids = ariaDescribed.split(/\\s+/);
-        for (const i of ids) {
-          const errEl = document.getElementById(i);
-          if (errEl && errEl.innerText.trim()) {
-            const txt = errEl.innerText.trim();
-            if (/error|enter|larger|decimal|number|valid|required|select/i.test(txt)) {
-              errorMessage = cleanQuestionText(txt);
-              break;
-            }
-          }
-        }
-      }
-
-      if (!errorMessage) {
-        const parentBlock = el.closest('.fb-form-element, .artdeco-form-element, .jobs-easy-apply-form-section__grouping, .display-flex, .form-group, div');
-        if (parentBlock) {
-          const errEl = parentBlock.querySelector('.artdeco-inline-feedback--error, .fb-form-element__error-text, [data-test-form-element-error-message], .error-message, .invalid-feedback, [role="alert"]');
-          if (errEl && errEl.innerText.trim()) {
-            errorMessage = cleanQuestionText(errEl.innerText);
-          }
-        }
-      }
-
-      if (!errorMessage) {
-        let sib = el.nextElementSibling;
-        while (sib) {
-          if (sib.classList && (sib.classList.contains('artdeco-inline-feedback') || sib.classList.contains('error-message') || sib.getAttribute('role') === 'alert')) {
-            errorMessage = cleanQuestionText(sib.innerText);
-            break;
-          }
-          sib = sib.nextElementSibling;
-        }
-      }
-    } catch {}
-
-    fields.push({
-      id: id,
-      elementSelector: '#' + CSS.escape(id),
-      type: fieldType,
-      label: getLabelText(el),
+(() => {
+  const inputs = Array.from(document.querySelectorAll('input, select, textarea, [role="radio"], [role="checkbox"]'));
+  return inputs.map((el, i) => {
+    const ariaControls = el.getAttribute('aria-controls') || '';
+    const ariaChecked = el.getAttribute('aria-checked') || '';
+    return {
+      id: el.id || 'field_' + i,
+      elementSelector: el.id ? '#' + el.id : (el.name ? '[name="' + el.name + '"]' : 'input'),
+      type: el.getAttribute('role') || el.type || 'text',
+      label: el.getAttribute('aria-label') || el.name || '',
       name: el.name || '',
       placeholder: el.placeholder || '',
       required: el.required || el.getAttribute('aria-required') === 'true',
-      options: options,
-      value: el.type === 'checkbox' || el.getAttribute('role') === 'checkbox'
-        ? String(el.checked || el.getAttribute('aria-checked') === 'true')
-        : (el.value || el.getAttribute('data-value') || ''),
-      errorMessage: errorMessage || undefined,
-    });
+      value: ariaChecked || el.value || '',
+      ariaControls,
+    };
   });
-
-  return fields;
-})();
+})()
 `;

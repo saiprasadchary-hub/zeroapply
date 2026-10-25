@@ -1,68 +1,55 @@
-import type { PlatformId } from '../ui/AgentControlBar';
+/**
+ * ZeroApply Standard Forms - Site Adapters
+ * Safe URL validation and portal adapter specifications.
+ */
 
 export interface StandardSiteAdapter {
-  id: Exclude<PlatformId, 'auto'>;
-  label: string;
-  hosts: string[];
-  jobPathPatterns: string[];
+  id: string;
+  name: string;
+  hostPatterns: string[];
 }
 
-export const STANDARD_SITE_ADAPTERS: StandardSiteAdapter[] = [
-  {
+export const SUPPORTED_SITE_ADAPTERS: Record<string, StandardSiteAdapter> = {
+  linkedin: {
     id: 'linkedin',
-    label: 'LinkedIn',
-    hosts: ['linkedin.com'],
-    jobPathPatterns: ['/jobs/view/'],
+    name: 'LinkedIn',
+    hostPatterns: ['linkedin.com', 'www.linkedin.com'],
   },
-  {
+  indeed: {
     id: 'indeed',
-    label: 'Indeed',
-    hosts: ['indeed.com'],
-    jobPathPatterns: ['/viewjob', '/rc/clk', '/pagead/clk'],
+    name: 'Indeed',
+    hostPatterns: ['indeed.com', 'www.indeed.com'],
   },
-  {
+  glassdoor: {
     id: 'glassdoor',
-    label: 'Glassdoor',
-    hosts: ['glassdoor.com'],
-    jobPathPatterns: ['/job-listing/', '/partner/joblisting.htm'],
+    name: 'Glassdoor',
+    hostPatterns: ['glassdoor.com', 'www.glassdoor.com'],
   },
-  {
-    id: 'naukri',
-    label: 'Naukri',
-    hosts: ['naukri.com'],
-    jobPathPatterns: ['/job-listings-', '/job-listing/'],
-  },
-  {
-    id: 'unstop',
-    label: 'Unstop',
-    hosts: ['unstop.com'],
-    jobPathPatterns: ['/jobs/', '/opportunity/'],
-  },
-];
+};
 
-export function hostnameMatches(hostname: string, expectedHost: string): boolean {
-  const normalized = hostname.toLowerCase();
-  const expected = expectedHost.toLowerCase();
-  return normalized === expected || normalized.endsWith(`.${expected}`);
+export function getStandardSiteAdapter(portal: string): StandardSiteAdapter | undefined {
+  const key = portal.toLowerCase().trim();
+  return SUPPORTED_SITE_ADAPTERS[key];
 }
 
-export function isSafeHttpsUrl(value: string): boolean {
+export function isAdapterUrl(url: string, adapter?: StandardSiteAdapter): boolean {
+  if (!adapter || !url) return false;
   try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'https:' && Boolean(parsed.hostname) && !parsed.username && !parsed.password;
+    const parsed = new URL(url);
+    return adapter.hostPatterns.some(
+      (h) => parsed.hostname === h || parsed.hostname.endsWith(`.${h}`)
+    );
   } catch {
     return false;
   }
 }
 
-export function getStandardSiteAdapter(platformId: PlatformId): StandardSiteAdapter | undefined {
-  return STANDARD_SITE_ADAPTERS.find((adapter) => adapter.id === platformId);
-}
-
-export function isAdapterUrl(value: string, adapter: StandardSiteAdapter): boolean {
+export function isSafeHttpsUrl(url: string): boolean {
   try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'https:' && adapter.hosts.some((host) => hostnameMatches(parsed.hostname, host));
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return false;
+    if (parsed.username || parsed.password) return false;
+    return true;
   } catch {
     return false;
   }

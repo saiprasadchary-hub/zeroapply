@@ -1,193 +1,103 @@
-export type LiveActionType = 
-  | 'click' 
-  | 'type' 
-  | 'scroll'
-  | 'check'
-  | 'think' 
-  | 'scan' 
-  | 'attach' 
-  | 'validate' 
-  | 'security' 
-  | 'submit' 
-  | 'step' 
-  | 'pause' 
-  | 'status';
+/**
+ * ZeroApply Telemetry - Real-time Live Telemetry System
+ * Dispatches live action records to transparent HUD, tracks metrics,
+ * and maintains audit statistics for applications, questions, and fields.
+ */
 
-export type LiveActionSource = 'ollama' | 'persona' | 'memory' | 'heuristic' | 'dom' | 'security';
+export type LiveActionType = 'scroll' | 'click' | 'think' | 'type' | 'check' | 'navigate' | 'submit' | 'status';
 
 export interface LiveActionRecord {
-  id: string;
-  timestamp: number;
   type: LiveActionType;
   title: string;
-  detail?: string;
   target?: string;
   value?: string;
-  source?: LiveActionSource;
-  confidence?: number;
+  source?: 'memory' | 'persona' | 'ollama' | 'webllm' | 'system' | 'rule';
   model?: string;
-  stepIndex?: number;
-  totalSteps?: number;
-  fieldsProgress?: { current: number; total: number };
-  status: 'running' | 'completed' | 'warning' | 'error';
-  durationMs?: number;
+  status: 'running' | 'completed' | 'failed' | 'paused';
+  timestamp?: number;
 }
 
-export interface LiveTelemetryStats {
+export interface TelemetryStats {
+  jobsAttempted: number;
+  jobsApplied: number;
   fieldsFilled: number;
   questionsSolved: number;
-  stepsCompleted: number;
-  jobsProcessed: number;
-  activeModel: string;
-  lastLatencyMs: number;
+  errorsCount: number;
+  lastActiveTimestamp: number;
 }
 
-type TelemetryListener = (action: LiveActionRecord, history: LiveActionRecord[], stats: LiveTelemetryStats) => void;
+export type TelemetryListener = (action: LiveActionRecord) => void;
 
-class LiveTelemetryService {
-  private currentAction: LiveActionRecord | null = null;
+export class LiveTelemetrySystem {
+  private listeners = new Set<TelemetryListener>();
   private history: LiveActionRecord[] = [];
-  private listeners: Set<TelemetryListener> = new Set();
-  private stats: LiveTelemetryStats = {
+  private stats: TelemetryStats = {
+    jobsAttempted: 0,
+    jobsApplied: 0,
     fieldsFilled: 0,
     questionsSolved: 0,
-    stepsCompleted: 0,
-    jobsProcessed: 0,
-    activeModel: 'qwen2.5:1.5b',
-    lastLatencyMs: 0,
+    errorsCount: 0,
+    lastActiveTimestamp: Date.now(),
   };
-
-  public getCurrentAction(): LiveActionRecord | null {
-    return this.currentAction;
-  }
-
-  public getHistory(): LiveActionRecord[] {
-    return [...this.history];
-  }
-
-  public getStats(): LiveTelemetryStats {
-    return { ...this.stats };
-  }
 
   public subscribe(listener: TelemetryListener): () => void {
     this.listeners.add(listener);
-    if (this.currentAction) {
-      listener(this.currentAction, this.getHistory(), this.getStats());
-    }
     return () => {
       this.listeners.delete(listener);
     };
   }
 
-  private notify(action: LiveActionRecord) {
-    const hist = this.getHistory();
-    const st = this.getStats();
-    this.listeners.forEach((cb) => {
-      try {
-        cb(action, hist, st);
-      } catch (err) {
-        console.error('[LiveTelemetry] Listener error:', err);
-      }
-    });
-  }
-
-  public emit(actionParams: Omit<LiveActionRecord, 'id' | 'timestamp'> & { id?: string; timestamp?: number }): LiveActionRecord {
-    const record: LiveActionRecord = {
-      id: actionParams.id || Math.random().toString(36).substring(2, 9),
-      timestamp: actionParams.timestamp || Date.now(),
-      ...actionParams,
+  public emit(action: LiveActionRecord): void {
+    const record: LiveActionRecord & { timestamp: number } = {
+      ...action,
+      timestamp: action.timestamp || Date.now(),
     };
 
-    this.currentAction = record;
-    this.history.unshift(record);
-    if (this.history.length > 60) {
-      this.history.pop();
+    this.history.push(record);
+    if (this.history.length > 500) {
+      this.history.shift();
     }
 
-    if (record.durationMs) {
-      this.stats.lastLatencyMs = record.durationMs;
-    }
-    if (record.type === 'type' && record.status === 'completed') {
-      this.stats.fieldsFilled += 1;
-    }
+    this.stats.lastActiveTimestamp = record.timestamp;
+
     if (record.type === 'think' && record.status === 'completed') {
       this.stats.questionsSolved += 1;
+    } else if (record.type === 'type' && record.status === 'completed') {
+      this.stats.fieldsFilled += 1;
+    } else if (record.type === 'submit' && record.status === 'completed') {
+      this.stats.jobsApplied += 1;
+    } else if (record.status === 'failed') {
+      this.stats.errorsCount += 1;
     }
-    if (record.type === 'step' && record.status === 'completed') {
-      this.stats.stepsCompleted += 1;
-    }
-    if (record.type === 'submit' && record.status === 'completed') {
-      this.stats.jobsProcessed += 1;
-    }
 
-    this.notify(record);
-    return record;
-  }
-
-  public startAction(
-    actionParams: Omit<LiveActionRecord, 'id' | 'timestamp' | 'status'>
-  ): {
-    id: string;
-    complete: (updates?: Partial<LiveActionRecord>) => LiveActionRecord;
-    fail: (errorMsg: string) => LiveActionRecord;
-  } {
-    const startTime = Date.now();
-    const record = this.emit({
-      ...actionParams,
-      status: 'running',
-    });
-
-    return {
-      id: record.id,
-      complete: (updates = {}) => {
-        const durationMs = Date.now() - startTime;
-        return this.emit({
-          ...record,
-          ...updates,
-          durationMs,
-          status: 'completed',
-        });
-      },
-      fail: (errorMsg: string) => {
-        const durationMs = Date.now() - startTime;
-        return this.emit({
-          ...record,
-          detail: errorMsg,
-          durationMs,
-          status: 'error',
-        });
-      },
-    };
-  }
-
-  public updateStats(partial: Partial<LiveTelemetryStats>) {
-    this.stats = { ...this.stats, ...partial };
-    if (this.currentAction) {
-      this.notify(this.currentAction);
+    for (const listener of this.listeners) {
+      try {
+        listener(record);
+      } catch (err) {
+        console.error('Error in telemetry listener:', err);
+      }
     }
   }
 
-  public clear() {
+  public getStats(): TelemetryStats {
+    return { ...this.stats };
+  }
+
+  public getRecentHistory(count = 20): LiveActionRecord[] {
+    return this.history.slice(-count);
+  }
+
+  public reset(): void {
     this.history = [];
     this.stats = {
+      jobsAttempted: 0,
+      jobsApplied: 0,
       fieldsFilled: 0,
       questionsSolved: 0,
-      stepsCompleted: 0,
-      jobsProcessed: 0,
-      activeModel: 'qwen2.5:1.5b',
-      lastLatencyMs: 0,
+      errorsCount: 0,
+      lastActiveTimestamp: Date.now(),
     };
-    const readyRecord: LiveActionRecord = {
-      id: Math.random().toString(36).substring(2, 9),
-      timestamp: Date.now(),
-      type: 'status',
-      title: 'Agent Standing By',
-      detail: 'Ready for batch application',
-      status: 'completed',
-    };
-    this.currentAction = readyRecord;
-    this.notify(readyRecord);
   }
 }
 
-export const liveTelemetry = new LiveTelemetryService();
+export const liveTelemetry = new LiveTelemetrySystem();

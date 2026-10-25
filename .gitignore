@@ -14,7 +14,7 @@ dist_desktop
 release
 release_*
 .firebase/
-scripts/bundled/
+public/models/
 *.local
 
 # Editor directories and files
@@ -27,3 +27,35 @@ scripts/bundled/
 *.njsproj
 *.sln
 *.sw?
+
+# Local secrets and signing material
+.env
+.env.*
+!.env.example
+!.env.template
+*.jks
+*.keystore
+*.pem
+*.p12
+*.pfx
+**/local.properties
+**/service-account*.json
+**/serviceAccount*.json
+
+# Downloaded models, packages, and generated preview media
+*.gguf
+*.apk
+*.aab
+*.dmg
+*.pkg
+*.exe
+*.mp4
+*.mov
+*.webm
+/brag-output*/
+/artifacts/
+/scratch/
+/zeroapply111111111
+**/__pycache__/
+**/.venv/
+**/.voice-env/

@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright-core';
+import { INJECTED_SCANNER_SCRIPT } from '../src/agent/domScanner/injectedScanner';
+import { FORM_AUDITOR_SCRIPT } from '../src/agent/formFiller/formAuditor';
+import { SUBMISSION_EVIDENCE_SCRIPT } from '../src/agent/normalApply/submissionEvidence';
+const browser = await chromium.launch({channel:'chrome',headless:true});
+try {
+ const page = await browser.newPage();
+ await page.route('https://www.linkedin.com/**', route => route.fulfill({contentType:'text/html',body:'<label>Job alerts<input type="checkbox"></label><div id="host"></div>'}));
+ await page.goto('https://www.linkedin.com/jobs/search/');
+ assert.deepEqual(await page.evaluate(INJECTED_SCANNER_SCRIPT), []);
+ await page.evaluate(() => {
+  document.querySelector('#host')!.attachShadow({mode:'open'}).innerHTML = '<div role="dialog" style="width:400px;height:300px"><label>First name<input id="name" type="text"></label><button>Not now</button></div>';
+ });
+ const fields = await page.evaluate<Array<{label:string}>>(INJECTED_SCANNER_SCRIPT);
+ assert.equal(fields.length,1);
+ assert.equal(fields[0].label,'First name');
+ assert.equal(await page.evaluate(SUBMISSION_EVIDENCE_SCRIPT), false);
+ await page.evaluate(() => {document.querySelector('#host')!.shadowRoot!.querySelector('[role="dialog"]')!.insertAdjacentHTML('afterbegin','<h2>Your application was sent to Example!</h2>');});
+ assert.equal(await page.evaluate(SUBMISSION_EVIDENCE_SCRIPT), true);
+ await page.evaluate(() => {document.querySelector('#host')!.remove();document.body.insertAdjacentHTML('beforeend','<dialog style="width:400px;height:300px"><label>Last name<input type="text"></label><button>Next</button></dialog>');document.querySelector('dialog')!.showModal();});
+ const nativeFields = await page.evaluate<Array<{label:string}>>(INJECTED_SCANNER_SCRIPT);
+ assert.equal(nativeFields.length,1);
+ assert.equal(nativeFields[0].label,'Last name');
+ await page.evaluate(() => {document.querySelector('dialog')!.innerHTML = '<fieldset><legend>Can you start immediately?</legend><label><input type="radio" name="available" value="yes">Yes</label><label><input type="radio" name="available" value="no">No</label></fieldset><label>Expected salary<input type="text"></label>';});
+ const radioFields = await page.evaluate<Array<{inputType:string;options?:string[]}>>(INJECTED_SCANNER_SCRIPT);
+ assert.equal(radioFields.length, 2, 'Radio questions must not cause the entire form scan to fail');
+ assert.deepEqual(radioFields.find(field => field.inputType === 'radio')?.options, ['Yes','No']);
+ await page.evaluate(() => {document.querySelector('dialog')!.innerHTML = '<div componentkey="easyApplyFieldFocus_1"><p>Do you have two years of industrial experience?*</p><fieldset role="radiogroup"><div role="radio" aria-label="Do you have two years of industrial experience?" aria-checked="false"><input type="radio" name="exp"><label></label><p>Yes</p></div><div role="radio" aria-label="Do you have two years of industrial experience?" aria-checked="false"><input type="radio" name="exp"><label></label><p>No</p></div></fieldset></div>';});
+ const modernFields = await page.evaluate<Array<{label:string;options?:string[]}>>(INJECTED_SCANNER_SCRIPT);
+ assert.equal(modernFields.length,1, 'Hidden native radios must not duplicate the custom group');
+ assert.equal(modernFields[0].label,'Do you have two years of industrial experience?*');
+ assert.deepEqual(modernFields[0].options,['Yes','No']);
+ await page.evaluate(() => {document.querySelector('dialog')!.insertAdjacentHTML('afterbegin','<label>Phone<input type="text"></label>');});
+ const rescanned = await page.evaluate<Array<{selector:string}>>(INJECTED_SCANNER_SCRIPT);
+ assert.equal(new Set(rescanned.map(field => field.selector)).size, rescanned.length, 'New fields must have unique selectors across rescans');
+ await page.evaluate(() => {document.querySelector('dialog')!.innerHTML = '<h3>Resume*</h3><label>Headline<input type="text"></label><label>Summary<textarea></textarea></label><label>Cover letter<textarea></textarea></label><button>Next</button>';});
+ const optionalFields = await page.evaluate<Array<{required:boolean}>>(INJECTED_SCANNER_SCRIPT);
+ assert.ok(optionalFields.every(field => !field.required), 'Required résumé heading must not make optional text fields required');
+ const optionalAudit = await page.evaluate<{ready:boolean;unansweredQuestions:unknown[]}>(FORM_AUDITOR_SCRIPT);
+ assert.equal(optionalAudit.ready,true);
+ assert.equal(optionalAudit.unansweredQuestions.length,0, 'Labels and optional text fields must not trigger repair retries');
+ console.log('LinkedIn scope checks passed: background controls excluded, shadow form found, explicit receipt required.');
+} finally {await browser.close();}

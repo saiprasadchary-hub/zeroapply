@@ -1,7 +1,7 @@
 import React from 'react';
-import { Layers, LayoutDashboard, ClipboardCheck, FileText } from 'lucide-react';
+import { Layers, LayoutDashboard, Bell, FileText, User } from 'lucide-react';
 
-export type NavTab = 'dashboard' | 'browser' | 'qa' | 'resume';
+export type NavTab = 'dashboard' | 'browser' | 'qa' | 'resume' | 'profile';
 
 interface MobileBottomNavProps {
   activeTab: NavTab;
@@ -35,8 +35,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     },
     {
       id: 'qa',
-      label: 'QA Check',
-      icon: ClipboardCheck,
+      label: 'Notifications',
+      icon: Bell,
       color: 'text-emerald-600',
       activeBg: 'bg-emerald-50 text-emerald-700',
     },
@@ -47,12 +47,19 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       color: 'text-cyan-600',
       activeBg: 'bg-cyan-50 text-cyan-700',
     },
+    {
+      id: 'profile',
+      label: 'Profile',
+      icon: User,
+      color: 'text-purple-600',
+      activeBg: 'bg-purple-50 text-purple-700',
+    },
   ];
 
   return (
     <nav
       aria-label="Mobile Navigation"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-2xl border-t border-zinc-200/90 shadow-[0_-4px_25px_rgba(0,0,0,0.06)] px-2 py-1.5 transition-all"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-2xl border-t border-zinc-200/90 shadow-[0_-4px_25px_rgba(0,0,0,0.08)] px-2 pt-2 pb-[max(0.6rem,env(safe-area-inset-bottom,0px))] transition-all"
     >
       <div className="flex items-center justify-around max-w-lg mx-auto">
         {navItems.map((item) => {
@@ -63,13 +70,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`relative flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition-all duration-200 group ${
-                isActive ? 'scale-105' : 'hover:scale-102 opacity-70 hover:opacity-100'
+              className={`relative flex flex-col items-center justify-center py-1 px-2.5 sm:px-3 rounded-2xl transition-all duration-200 min-h-[46px] min-w-[52px] cursor-pointer group active:scale-95 ${
+                isActive ? 'scale-105' : 'opacity-70 hover:opacity-100'
               }`}
             >
               <div
-                className={`w-9 h-7 rounded-xl flex items-center justify-center transition-all ${
-                  isActive ? item.activeBg : 'text-zinc-500'
+                className={`w-10 h-7 rounded-xl flex items-center justify-center transition-all ${
+                  isActive ? `${item.activeBg} shadow-2xs` : 'text-zinc-500'
                 }`}
               >
                 <Icon size={18} className={isActive ? item.color : 'text-zinc-600'} />
@@ -77,7 +84,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
               <span
                 className={`text-[10px] font-bold tracking-tight transition-colors mt-0.5 ${
-                  isActive ? 'text-zinc-900 font-extrabold' : 'text-zinc-500'
+                  isActive ? 'text-zinc-950 font-black' : 'text-zinc-500'
                 }`}
               >
                 {item.label}
@@ -85,7 +92,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
               {/* Active Indicator Dot */}
               {isActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-zinc-900 absolute -bottom-0.5" />
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-900 absolute -bottom-1 shadow-xs" />
               )}
             </button>
           );

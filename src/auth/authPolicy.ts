@@ -13,6 +13,8 @@ export function getFriendlyAuthErrorMessage(error: unknown): string {
     ? error.code
     : '';
   switch (code) {
+    case 'auth/browser-handoff-failed':
+      return error instanceof Error ? error.message : 'Could not complete sign-in in Chrome. Please try again.';
     case 'auth/invalid-email':
       return 'Please enter a valid email address.';
     case 'auth/user-disabled':

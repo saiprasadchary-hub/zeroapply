@@ -307,7 +307,17 @@ export function resumeToPersona(doc: ResumeDocument): Partial<PersonaData> {
  * Converts candidate PersonaData into a populated ResumeDocument
  */
 export function personaToResume(persona: PersonaData, existing?: ResumeDocument): ResumeDocument {
-  const base = existing ? { ...existing } : { ...DEFAULT_RESUME_DOCUMENT };
+  const base: ResumeDocument = existing ? structuredClone(existing) : {
+    ...structuredClone(DEFAULT_RESUME_DOCUMENT),
+    title: 'My Resume',
+    contact: { fullName: '', jobTitle: '', email: '', phone: '', location: '', linkedIn: '', gitHub: '', portfolio: '' },
+    summary: '',
+    experience: [],
+    education: [],
+    projects: [],
+    certifications: [],
+    skills: { languages: [], frontend: [], backend: [], databases: [], cloudDevops: [], tools: [], custom: [] },
+  };
   const hasPersonaName = Boolean(persona.fullName && persona.fullName.trim());
   const hasPersonaEmail = Boolean(persona.email && persona.email.trim());
   const hasTechStack = Boolean(persona.techStack && persona.techStack.length > 0);

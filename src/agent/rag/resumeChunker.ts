@@ -1,252 +1,104 @@
-import { liveTelemetry } from '../telemetry/liveTelemetry';
-import { ProcessLogger } from '../tracker/processLogger';
+/** Extract verbatim resume evidence into the topics shown in Profile knowledge. */
+const HEADINGS: Record<string, string> = {
+  overview: 'summary', 'career summary': 'summary', 'professional background': 'summary',
+  summary: 'summary', 'professional summary': 'summary', 'executive summary': 'summary',
+  profile: 'summary', 'professional profile': 'summary', objective: 'summary', 'career objective': 'summary', 'about me': 'summary',
+  'relevant experience': 'experience', 'internship experience': 'experience', 'employment': 'experience',
+  experience: 'experience', 'work experience': 'experience', 'professional experience': 'experience',
+  'employment history': 'experience', 'work history': 'experience', internships: 'experience',
+  skills: 'skills', 'technical skills': 'skills', 'skills and tools': 'skills', 'core competencies': 'skills',
+  'technical competencies': 'skills', technologies: 'skills', 'tech stack': 'skills',
+  'programming languages': 'skills', frameworks: 'skills', tools: 'skills',
+  education: 'education', academics: 'education', 'academic qualifications': 'education', 'educational qualifications': 'education',
+  projects: 'projects', 'key projects': 'projects', 'personal projects': 'projects', 'academic projects': 'projects', 'selected projects': 'projects',
+  'professional certifications': 'certifications', 'certifications and training': 'certifications', 'licenses and certifications': 'certifications',
+  certifications: 'certifications', certificates: 'certifications', licenses: 'certifications', 'certifications and licenses': 'certifications',
+  'language skills': 'languages', 'language proficiencies': 'languages',
+  languages: 'languages', 'spoken languages': 'languages', 'language proficiency': 'languages',
+  publications: 'publications', research: 'publications', 'publications and research': 'publications', patents: 'publications',
+  awards: 'awards', achievements: 'awards', honors: 'awards', 'awards and achievements': 'awards', 'honors and awards': 'awards',
+  leadership: 'leadership', 'leadership experience': 'leadership', volunteering: 'leadership',
+  metrics: 'metrics', 'results and metrics': 'metrics', 'key achievements': 'metrics',
+  'domain expertise': 'domainExpertise', 'industry experience': 'domainExpertise',
+  'work authorization': 'workAuthorization', 'visa status': 'workAuthorization', 'sponsorship': 'workAuthorization',
+  availability: 'availability', 'notice period': 'availability', 'start date': 'availability',
+  'compensation preferences': 'compensation', 'salary expectations': 'compensation', 'expected salary': 'compensation',
+  'location preferences': 'relocation', 'work preferences': 'relocation', relocation: 'relocation',
+  'security clearance': 'securityClearance', 'clearance status': 'securityClearance',
+  'voluntary eeo responses': 'ignored', 'eeo demographics': 'ignored', 'equal employment opportunity': 'ignored',
+  references: 'references', 'professional references': 'references',
+  interests: 'general', hobbies: 'general', 'personal details': 'general', 'additional information': 'general',
+};
 
-export const RESUME_CHUNK_KEYS = [
-  'summary',
-  'experience',
-  'education',
-  'skills',
-  'projects',
-  'certifications',
-  'languages',
-  'publications',
-  'awards',
-  'leadership',
-  'metrics',
-  'workAuthorization',
-  'availability',
-  'compensation',
-  'relocation',
-  'securityClearance',
-  'domainExpertise',
-  'eeoDemographics',
-  'references',
-] as const;
-
-export type ResumeChunks = Record<(typeof RESUME_CHUNK_KEYS)[number], string>;
-
-const HEADING_PATTERNS: Array<[keyof ResumeChunks, RegExp]> = [
-  ['summary', /^(?:professional\s+)?(?:summary|profile|objective|about(?:\s+me)?|career\s+overview|executive\s+summary|highlights?)$/i],
-  ['experience', /^(?:work|professional|employment|career|industry|relevant)\s+(?:experience|history)|experience|work\s+history$/i],
-  ['education', /^(?:education|academic(?:\s+(?:background|qualifications?))?|degrees?)$/i],
-  ['skills', /^(?:technical\s+)?(?:skills|competenc(?:y|ies)|technologies|tools(?:\s*(?:&|and)\s*technologies)?|core\s+competencies|expertise|proficiencies|tech\s+stack|programming\s+languages?|technical\s+expertise|databases?|frameworks?|core\s+cs|data\s+science)$/i],
-  ['projects', /^(?:selected|personal|academic|key|notable|featured)?\s*projects?$/i],
-  ['certifications', /^(?:certifications?|licenses?(?:\s*(?:&|and)\s*certifications?)?|credentials|accreditations|training)$/i],
-  ['languages', /^(?:spoken\s+languages|natural\s+languages|human\s+languages|languages\s+known|spoken\s+fluency|language\s+proficienc(?:y|ies))$/i],
-  ['publications', /^(?:publications?|research(?:\s+papers?)?|patents?)$/i],
-  ['awards', /^(?:awards?(?:\s*(?:&|and)\s*(?:honors?|achievements?))?|honors?|achievements?|accomplishments?|recognitions?)$/i],
-  ['leadership', /^(?:leadership|community|extracurricular|volunteering|affiliations?)$/i],
-  ['workAuthorization', /^(?:work\s+authorization|citizenship|visa\s+status|eligibility\s+to\s+work|immigration\s+status|right\s+to\s+work)$/i],
-  ['availability', /^(?:availability|notice\s+period|start\s+date|earliest\s+start)$/i],
-  ['compensation', /^(?:compensation|salary\s+expectations?|target\s+compensation|expected\s+salary)$/i],
-  ['relocation', /^(?:relocation|location\s+preferences?|mobility|willingness\s+to\s+relocate)$/i],
-  ['securityClearance', /^(?:security\s+clearance|clearance\s+level|government\s+clearance)$/i],
-  ['domainExpertise', /^(?:domain\s+expertise|industry\s+experience|specializations?|domain\s+knowledge)$/i],
-  ['eeoDemographics', /^(?:voluntary\s+self-identification|eeo\s+information|demographics?|diversity)$/i],
-  ['references', /^(?:professional\s+)?references?$/i],
-];
-
-export function emptyChunks(): ResumeChunks {
-  return Object.fromEntries(RESUME_CHUNK_KEYS.map((key) => [key, ''])) as ResumeChunks;
+function normalizeHeading(value: string): string {
+  return value.toLowerCase().replace(/&/g, ' and ').replace(/^[\s#•*\d.)-]+|[\s:–—-]+$/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function normalizeText(text: string): string {
-  return text
-    .replace(/\r\n?/g, '\n')
-    .replace(/\u00a0/g, ' ')
-    .replace(/[\u2022\u2023\u25E6\u2043\u2219]/g, '•')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+function appendEvidence(result: Record<string, string>, key: string, value: string): void {
+  const clean = value.trim();
+  if (!clean) return;
+  const existing = result[key]?.split('\n') ?? [];
+  if (!existing.includes(clean)) result[key] = [...existing, clean].join('\n');
 }
 
-function headingFor(line: string): keyof ResumeChunks | null {
-  const candidate = line
-    .replace(/^[•\-–—*\s]+/, '')
-    .replace(/[:|]+$/, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!candidate || candidate.length > 70 || /[.!?]$/.test(candidate)) return null;
-  return HEADING_PATTERNS.find(([, pattern]) => pattern.test(candidate))?.[0] ?? null;
-}
-
-function append(chunks: ResumeChunks, key: keyof ResumeChunks, lines: string[]): void {
-  const value = lines.join('\n').trim();
-  if (!value) return;
-  chunks[key] = chunks[key] ? `${chunks[key]}\n\n${value}` : value;
-}
-
-/**
- * Extracts quantifiable metrics (e.g. "reduced latency by 45%", "$2M ARR") into a dedicated metrics chunk.
- */
-function extractQuantifiableMetrics(text: string): string[] {
-  const metricRegex = /([^.\n]*?(?:\d+%\s*(?:increase|reduction|improvement|growth|boost|saved|faster)|\$\d+(?:\.\d+)?[MBKmbk]?|\d+\+?\s*(?:users|clients|engineers|microservices|requests|QPS|TPS|stars))[^.\n]*\.?)/gi;
-  const matches = text.match(metricRegex) || [];
-  return Array.from(new Set(matches.map((m) => m.trim()))).slice(0, 8);
-}
-
-/**
- * Extracts in-text legal, authorization, and clearance mentions.
- */
-function extractAuthorizationMentions(text: string): { auth?: string; clearance?: string; notice?: string } {
-  const result: { auth?: string; clearance?: string; notice?: string } = {};
-
-  if (/\b(?:u\.?s\.?\s+citizen|permanent\s+resident|green\s+card|authorized\s+to\s+work|no\s+sponsorship\s+required|stem\s+opt|h1-?b)\b/i.test(text)) {
-    const match = text.match(/[^.\n]*?\b(?:u\.?s\.?\s+citizen|permanent\s+resident|green\s+card|authorized\s+to\s+work|no\s+sponsorship\s+required|stem\s+opt|h1-?b)\b[^.\n]*/i);
-    if (match) result.auth = match[0].trim();
-  }
-
-  if (/\b(?:top\s+secret|secret\s+clearance|public\s+trust|security\s+clearance|ts\/sci)\b/i.test(text)) {
-    const match = text.match(/[^.\n]*?\b(?:top\s+secret|secret\s+clearance|public\s+trust|security\s+clearance|ts\/sci)\b[^.\n]*/i);
-    if (match) result.clearance = match[0].trim();
-  }
-
-  if (/\b(?:immediate\s+start|2\s+weeks?\s+notice|30\s+days?\s+notice|available\s+immediately)\b/i.test(text)) {
-    const match = text.match(/[^.\n]*?\b(?:immediate\s+start|2\s+weeks?\s+notice|30\s+days?\s+notice|available\s+immediately)\b[^.\n]*/i);
-    if (match) result.notice = match[0].trim();
-  }
-
-  return result;
-}
-
-/**
- * Super God-Level Autonomous Multi-Pass Resume Chunker:
- * 1. Pass 1: Syntax & Structural Heading Boundary Detection (18 Compartments)
- * 2. Pass 2: Semantic Keyword & Entity Classification
- * 3. Pass 3: Quantifiable Performance Metric & KPI Extraction
- * 4. Pass 4: Legal / Authorization / Clearance Heuristic Extraction
- */
-export async function chunkResumeText(rawText: string, _options?: { enableLlmSynthesis?: boolean }): Promise<ResumeChunks> {
-  const startTime = Date.now();
-  const chunks = emptyChunks();
-  const text = normalizeText(rawText);
-  if (!text) return chunks;
-
-  const lines = text.split('\n').map((line) => line.trim());
-  let activeSection: keyof ResumeChunks | null = null;
-  let pending: string[] = [];
-  let foundHeading = false;
-
-  for (const line of lines) {
-    const section = headingFor(line);
-    if (section) {
-      if (activeSection) {
-        append(chunks, activeSection, pending);
-      } else if (pending.some(Boolean)) {
-        // Filter out header lines containing contact info (email, phone, linkedin, location pipes)
-        const nonContactPending = pending.filter(l => {
-          const lClean = l.trim();
-          if (!lClean) return false;
-          if (/@|http|linkedin\.com|github\.com|\+\d{1,4}|\b\d{10}\b/i.test(lClean)) return false;
-          if (lClean.includes('|') && /phone|email|location|tel|mobile/i.test(lClean)) return false;
-          return true;
-        });
-        if (nonContactPending.length > 0) {
-          append(chunks, 'summary', nonContactPending);
-        }
-      }
-      pending = [];
-      activeSection = section;
-      foundHeading = true;
+export function chunkResumeText(rawText: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!rawText.trim()) return result;
+  const lines = rawText.normalize('NFKC').replace(/\r\n?/g, '\n').split('\n');
+  const preamble: string[] = [];
+  const evidence: Array<{ section: string; line: string }> = [];
+  let section = 'general';
+  let seenHeading = false;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const colon = line.indexOf(':');
+    const heading = normalizeHeading(colon >= 0 ? line.slice(0, colon) : line);
+    const nextSection = HEADINGS[heading];
+    if (nextSection) {
+      section = nextSection;
+      seenHeading = true;
+      if (colon >= 0 && section !== 'ignored') appendEvidence(result, section, line.slice(colon + 1));
       continue;
     }
-    pending.push(line);
+    if (section === 'ignored') continue;
+    if (!seenHeading) preamble.push(line);
+    appendEvidence(result, section, line);
+    evidence.push({ section, line });
   }
-  if (activeSection) append(chunks, activeSection, pending);
 
-  // Pass 2: Fallback heuristic for unstructured or non-standard resumes
-  if (!foundHeading) {
-    const blocks = text.split(/\n\s*\n/).map((block) => block.trim()).filter((block) => block.length >= 20);
-    for (const block of blocks) {
-      const lower = block.toLowerCase();
-      let assignedKey: keyof ResumeChunks = 'summary';
+  // Bare “Languages” can describe code. Never convert programming skills into speech fluency.
+  if (result.languages && /(?:\b(?:python|javascript|typescript|java|sql|html|css)\b|c\+\+|c#)/i.test(result.languages)
+    && !/\b(?:english|hindi|telugu|tamil|french|spanish|german|mandarin|arabic|native|fluent|conversational)\b/i.test(result.languages)) {
+    appendEvidence(result, 'skills', result.languages);
+    delete result.languages;
+  }
 
-      if (/\b(bachelor|master|degree|university|college|gpa|bs|ms|phd|education|graduated)\b/i.test(lower)) {
-        assignedKey = 'education';
-      } else if (/\b(skill|python|react|typescript|javascript|node|java|c\+\+|sql|aws|docker|git|html|css|kubernetes)\b/i.test(lower)) {
-        assignedKey = 'skills';
-      } else if (/\b(project|built|developed|github|app|application|designed|architected)\b/i.test(lower)) {
-        assignedKey = 'projects';
-      } else if (/\b(company|inc|llc|worked|engineer|developer|manager|intern|experience|present|20\d\d)\b/i.test(lower)) {
-        assignedKey = 'experience';
-      } else if (/\b(certified|certification|aws certified|license|cka)\b/i.test(lower)) {
-        assignedKey = 'certifications';
-      } else if (/\b(lead|mentor|organized|president|director|managed\s+team)\b/i.test(lower)) {
-        assignedKey = 'leadership';
-      } else if (/\b(clearance|security clearance|secret|top secret)\b/i.test(lower)) {
-        assignedKey = 'securityClearance';
-      } else if (/\b(citizen|citizenship|visa|sponsorship|work authorization)\b/i.test(lower)) {
-        assignedKey = 'workAuthorization';
-      }
-
-      append(chunks, assignedKey, [block]);
+  // An unheaded introduction can be reused as a summary without inventing a pitch.
+  if (!result.summary) {
+    const introduction = preamble.filter((line) => line.split(/\s+/).length >= 8
+      && !/@|https?:|linkedin\.com|github\.com|\+\d/.test(line));
+    if (introduction.length) result.summary = introduction.join('\n');
+    else {
+      const background = evidence.filter(({ section: key, line }) => ['experience', 'projects'].includes(key)
+        && /\b(?:built|developed|designed|implemented|engineered|managed|led|delivered|created)\b/i.test(line));
+      if (background.length) result.summary = background.slice(0, 3).map(({ line }) => line).join('\n');
     }
   }
 
-  // Pass 3: Impact & Quantifiable Metrics Extraction
-  const metrics = extractQuantifiableMetrics(text);
-  if (metrics.length > 0) {
-    chunks.metrics = metrics.map((m) => `• ${m}`).join('\n');
-  }
-
-  // Pass 4: In-line Legal / Authorization Extraction
-  const authMentions = extractAuthorizationMentions(text);
-  if (authMentions.auth && !chunks.workAuthorization) {
-    chunks.workAuthorization = authMentions.auth;
-  }
-  if (authMentions.clearance && !chunks.securityClearance) {
-    chunks.securityClearance = authMentions.clearance;
-  }
-  if (authMentions.notice && !chunks.availability) {
-    chunks.availability = authMentions.notice;
-  }
-
-  // Pass 5: Disambiguate Programming Languages / Tech Stack from Spoken Languages
-  const technicalIndicatorRegex = /\b(?:python|javascript|typescript|c\+\+|java\b|c#|sql|mongodb|firebase|html5?|css3?|react|node|flask|opencv|dsa|system design|pandas|numpy|matplotlib|scikit-learn|databases|frameworks|oop|beautifulsoup|scrapy)\b/i;
-
-  if (chunks.languages && technicalIndicatorRegex.test(chunks.languages)) {
-    const techContent = chunks.languages;
-    if (!chunks.skills || !chunks.skills.includes('Python')) {
-      chunks.skills = chunks.skills ? `${chunks.skills}\n\n${techContent}` : techContent;
+  for (const { section: key, line } of evidence) {
+    if (['experience', 'projects', 'metrics', 'leadership'].includes(key)) {
+      if (/(?:\d+(?:\.\d+)?\s*(?:%|x\b|k\b|million\b|users\b|customers\b|requests\b|ms\b|seconds\b)|[$₹€£]\s*\d)/i.test(line)) appendEvidence(result, 'metrics', line);
+      if (/\b(?:led|managed|mentored|coached|supervised|cross-functional|team lead|leadership)\b/i.test(line)) appendEvidence(result, 'leadership', line);
+      if (/\b(?:healthcare|fintech|banking|financial services|e-commerce|ecommerce|cybersecurity|telecommunications|logistics|insurance|edtech|manufacturing)\b/i.test(line)) appendEvidence(result, 'domainExpertise', line);
     }
-    chunks.languages = '';
+    // Only direct statements; nationality, university location, or employer benefits are insufficient.
+    if (/\b(?:authorized to work|work authorization|require.{0,15}sponsorship|no.{0,15}sponsorship|visa status|work permit)\b/i.test(line)) appendEvidence(result, 'workAuthorization', line);
+    if (/\b(?:notice period|available to (?:start|join)|start date|immediate joiner)\b/i.test(line)) appendEvidence(result, 'availability', line);
+    if (/\b(?:expected salary|salary expectations|target compensation|compensation expectations)\b/i.test(line)) appendEvidence(result, 'compensation', line);
+    if (/\b(?:willing to relocate|open to relocation|prefer.{0,20}(?:remote|hybrid|onsite)|location preference)\b/i.test(line)) appendEvidence(result, 'relocation', line);
+    if (/\b(?:hold|have|active|current|no)\b.{0,30}\b(?:security clearance|public trust|top secret clearance)\b/i.test(line)) appendEvidence(result, 'securityClearance', line);
   }
-
-  if (!chunks.languages) {
-    const spokenMatch = text.match(/(?:spoken\s+languages?|languages?\s+known|languages?\s+proficiency)[\s:]*([^\n]+(?:\n[^\n]+)?)/i);
-    const commonSpoken = ['English', 'Hindi', 'Telugu', 'Tamil', 'Kannada', 'Malayalam', 'Marathi', 'Bengali', 'Gujarati', 'Punjabi', 'Urdu', 'Spanish', 'French', 'German', 'Mandarin', 'Japanese', 'Arabic', 'Russian', 'Portuguese', 'Italian'];
-
-    if (spokenMatch && !technicalIndicatorRegex.test(spokenMatch[1])) {
-      chunks.languages = spokenMatch[1].trim();
-    } else {
-      const foundSpoken = commonSpoken.filter((lang) => new RegExp(`\\b${lang}\\b`, 'i').test(text));
-      if (foundSpoken.length > 0) {
-        chunks.languages = foundSpoken.join(', ');
-      }
-    }
-  }
-
-  const populatedCount = Object.values(chunks).filter((c) => c.trim().length > 0).length;
-  const elapsed = Date.now() - startTime;
-
-  liveTelemetry.emit({
-    type: 'scan',
-    title: `Resume Chunked into ${populatedCount} Semantic Modules (${elapsed}ms)`,
-    detail: `Populated: ${Object.entries(chunks).filter(([, v]) => v.trim().length > 0).map(([k]) => k).join(', ')}`,
-    status: 'completed',
-  });
-
-  ProcessLogger.log({
-    level: 'SUCCESS',
-    source: 'Resume Chunker',
-    message: `Resume segmented into ${populatedCount} high-density semantic chunks`,
-    detail: `Latency: ${elapsed}ms | Metrics extracted: ${metrics.length}`,
-    metadata: {
-      populatedChunks: populatedCount,
-      metricsCount: metrics.length,
-      chunksSummary: Object.fromEntries(Object.entries(chunks).map(([k, v]) => [k, v.length])),
-    },
-  });
-
-  return chunks;
+  // EEO responses require a voluntary user entry, never inference from a resume.
+  return result;
 }

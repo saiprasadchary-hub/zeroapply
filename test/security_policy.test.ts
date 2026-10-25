@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 
 const main = fs.readFileSync('main.js', 'utf8');
 const workflow = fs.readFileSync('src/agent/easyApply/workflow.ts', 'utf8');
@@ -12,6 +13,32 @@ const appPreload = fs.readFileSync('preload-popup.cjs', 'utf8');
 const autoApply = fs.readFileSync('src/agent/autoApply/autoApplyEngine.ts', 'utf8');
 const releaseWorkflow = fs.readFileSync('.github/workflows/release.yml', 'utf8');
 const installer = fs.readFileSync('scripts/zeroapply.iss', 'utf8');
+
+// Execute the actual sender guard with frame identities, including a same-origin iframe.
+const senderGuard = main.slice(main.indexOf('function isTrustedIpcSender('), main.indexOf('const SECURE_STORAGE_KEY'));
+const trustedFrame = { url: 'http://localhost:5173/index.html' };
+const trustedContents = { mainFrame: trustedFrame, getURL: () => trustedFrame.url };
+const guardContext = vm.createContext({
+  rendererUrlInUse: trustedFrame.url, URL,
+  mainWindow: { isDestroyed: () => false, webContents: trustedContents },
+  isLocalAppUrl: (url: string) => url === trustedFrame.url,
+});
+vm.runInContext(senderGuard, guardContext);
+const checkSender = (sender: unknown, senderFrame: unknown): boolean => {
+  guardContext.event = { sender, senderFrame };
+  return vm.runInContext('isTrustedIpcSender(event)', guardContext) as boolean;
+};
+assert.equal(checkSender(trustedContents, trustedFrame), true);
+assert.equal(checkSender(trustedContents, { url: trustedFrame.url }), false);
+assert.equal(checkSender(trustedContents, undefined), false);
+assert.equal(checkSender({ mainFrame: trustedFrame }, trustedFrame), false);
+guardContext.rendererUrlInUse = 'http://localhost:9999';
+assert.equal(checkSender(trustedContents, trustedFrame), false, 'Other local servers cannot use privileged IPC');
+
+const webviewGuard = main.slice(main.indexOf("contents.on('will-attach-webview'"), main.indexOf("if (contents.getType() === 'webview')"));
+for (const preference of ['webSecurity = true', 'allowRunningInsecureContent = false', 'nodeIntegrationInSubFrames = false', 'nodeIntegrationInWorker = false', 'experimentalFeatures = false']) {
+  assert.ok(webviewGuard.includes(preference), `Webview must enforce ${preference}`);
+}
 
 assert.match(main, /setPermissionRequestHandler/);
 assert.match(main, /Website permission/);
@@ -50,10 +77,11 @@ assert.match(main, /zeroapply-linkedin-apply-click/);
 assert.doesNotMatch(webviewPreload, /preventDefault|stopImmediatePropagation/);
 assert.doesNotMatch(webviewPreload, /navigator\.webdriver|window\.chrome|navigator\.permissions\.query/);
 assert.doesNotMatch(main, /requestHeaders\['sec-ch-ua/);
+assert.match(main, /ns1p\.net/);
 assert.match(main, /migrateBrowserCacheIfNeeded/);
 assert.match(main, /\.clearCache\(\)/);
 assert.doesNotMatch(main, /clearStorageData/);
-const popupHandler = main.slice(main.indexOf('const handleWindowOpen'), main.indexOf('function compareVersions'));
+const popupHandler = main.slice(main.indexOf('const handleWindowOpen'), main.indexOf('function initializeDesktopUpdates'));
 assert.match(popupHandler, /sendOpenTab\(parsed\.toString\(\), sourceContents\)/);
 assert.doesNotMatch(main, /\.sendToHost\(/);
 assert.match(browserSession, /MAX_BROWSER_TABS = 20/);
@@ -80,8 +108,8 @@ assert.match(main, /rendererLoadAttempts > 3/);
 assert.match(main, /webviewRecoveryState/);
 assert.match(main, /process\.on\('unhandledRejection'/);
 assert.match(main, /process\.on\('uncaughtException'/);
-assert.match(main, /api\.github\.com\/repos\/saiprasadchary-hub\/zeroapply\/releases\/latest/);
-assert.match(main, /releaseUrl\.startsWith\(RELEASES_URL_PREFIX\)/);
+assert.match(main, /releaseInfo\.updatesEnabled === true/);
+assert.match(main, /provider: 'github', owner: 'saiprasadchary-hub', repo: 'zeroapply', private: false/);
 assert.match(releaseWorkflow, /contents: write/);
 assert.match(releaseWorkflow, /gh release (create|upload)/);
 assert.match(installer, /AppUpdatesURL=https:\/\/github\.com\/saiprasadchary-hub\/zeroapply\/releases\/latest/);

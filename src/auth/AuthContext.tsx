@@ -3,6 +3,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '../services/firebase/firebaseConfig';
 import { AuthService, getFriendlyAuthErrorMessage } from './authService';
 import { requiresEmailVerification } from './authPolicy';
+import { watchAuthStartup } from './authStartup';
 
 interface AuthContextType {
   user: User | null;
@@ -31,22 +32,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isGuest, setIsGuest] = useState<boolean>(false);
 
   useEffect(() => {
-    // Restore guest flag from localStorage safely after mount
-    if (localStorage.getItem(GUEST_STORAGE_KEY) === 'true') {
-      setIsGuest(true);
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      const verifiedUser = currentUser && !requiresEmailVerification(currentUser) ? currentUser : null;
-      setUser(verifiedUser);
-      if (verifiedUser) {
-        setIsGuest(false);
-        localStorage.removeItem(GUEST_STORAGE_KEY);
-      }
+    let mounted = true;
+    const cancelTimeout = watchAuthStartup((): void => {
+      if (!mounted) return;
+      setAuthError('Sign-in is taking longer than expected. You can try signing in or continue as guest.');
       setLoading(false);
     });
-
-    return () => unsubscribe();
+    try {
+      if (localStorage.getItem(GUEST_STORAGE_KEY) === 'true') {
+        setIsGuest(true);
+        setLoading(false);
+      }
+    } catch {
+      // Restricted local storage must not prevent the login screen opening.
+    }
+    const unsubscribe = onAuthStateChanged(auth, (currentUser): void => {
+      if (!mounted) return;
+      cancelTimeout();
+      const verifiedUser = currentUser && !requiresEmailVerification(currentUser) ? currentUser : null;
+      setUser(verifiedUser);
+      setAuthError(null);
+      if (verifiedUser) {
+        setIsGuest(false);
+        try { localStorage.removeItem(GUEST_STORAGE_KEY); } catch { /* Auth remains valid without the guest flag. */ }
+      }
+      setLoading(false);
+    }, (error): void => {
+      if (!mounted) return;
+      cancelTimeout();
+      setAuthError(getFriendlyAuthErrorMessage(error));
+      setLoading(false);
+    });
+    return (): void => {
+      mounted = false;
+      cancelTimeout();
+      unsubscribe();
+    };
   }, []);
 
   const loginWithGoogle = async () => {
@@ -98,7 +119,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const continueAsGuest = () => {
     setIsGuest(true);
-    localStorage.setItem(GUEST_STORAGE_KEY, 'true');
+    setLoading(false);
+    try { localStorage.setItem(GUEST_STORAGE_KEY, 'true'); } catch { /* Guest mode also works without persistence. */ }
   };
 
   return (

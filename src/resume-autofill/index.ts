@@ -25,15 +25,24 @@ export async function autoFillPersonaFromResume(
   }
 
   const extractedFields = await runLocalMLClassification(rawText, currentPersona);
-  const fieldsCount = Object.keys(extractedFields).length;
+  const fieldsCount = Object.entries(extractedFields).filter(([key, value]) =>
+    JSON.stringify(currentPersona[key as keyof PersonaData]) !== JSON.stringify(value)
+  ).length;
   
-  const resumeChunks = await chunkResumeText(rawText);
+  const resumeChunks = chunkResumeText(rawText);
+  // Retain explicitly saved application preferences when the resume does not state them.
+  for (const key of ['workAuthorization', 'availability', 'compensation', 'relocation', 'securityClearance', 'eeoDemographics'] as const) {
+    const saved = currentPersona.resumeChunks?.[key];
+    if (!resumeChunks[key] && saved?.trim()) resumeChunks[key] = saved;
+  }
 
   const updatedPersona: PersonaData = {
     ...currentPersona,
     ...extractedFields,
+    resumeText: rawText,
+    experienceSummary: resumeChunks.summary ?? extractedFields.experienceSummary ?? '',
     resumeChunks,
-    verified: true,
+    verified: false,
   };
 
   return {

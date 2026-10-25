@@ -4,7 +4,7 @@ import { getSecureItem, setSecureItem } from '../src/services/secureStorage';
 export const DEFAULT_HOME_URL = 'https://www.google.com/';
 export const MAX_BROWSER_TABS = 20;
 const SESSION_KEY = 'zeroapply_browser_session_v2';
-const VALID_PLATFORMS = new Set<PlatformId>(['linkedin', 'unstop', 'indeed', 'glassdoor', 'naukri', 'auto']);
+const VALID_PLATFORMS = new Set<PlatformId>(['linkedin', 'unstop', 'indeed', 'glassdoor', 'naukri', 'testbed', 'auto']);
 
 export interface BrowserTab {
   id: string;
@@ -14,6 +14,7 @@ export interface BrowserTab {
   platform: PlatformId;
   loading: boolean;
   error?: string;
+  accessBlocked?: boolean;
   favicon?: string;
   zoomFactor: number;
 }
@@ -121,4 +122,18 @@ export function saveBrowserSession(tabs: BrowserTab[], activeTabId: string): voi
     })),
   };
   setSecureItem(SESSION_KEY, JSON.stringify(payload));
+}
+
+/** Compare navigation destinations without Google Forms presentation parameters. */
+export function browserNavigationKey(candidate: string): string {
+  try {
+    const url = new URL(candidate);
+    if (url.hostname === 'docs.google.com' && /^\/forms\/d\/(?:e\/)?[^/]+\/viewform\/?$/.test(url.pathname)) {
+      for (const key of ['pli', 'usp']) url.searchParams.delete(key);
+      url.searchParams.sort();
+    }
+    return `${url.origin}${url.pathname.replace(/\/+$/, '')}${url.search}${url.hash}`;
+  } catch {
+    return candidate;
+  }
 }

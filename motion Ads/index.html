@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZeroApply — Advanced Motion Design Video Ad (Light Mode)</title>
+  <meta name="description" content="Studio-grade 3D Camera, Particle & Laser Physics, Kinetic Typography Motion Video Ad for ZeroApply." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Studio Header -->
+  <header class="studio-header">
+    <div class="brand-section">
+      <div class="brand-logo-mark">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+      </div>
+      <div class="brand-info">
+        <div class="brand-title">
+          ZeroApply Motion Studio
+          <span class="badge-mode">3D Camera • 60 FPS</span>
+        </div>
+        <div class="brand-subtitle">Kinetic Typography & 3D Spatial Motion</div>
+      </div>
+    </div>
+
+    <!-- Center Controls: Camera Presets & Aspect Switcher -->
+    <div class="studio-controls-center">
+      <!-- 3D Camera Presets -->
+      <div class="camera-preset-switcher" title="3D Camera Gimbal Modes">
+        <button class="cam-preset-btn active" data-preset="director">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+          Cinematic
+        </button>
+        <button class="cam-preset-btn" data-preset="orbit">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          3D Orbit
+        </button>
+        <button class="cam-preset-btn" data-preset="isometric">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+          Isometric
+        </button>
+        <button class="cam-preset-btn" data-preset="flat">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect></svg>
+          Flat 2D
+        </button>
+      </div>
+
+      <!-- Aspect Switcher -->
+      <div class="aspect-switcher">
+        <button class="aspect-btn active" data-aspect="16-9" title="16:9 Landscape (1920x1080)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"></rect></svg>
+          16:9
+        </button>
+        <button class="aspect-btn" data-aspect="9-16" title="9:16 Vertical Reel (1080x1920)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"></rect></svg>
+          9:16
+        </button>
+        <button class="aspect-btn" data-aspect="1-1" title="1:1 Square Feed (1080x1080)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect></svg>
+          1:1
+        </button>
+      </div>
+
+      <!-- Real-time Audio Visualizer Equalizer -->
+      <div class="audio-visualizer-wrap" title="Audio Spectrum Visualizer">
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+      </div>
+    </div>
+
+    <!-- Header Actions -->
+    <div class="studio-header-actions">
+      <select id="playbackSpeedSelect" class="btn-secondary" title="Playback Speed">
+        <option value="0.5">0.5x Slow-mo</option>
+        <option value="1" selected>1.0x Normal</option>
+        <option value="1.25">1.25x Fast</option>
+        <option value="1.5">1.5x Turbo</option>
+      </select>
+
+      <button id="recordVideoBtn" class="btn-primary" title="Record and download HD video">
+        <div class="record-dot"></div>
+        <span>Export HD Video (.webm)</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Studio Viewport (Stage Area) -->
+  <main class="studio-viewport" id="studioViewport">
+    
+    <div class="ad-frame-container aspect-16-9" id="adFrameContainer">
+      <div class="motion-ad-stage" id="motionAdStage">
+        
+        <!-- Canvas Particle, Laser & Synapse Physics Layer -->
+        <canvas id="particleFxCanvas"></canvas>
+
+        <!-- Ambient Gradients -->
+        <div class="ad-canvas-bg"></div>
+        <div class="orb-glow-1"></div>
+        <div class="orb-glow-2"></div>
+
+        <!-- Persistent Minimalist Brand Header inside the Ad -->
+        <div class="ad-persistent-brand">
+          <div class="ad-logo-wrap">
+            <div class="ad-logo-icon">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+            </div>
+            <div class="ad-logo-text">Zero<span>Apply</span></div>
+          </div>
+          <div class="ad-pill-status">
+            <span class="live-beacon"></span>
+            AUTONOMOUS AGENT ACTIVE
+          </div>
+        </div>
+
+        <!-- ==========================================================
+             3D CAMERA GIMBAL WORLD
+             All 3D transformations, pans, tilts, and zooms happen here
+             ========================================================== -->
+        <div class="camera-gimbal-world" id="cameraGimbalWorld">
+
+          <!-- Animated Mouse Pointer -->
+          <div class="animated-agent-mouse" id="agentMousePointer">
+            <svg class="mouse-svg" width="28" height="28" viewBox="0 0 24 24" fill="#0f172a" stroke="#ffffff" stroke-width="1.5">
+              <path d="M3 3l7 18 3-7 7-3L3 3z"></path>
+            </svg>
+            <div class="mouse-ripple" id="mouseRipple"></div>
+          </div>
+
+          <!-- Scenes Container -->
+          <div class="scenes-container">
+
+            <!-- SCENE 1: The Broken Reality (0s - 6s) -->
+            <div class="ad-scene active" id="scene1">
+              <div class="scene-1-content">
+                <div class="badge-tag-danger">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  The 2026 Job Market Reality
+                </div>
+                <h1 class="kinetic-headline-huge">
+                  Applying to 250 jobs by hand is <span class="strike-red">exhausting.</span>
+                </h1>
+                <p class="subheadline-lead">
+                  Hours lost copying resumes. Blackhole ATS rejections. 99% of applications never even get seen by a human recruiter.
+                </p>
+
+                <div class="cards-chaos-row">
+                  <!-- Chaos Card 1 -->
+                  <div class="chaos-card">
+                    <div class="chaos-header">
+                      <div class="chaos-icon-box">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                      </div>
+                      <div>
+                        <div class="chaos-company">Tech Giant Co.</div>
+                        <div class="chaos-time">Yesterday, 9:15 AM</div>
+                      </div>
+                    </div>
+                    <div class="chaos-body">"Unfortunately, after reviewing your application, we have decided not to move forward at this time..."</div>
+                    <div class="chaos-status status-rejected">Instant ATS Reject</div>
+                  </div>
+
+                  <!-- Chaos Card 2 -->
+                  <div class="chaos-card">
+                    <div class="chaos-header">
+                      <div class="chaos-icon-box" style="background: #fef3c7; color: #d97706;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                      </div>
+                      <div>
+                        <div class="chaos-company">Growth Unicorn</div>
+                        <div class="chaos-time">32 Days Ago</div>
+                      </div>
+                    </div>
+                    <div class="chaos-body">"Application Received. We are currently experiencing higher than usual candidate volume..."</div>
+                    <div class="chaos-status status-ghosted">Zero Response • Ghosted</div>
+                  </div>
+
+                  <!-- Chaos Card 3 -->
+                  <div class="chaos-card">
+                    <div class="chaos-header">
+                      <div class="chaos-icon-box">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                      </div>
+                      <div>
+                        <div class="chaos-company">Enterprise Systems</div>
+                        <div class="chaos-time">3 Weeks Ago</div>
+                      </div>
+                    </div>
+                    <div class="chaos-body">"Form error: Resume format incompatible with legacy parser. Please re-enter work history manually."</div>
+                    <div class="chaos-status status-rejected">Broken Workday Flow</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCENE 2: The Solution / Meet ZeroApply (6s - 12s) -->
+            <div class="ad-scene" id="scene2">
+              <div class="scene-2-content">
+                <div class="scene-2-left">
+                  <div class="badge-tag-indigo">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                    The Next Evolution
+                  </div>
+                  <h2 class="headline-brand">
+                    Meet ZeroApply.<br/>
+                    <span class="gradient-text">Your Autonomous Career Agent.</span>
+                  </h2>
+                  <p class="subheadline-brand">
+                    Stop spending nights filling out identical job portals. ZeroApply learns your professional persona and autonomously navigates, optimizes, and submits high-caliber applications in seconds.
+                  </p>
+
+                  <div class="features-grid-pills">
+                    <div class="feature-pill-item">
+                      <div class="pill-check">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      </div>
+                      <span>1-Click Multi-Persona Sync</span>
+                    </div>
+                    <div class="feature-pill-item">
+                      <div class="pill-check">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      </div>
+                      <span>Direct Chrome Auto-Control</span>
+                    </div>
+                    <div class="feature-pill-item">
+                      <div class="pill-check">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      </div>
+                      <span>98% ATS Keyword Optimization</span>
+                    </div>
+                    <div class="feature-pill-item">
+                      <div class="pill-check">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      </div>
+                      <span>Stealth Anti-Detection Shield</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 3D Angled Agent Profile Card with Specular Reflection -->
+                <div class="scene-2-right">
+                  <div class="hero-agent-card-3d">
+                    <div class="agent-card-top">
+                      <div class="agent-profile-meta">
+                        <div class="agent-avatar">SP</div>
+                        <div>
+                          <div class="agent-name">Sai Prasad Chary</div>
+                          <div class="agent-role">Lead Full Stack & AI Systems Engineer</div>
+                        </div>
+                      </div>
+                      <div class="status-badge-active">
+                        <span class="live-beacon"></span>
+                        Verified Ready
+                      </div>
+                    </div>
+
+                    <div class="agent-specs-matrix">
+                      <div class="spec-row">
+                        <span class="spec-label">Target Compensation</span>
+                        <span class="spec-val">$180,000+ / Year</span>
+                      </div>
+                      <div class="spec-row">
+                        <span class="spec-label">Work Preference</span>
+                        <span class="spec-val">100% Remote / Hybrid Global</span>
+                      </div>
+                      <div class="spec-row">
+                        <span class="spec-label">Verified Tech Stack</span>
+                        <span class="spec-val" style="color: #4f46e5;">TypeScript • React • Node.js • Python</span>
+                      </div>
+                      <div class="spec-row">
+                        <span class="spec-label">Autonomous Safety</span>
+                        <span class="spec-val" style="color: #10b981;">Zero Duplication • Human Speed</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCENE 3: The Live Autonomous Engine (12s - 20s) -->
+            <div class="ad-scene" id="scene3">
+              <div class="scene-3-content">
+                <div class="scene-header-center">
+                  <div class="badge-tag-indigo" style="margin-bottom: 12px;">Live Execution Simulation</div>
+                  <h2 class="headline-scene-3">Autonomous Precision In Action</h2>
+                </div>
+
+                <!-- Simulated Chrome Automation Window in 3D -->
+                <div class="chrome-browser-window">
+                  <!-- Browser Title Bar -->
+                  <div class="chrome-title-bar">
+                    <div class="window-dots">
+                      <div class="dot dot-red"></div>
+                      <div class="dot dot-yellow"></div>
+                      <div class="dot dot-green"></div>
+                    </div>
+                    <div class="chrome-address-bar">
+                      <svg class="padlock-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                      <span>boards.greenhouse.io/stripe/jobs/staff-software-engineer-cloud</span>
+                    </div>
+                  </div>
+
+                  <!-- Chrome Viewport Body -->
+                  <div class="chrome-viewport-body">
+                    <!-- Left: Job & Real-time ATS Match Engine -->
+                    <div class="engine-left-panel">
+                      <div class="job-listing-header">
+                        <div>
+                          <div class="job-title">Staff Software Engineer — Cloud Infrastructure</div>
+                          <div class="job-company-row">
+                            <span>Stripe, Inc.</span> • <span>San Francisco, CA / Remote</span> • <span>$210k - $265k</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="ats-radar-box">
+                        <div class="ats-radar-top">
+                          <span class="ats-title">Dynamic ATS Keyword Radar</span>
+                          <span class="ats-score-counter" id="atsScoreCounter">62%</span>
+                        </div>
+                        <div class="progress-track">
+                          <div class="progress-fill" id="atsProgressFill"></div>
+                        </div>
+                        <div class="ats-tags-cloud">
+                          <span class="ats-tag matched">Distributed Systems</span>
+                          <span class="ats-tag matched">TypeScript</span>
+                          <span class="ats-tag" id="tagReact">React & Next.js</span>
+                          <span class="ats-tag" id="tagCloud">Kubernetes</span>
+                          <span class="ats-tag" id="tagArch">High Concurrency</span>
+                          <span class="ats-tag" id="tagDb">PostgreSQL</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Right: Automated Persona Form Fill -->
+                    <div class="engine-right-panel">
+                      <div class="form-automation-title">
+                        <span>ZeroApply Stealth Form Injector</span>
+                        <span class="stealth-status-indicator">⚡ 0.4s Human-Emulation Mode</span>
+                      </div>
+
+                      <div class="form-fields-group">
+                        <div class="sim-input-group">
+                          <label class="sim-label">Full Legal Name</label>
+                          <div class="sim-input-box typing" id="simInputName">Sai Prasad Chary<span class="sim-cursor-caret"></span></div>
+                        </div>
+                        <div class="sim-input-group">
+                          <label class="sim-label">Email Address</label>
+                          <div class="sim-input-box" id="simInputEmail">saiprasad.chary@gmail.com</div>
+                        </div>
+                        <div class="sim-input-group">
+                          <label class="sim-label">Target Role & Specialization</label>
+                          <div class="sim-input-box" id="simInputRole">Lead Full Stack & AI Systems Engineer</div>
+                        </div>
+                      </div>
+
+                      <div class="sim-apply-btn-wrap">
+                        <button class="sim-submit-btn" id="simSubmitBtn">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+                          Auto-Applying with ZeroApply...
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCENE 4: 3D Rolling Stats & Social Proof (20s - 25s) -->
+            <div class="ad-scene" id="scene4">
+              <div class="scene-4-content">
+                <div class="badge-tag-indigo" style="margin-bottom: 20px;">
+                  Verified Outcomes
+                </div>
+                <h2 class="kinetic-headline-huge" style="font-size: 64px; margin-bottom: 36px;">
+                  From Application Grind to <span class="gradient-text">Multiple Offers</span>
+                </h2>
+
+                <!-- Stats Metrics Row in 3D -->
+                <div class="stats-grid-row">
+                  <div class="stat-metric-card">
+                    <div class="stat-number" id="statNum1">480+</div>
+                    <div class="stat-label">Autonomous Applications Dispatched</div>
+                  </div>
+                  <div class="stat-metric-card">
+                    <div class="stat-number" id="statNum2">18</div>
+                    <div class="stat-label">Direct First-Round Interviews Scheduled</div>
+                  </div>
+                  <div class="stat-metric-card">
+                    <div class="stat-number" id="statNum3">14d</div>
+                    <div class="stat-label">Average Time to Multiple Offers</div>
+                  </div>
+                </div>
+
+                <!-- Cascading 3D Interview Cards -->
+                <div class="interviews-cascading-stack">
+                  <div class="interview-card">
+                    <div class="interview-company-info">
+                      <div class="company-logo-badge logo-stripe">S</div>
+                      <div class="interview-details-text">
+                        <div class="interview-company-name">Stripe</div>
+                        <div class="interview-role-text">Interview Invitation: Staff Software Engineer ($240,000/yr)</div>
+                      </div>
+                    </div>
+                    <div class="interview-status-tag">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      Direct Interview Link
+                    </div>
+                  </div>
+
+                  <div class="interview-card">
+                    <div class="interview-company-info">
+                      <div class="company-logo-badge logo-figma">F</div>
+                      <div class="interview-details-text">
+                        <div class="interview-company-name">Figma</div>
+                        <div class="interview-role-text">Final Round Interview: Senior Systems Architect</div>
+                      </div>
+                    </div>
+                    <div class="interview-status-tag">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      Final Onsite Confirmed
+                    </div>
+                  </div>
+
+                  <div class="interview-card">
+                    <div class="interview-company-info">
+                      <div class="company-logo-badge logo-airbnb">A</div>
+                      <div class="interview-details-text">
+                        <div class="interview-company-name">Airbnb</div>
+                        <div class="interview-role-text">Official Offer Letter Dispatched • Full Remote Option</div>
+                      </div>
+                    </div>
+                    <div class="interview-status-tag" style="background: #eef2ff; border-color: #c7d2fe; color: #4f46e5;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                      Offer Extended
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SCENE 5: The Climax & Outro CTA (25s - 30s) -->
+            <div class="ad-scene" id="scene5">
+              <div class="scene-5-content">
+                <div class="badge-tag-indigo" style="margin-bottom: 24px;">Start Today</div>
+                <h2 class="cta-huge-title">
+                  Stop Searching.<br/>
+                  <span class="gradient-text">Start Getting Hired.</span>
+                </h2>
+                <p class="cta-subtext">
+                  Let your autonomous agent work around the clock while you focus on interview prep and doing your best work.
+                </p>
+
+                <div class="cta-button-card" id="ctaMainButton">
+                  <span>Download ZeroApply Free</span>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
+                </div>
+
+                <div class="trust-badges-row">
+                  <div class="trust-badge-item">
+                    <svg class="trust-check-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>100% Free & Open Source</span>
+                  </div>
+                  <div class="trust-badge-item">
+                    <svg class="trust-check-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>Mac, Windows & Web Ready</span>
+                  </div>
+                  <div class="trust-badge-item">
+                    <svg class="trust-check-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>100% Private Local Execution</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /scenes-container -->
+
+        </div><!-- /camera-gimbal-world -->
+
+      </div><!-- /motion-ad-stage -->
+    </div><!-- /ad-frame-container -->
+
+  </main>
+
+  <!-- Bottom Timeline & Studio Deck -->
+  <footer class="studio-timeline-deck">
+    <!-- Scrubbable Bar -->
+    <div class="timeline-track-wrap" id="timelineTrack" title="Click or drag to scrub timeline">
+      <div class="timeline-bg-bar">
+        <div class="keyframe-marker" style="left: 0%;" title="Scene 1: The Struggle"></div>
+        <div class="keyframe-marker" style="left: 20%;" title="Scene 2: Meet ZeroApply"></div>
+        <div class="keyframe-marker" style="left: 40%;" title="Scene 3: Live Engine"></div>
+        <div class="keyframe-marker" style="left: 66.6%;" title="Scene 4: Results"></div>
+        <div class="keyframe-marker" style="left: 83.3%;" title="Scene 5: Call to Action"></div>
+        
+        <div class="timeline-fill-bar" id="timelineFillBar"></div>
+        <div class="timeline-playhead-thumb" id="timelinePlayheadThumb"></div>
+      </div>
+    </div>
+
+    <!-- Controls Row -->
+    <div class="timeline-controls-row">
+      <div class="playback-buttons-group">
+        <button class="play-pause-btn" id="playPauseBtn" title="Play / Pause (Space)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        </button>
+        <button class="btn-icon-subtle" id="resetBtn" title="Restart Ad">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+        </button>
+        <span class="time-display-digital" id="timeDisplay">00:00 / 00:30</span>
+      </div>
+
+      <!-- Quick Scene Jump Pills -->
+      <div class="scene-pills-selector">
+        <button class="scene-jump-pill active" data-scene="1">01 The Struggle</button>
+        <button class="scene-jump-pill" data-scene="2">02 ZeroApply</button>
+        <button class="scene-jump-pill" data-scene="3">03 Live Engine</button>
+        <button class="scene-jump-pill" data-scene="4">04 Results</button>
+        <button class="scene-jump-pill" data-scene="5">05 Outro CTA</button>
+      </div>
+
+      <!-- Sound & Settings -->
+      <div class="sound-controls-group">
+        <button class="btn-icon-subtle" id="soundToggleBtn" title="Toggle Sound">
+          <svg class="sound-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+        </button>
+        <input type="range" class="sound-volume-slider" id="volumeSlider" min="0" max="1" step="0.05" value="0.85" title="Master Volume" />
+      </div>
+    </div>
+  </footer>
+
+  <!-- Recording Overlay Banner -->
+  <div id="recordingOverlay" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(6px); z-index: 999; align-items: center; justify-content: center; flex-direction: column; color: #ffffff;">
+    <div style="background: #ffffff; color: #0f172a; padding: 36px 52px; border-radius: 22px; box-shadow: 0 24px 60px rgba(0,0,0,0.25); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 16px;">
+      <div class="record-dot" style="width: 16px; height: 16px;"></div>
+      <h3 style="font-size: 22px; font-weight: 800;">Recording 60FPS 3D Master Video...</h3>
+      <p style="font-size: 15px; color: #64748b; max-width: 400px;">Capturing native high-definition frames with 3D camera transforms and particle physics. Your .webm video will download automatically when completed.</p>
+      <div id="recordingTimer" style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 800; color: #4f46e5;">00:00 / 00:30</div>
+    </div>
+  </div>
+
+  <!-- Scripts in dependency order -->
+  <script src="sound-engine.js"></script>
+  <script src="particle-fx.js"></script>
+  <script src="motion-engine.js"></script>
+  <script src="recorder.js"></script>
+</body>
+</html>

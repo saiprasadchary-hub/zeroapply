@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZeroApply Dark Glass Cursor System | Official Interactions in Motion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-deep: #05030a;
+      --bg-card: rgba(14, 11, 24, 0.7);
+      --bg-card-hover: rgba(22, 17, 38, 0.85);
+      --border-glass: rgba(196, 181, 253, 0.15);
+      --border-glass-bright: rgba(196, 181, 253, 0.4);
+      --glow-lavender: rgba(167, 139, 250, 0.4);
+      --glow-bright: rgba(196, 181, 253, 0.75);
+      --text-main: #f5f3ff;
+      --text-muted: #948aa9;
+      --text-dim: #5e5473;
+      --accent-lavender: #c4b5fd;
+      --accent-purple: #a78bfa;
+      --accent-indigo: #818cf8;
+      --accent-crimson: #f43f5e;
+      --accent-green: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-deep);
+      background-image: 
+        radial-gradient(ellipse at 50% 0%, rgba(139, 92, 246, 0.18) 0%, transparent 65%),
+        radial-gradient(circle at 15% 30%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 85% 70%, rgba(168, 85, 247, 0.12) 0%, transparent 55%);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      padding: 40px 32px 80px;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Ambient noise overlay for deep obsidian glass atmosphere */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at center, transparent 0%, rgba(5, 3, 10, 0.6) 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header Banner */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 44px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid rgba(196, 181, 253, 0.12);
+    }
+
+    .brand-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-logo-disc {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(38, 28, 62, 0.8), rgba(16, 12, 28, 0.95));
+      border: 1.8px solid var(--accent-lavender);
+      box-shadow: 0 0 16px var(--glow-bright), inset 0 0 8px rgba(167, 139, 250, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #ffffff;
+      font-weight: 300;
+      line-height: 1;
+    }
+
+    .brand-title-group h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 3.5px;
+      color: #ffffff;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-title-group .sub {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .brand-right {
+      text-align: right;
+    }
+
+    .brand-right .badge-tech {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.8px;
+      color: var(--accent-lavender);
+      text-transform: uppercase;
+    }
+
+    .brand-right .tagline {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* 6x3 Grid of 18 Interactive Cursors */
+    .cursor-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+
+    @media (max-width: 1280px) {
+      .cursor-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .cursor-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .cell {
+      background: var(--bg-card);
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 16px 14px 18px;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .cell::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+      background: radial-gradient(circle at 50% 60%, rgba(167, 139, 250, 0.08) 0%, transparent 70%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .cell:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-glass-bright);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px rgba(124, 58, 237, 0.25), 0 0 18px rgba(196, 181, 253, 0.2);
+    }
+
+    .cell:hover::after {
+      opacity: 1;
+    }
+
+    .cell-header {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #ffffff;
+      text-transform: uppercase;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .cell-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .cell-canvas {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      margin: 12px 0 6px;
+    }
+
+    /* Common Glass SVG Styling */
+    .glass-svg {
+      filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.7)) drop-shadow(0 0 20px rgba(129, 140, 248, 0.4)) drop-shadow(0 8px 18px rgba(0, 0, 0, 0.7));
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .cell:hover .glass-svg {
+      transform: scale(1.08);
+      filter: drop-shadow(0 0 14px rgba(196, 181, 253, 0.95)) drop-shadow(0 0 28px rgba(167, 139, 250, 0.6)) drop-shadow(0 8px 24px rgba(0, 0, 0, 0.8));
+    }
+
+    /* 02. Moving Motion Echoes */
+    .motion-ghosts {
+      position: absolute;
+      left: 14px;
+      top: 6px;
+      opacity: 0.35;
+      filter: blur(0.5px);
+    }
+    .motion-ghost-2 {
+      position: absolute;
+      left: 22px;
+      top: 10px;
+      opacity: 0.2;
+      filter: blur(1px);
+    }
+
+    /* 03. Soft Glow Bloom */
+    .glow-bloom {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(196, 181, 253, 0.35) 0%, rgba(167, 139, 250, 0.15) 50%, transparent 80%);
+      pointer-events: none;
+      animation: za-pulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes za-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.7; }
+      50% { transform: scale(1.25); opacity: 1; }
+    }
+
+    /* 04 & 05. Concentric Click Ripples */
+    .ripple-ring-1 {
+      position: absolute;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      border: 1.8px solid rgba(196, 181, 253, 0.85);
+      background: rgba(167, 139, 250, 0.1);
+      box-shadow: 0 0 16px rgba(196, 181, 253, 0.6), inset 0 0 8px rgba(167, 139, 250, 0.3);
+      animation: za-expand 2s infinite cubic-bezier(0.1, 0.8, 0.3, 1);
+    }
+    .ripple-ring-2 {
+      position: absolute;
+      width: 74px;
+      height: 74px;
+      border-radius: 50%;
+      border: 1.2px solid rgba(167, 139, 250, 0.55);
+      animation: za-expand 2s 0.3s infinite cubic-bezier(0.1, 0.8, 0.3, 1);
+    }
+
+    @keyframes za-expand {
+      0% { transform: scale(0.2); opacity: 1; }
+      100% { transform: scale(1.4); opacity: 0; }
+    }
+
+    /* 18. Idle Orbital Ring */
+    .orbital-ring {
+      position: absolute;
+      width: 76px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(196, 181, 253, 0.6);
+      border-left-color: transparent;
+      border-right-color: transparent;
+      box-shadow: 0 0 12px rgba(196, 181, 253, 0.4);
+      transform: rotate(-25deg);
+      animation: za-orbit 5s linear infinite;
+    }
+
+    @keyframes za-orbit {
+      from { transform: rotate(-25deg) rotate(0deg); }
+      to { transform: rotate(-25deg) rotate(360deg); }
+    }
+
+    /* 19. Complete Flow Section */
+    .flow-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-glass);
+      border-radius: 14px;
+      padding: 24px 28px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      margin-bottom: 40px;
+    }
+
+    .flow-header {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .flow-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .flow-stages {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .flow-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 110px;
+    }
+
+    .flow-icon-box {
+      width: 72px;
+      height: 72px;
+      border-radius: 12px;
+      background: rgba(22, 17, 38, 0.6);
+      border: 1px solid var(--border-glass);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: all 0.25s ease;
+    }
+
+    .flow-stage:hover .flow-icon-box {
+      border-color: var(--border-glass-bright);
+      background: rgba(30, 22, 52, 0.8);
+      box-shadow: 0 0 18px rgba(196, 181, 253, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .flow-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    .flow-arrow {
+      color: var(--text-dim);
+      font-size: 16px;
+      user-select: none;
+    }
+
+    /* Live Interactive Agent Simulator Playground */
+    .playground-section {
+      background: linear-gradient(135deg, rgba(18, 14, 32, 0.9), rgba(10, 8, 20, 0.95));
+      border: 1px solid var(--border-glass-bright);
+      border-radius: 16px;
+      padding: 32px;
+      position: relative;
+      box-shadow: 0 12px 40px rgba(124, 58, 237, 0.2);
+    }
+
+    .playground-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .playground-title h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #ffffff;
+    }
+
+    .playground-title p {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .playground-controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn-action {
+      background: linear-gradient(135deg, rgba(38, 28, 64, 0.9), rgba(24, 18, 42, 0.9));
+      color: #ede9fe;
+      border: 1px solid rgba(196, 181, 253, 0.4);
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    }
+
+    .btn-action:hover {
+      background: linear-gradient(135deg, #7c3aed, #6366f1);
+      border-color: #ffffff;
+      color: #ffffff;
+      box-shadow: 0 0 20px rgba(196, 181, 253, 0.6);
+      transform: translateY(-1px);
+    }
+
+    .btn-action.btn-primary {
+      background: linear-gradient(135deg, #7c3aed, #9333ea);
+      border-color: #c4b5fd;
+    }
+
+    .sandbox-stage {
+      height: 280px;
+      background: rgba(6, 4, 12, 0.85);
+      border: 1px dashed rgba(196, 181, 253, 0.25);
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 20px;
+    }
+
+    .interactive-target {
+      padding: 14px 24px;
+      border-radius: 10px;
+      background: rgba(22, 17, 38, 0.9);
+      border: 1px solid var(--border-glass);
+      color: #ede9fe;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    .interactive-target:hover {
+      border-color: var(--accent-lavender);
+      box-shadow: 0 0 16px rgba(196, 181, 253, 0.35);
+    }
+
+    .interactive-input {
+      background: rgba(14, 10, 24, 0.9);
+      border: 1px solid var(--border-glass);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #ffffff;
+      font-size: 13px;
+      font-family: inherit;
+      width: 220px;
+      outline: none;
+    }
+
+    .interactive-input:focus {
+      border-color: var(--accent-lavender);
+      box-shadow: 0 0 14px rgba(196, 181, 253, 0.3);
+    }
+
+    /* Footer */
+    footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(196, 181, 253, 0.1);
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="brand-left">
+        <div class="brand-logo-disc">Ø</div>
+        <div class="brand-title-group">
+          <h1>Zero Apply</h1>
+          <div class="sub">Dark Glass Cursor System</div>
+        </div>
+      </div>
+      <div class="brand-right">
+        <div class="badge-tech">Interactions in Motion</div>
+        <div class="tagline">Same Purpose. A Smoother Tomorrow.</div>
+      </div>
+    </header>
+
+    <!-- 18 Cursor Interaction States Grid (Matching User's Reference Poster) -->
+    <div class="cursor-grid">
+      
+      <!-- 01. DEFAULT -->
+      <div class="cell" onclick="demoState('default')">
+        <div class="cell-header">01. DEFAULT</div>
+        <div class="cell-sub">Clean & Elegant</div>
+        <div class="cell-canvas">
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none" class="glass-svg">
+            <defs>
+              <linearGradient id="body-01" x1="14" y1="8" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#2a2046" stop-opacity="0.95" />
+                <stop offset="35%" stop-color="#191330" stop-opacity="0.96" />
+                <stop offset="100%" stop-color="#080612" stop-opacity="0.99" />
+              </linearGradient>
+              <linearGradient id="rim-01" x1="12" y1="6" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#ffffff" />
+                <stop offset="30%" stop-color="#c4b5fd" />
+                <stop offset="70%" stop-color="#a78bfa" />
+                <stop offset="100%" stop-color="#6366f1" />
+              </linearGradient>
+            </defs>
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <path d="M 15 10 L 22 41 L 28 33 L 21 13 Z" fill="#ffffff" opacity="0.3" />
+            <path d="M 14.5 9.5 L 18 23" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" />
+            <circle cx="14" cy="8.5" r="1.3" fill="#ffffff" />
+            <!-- Ø Logo -->
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 02. MOVING -->
+      <div class="cell" onclick="demoState('moving')">
+        <div class="cell-header">02. MOVING</div>
+        <div class="cell-sub">Smooth Follow</div>
+        <div class="cell-canvas">
+          <!-- Motion Ghost Echoes -->
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none" class="glass-svg motion-ghost-2">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="rgba(42,32,70,0.5)" stroke="#a78bfa" stroke-width="1.5" />
+            <circle cx="37" cy="38" r="8" stroke="#a78bfa" stroke-width="1.5" />
+          </svg>
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none" class="glass-svg motion-ghosts">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="rgba(42,32,70,0.8)" stroke="#c4b5fd" stroke-width="2" />
+            <circle cx="37" cy="38" r="8" stroke="#c4b5fd" stroke-width="1.8" />
+          </svg>
+          <!-- Main Pointer -->
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 03. HOVER -->
+      <div class="cell" onclick="demoState('hover')">
+        <div class="cell-header">03. HOVER</div>
+        <div class="cell-sub">Soft Glow</div>
+        <div class="cell-canvas">
+          <div class="glow-bloom"></div>
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none" class="glass-svg" style="filter: drop-shadow(0 0 16px rgba(196, 181, 253, 0.95)) drop-shadow(0 0 32px rgba(167, 139, 250, 0.7));">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 04. CLICK -->
+      <div class="cell" onclick="demoState('click')">
+        <div class="cell-header">04. CLICK</div>
+        <div class="cell-sub">Ripple Effect</div>
+        <div class="cell-canvas">
+          <div class="ripple-ring-1"></div>
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none" class="glass-svg" style="transform: scale(0.92) rotate(-4deg);">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 05. DOUBLE CLICK -->
+      <div class="cell" onclick="demoState('doubleclick')">
+        <div class="cell-header">05. DOUBLE CLICK</div>
+        <div class="cell-sub">Pulse</div>
+        <div class="cell-canvas">
+          <div class="ripple-ring-1"></div>
+          <div class="ripple-ring-2"></div>
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 06. DRAGGING -->
+      <div class="cell" onclick="demoState('drag')">
+        <div class="cell-header">06. DRAGGING</div>
+        <div class="cell-sub">Hold & Move</div>
+        <div class="cell-canvas">
+          <svg width="70" height="60" viewBox="0 0 74 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+            <!-- Dragged File Card -->
+            <rect x="49" y="10" width="22" height="26" rx="4" fill="rgba(24, 18, 44, 0.88)" stroke="#c4b5fd" stroke-width="1.6" />
+            <line x1="54" y1="17" x2="65" y2="17" stroke="#a78bfa" stroke-width="1.4" stroke-linecap="round" />
+            <line x1="54" y1="22" x2="62" y2="22" stroke="#a78bfa" stroke-width="1.4" stroke-linecap="round" />
+            <circle cx="68" cy="33" r="5" fill="#7c3aed" stroke="#ffffff" stroke-width="1.2" />
+            <line x1="68" y1="30" x2="68" y2="36" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" />
+            <line x1="65" y1="33" x2="71" y2="33" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 07. TEXT SELECT -->
+      <div class="cell" onclick="demoState('textselect')">
+        <div class="cell-header">07. TEXT SELECT</div>
+        <div class="cell-sub">Precision</div>
+        <div class="cell-canvas">
+          <svg width="70" height="60" viewBox="0 0 70 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+            <!-- Vertical Caret -->
+            <line x1="58" y1="12" x2="64" y2="12" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" />
+            <line x1="61" y1="12" x2="61" y2="44" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+            <line x1="58" y1="44" x2="64" y2="44" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 08. SELECTING -->
+      <div class="cell" onclick="demoState('selecting')">
+        <div class="cell-header">08. SELECTING</div>
+        <div class="cell-sub">Area Select</div>
+        <div class="cell-canvas">
+          <svg width="76" height="60" viewBox="0 0 76 64" fill="none" class="glass-svg">
+            <!-- Dashed bounding box with anchor dots -->
+            <rect x="12" y="10" width="52" height="40" rx="3" fill="none" stroke="#c4b5fd" stroke-width="1.4" stroke-dasharray="3 3" />
+            <circle cx="12" cy="10" r="2.5" fill="#a78bfa" />
+            <circle cx="64" cy="10" r="2.5" fill="#a78bfa" />
+            <circle cx="12" cy="50" r="2.5" fill="#a78bfa" />
+            <circle cx="64" cy="50" r="2.5" fill="#a78bfa" />
+            <!-- Cursor -->
+            <path d="M 28 18 L 60 37 L 44 41 L 34 56 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="51" cy="48" r="7" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="1.8" />
+            <line x1="46" y1="53" x2="56" y2="43" stroke="url(#rim-01)" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 09. SCROLL -->
+      <div class="cell" onclick="demoState('scroll')">
+        <div class="cell-header">09. SCROLL</div>
+        <div class="cell-sub">Vertical / Horizontal</div>
+        <div class="cell-canvas">
+          <svg width="68" height="64" viewBox="0 0 68 64" fill="none" class="glass-svg">
+            <!-- 4 Directional Arrows -->
+            <path d="M 32 4 L 28 8 M 32 4 L 36 8 M 32 4 L 32 10" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" />
+            <path d="M 32 60 L 28 56 M 32 60 L 36 56 M 32 60 L 32 54" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" />
+            <path d="M 4 32 L 8 28 M 4 32 L 8 36 M 4 32 L 10 32" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" />
+            <path d="M 64 32 L 60 28 M 64 32 L 60 36 M 64 32 L 58 32" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" />
+            <!-- Pointer -->
+            <path d="M 18 14 L 48 32 L 34 36 L 24 50 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.4" stroke-linejoin="round" />
+            <circle cx="41" cy="42" r="7" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="1.8" />
+            <line x1="36" y1="47" x2="46" y2="37" stroke="url(#rim-01)" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 10. TYPING -->
+      <div class="cell" onclick="demoState('typing')">
+        <div class="cell-header">10. TYPING</div>
+        <div class="cell-sub">Input Mode</div>
+        <div class="cell-canvas">
+          <svg width="68" height="60" viewBox="0 0 68 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+            <!-- Glowing I-Beam -->
+            <line x1="53" y1="14" x2="63" y2="14" stroke="#c4b5fd" stroke-width="2.2" stroke-linecap="round" />
+            <line x1="58" y1="14" x2="58" y2="46" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" />
+            <line x1="53" y1="46" x2="63" y2="46" stroke="#c4b5fd" stroke-width="2.2" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 11. LOADING -->
+      <div class="cell" onclick="demoState('loading')">
+        <div class="cell-header">11. LOADING</div>
+        <div class="cell-sub">Processing</div>
+        <div class="cell-canvas">
+          <svg width="68" height="60" viewBox="0 0 68 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+            <!-- Dotted Circular Spinner -->
+            <g transform="rotate(45 56 20)">
+              <circle cx="56" cy="12" r="1.8" fill="#c4b5fd" opacity="0.9" />
+              <circle cx="62" cy="15" r="1.8" fill="#c4b5fd" opacity="0.75" />
+              <circle cx="64" cy="20" r="1.8" fill="#c4b5fd" opacity="0.6" />
+              <circle cx="62" cy="25" r="1.8" fill="#c4b5fd" opacity="0.45" />
+              <circle cx="56" cy="28" r="1.8" fill="#c4b5fd" opacity="0.3" />
+              <circle cx="50" cy="25" r="1.8" fill="#c4b5fd" opacity="0.2" />
+              <circle cx="48" cy="20" r="1.8" fill="#c4b5fd" opacity="0.1" />
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 12. SUCCESS -->
+      <div class="cell" onclick="demoState('success')">
+        <div class="cell-header">12. SUCCESS</div>
+        <div class="cell-sub">Completed</div>
+        <div class="cell-canvas">
+          <svg width="68" height="60" viewBox="0 0 68 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+            <!-- Checkmark Badge -->
+            <circle cx="54" cy="18" r="8" fill="#15102a" stroke="#c4b5fd" stroke-width="1.8" />
+            <path d="M 50 18 L 53 21 L 58 15" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 13. ERROR -->
+      <div class="cell" onclick="demoState('error')">
+        <div class="cell-header">13. ERROR</div>
+        <div class="cell-sub">Not Allowed</div>
+        <div class="cell-canvas">
+          <svg width="68" height="60" viewBox="0 0 68 64" fill="none" class="glass-svg" style="filter: drop-shadow(0 0 14px rgba(244, 63, 94, 0.8)) drop-shadow(0 0 28px rgba(225, 29, 72, 0.5));">
+            <defs>
+              <linearGradient id="body-err" x1="14" y1="8" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#3d141e" stop-opacity="0.95" />
+                <stop offset="100%" stop-color="#140609" stop-opacity="0.99" />
+              </linearGradient>
+              <linearGradient id="rim-err" x1="12" y1="6" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#ffffff" />
+                <stop offset="40%" stop-color="#fb7185" />
+                <stop offset="100%" stop-color="#e11d48" />
+              </linearGradient>
+            </defs>
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-err)" stroke="url(#rim-err)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(30, 8, 14, 0.9)" stroke="url(#rim-err)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-err)" stroke-width="2" stroke-linecap="round" />
+            <!-- Crimson 'X' Badge -->
+            <circle cx="54" cy="18" r="8" fill="#2d0a12" stroke="#f43f5e" stroke-width="1.8" />
+            <line x1="51" y1="15" x2="57" y2="21" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" />
+            <line x1="57" y1="15" x2="51" y2="21" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 14. LINK -->
+      <div class="cell" onclick="demoState('link')">
+        <div class="cell-header">14. LINK</div>
+        <div class="cell-sub">Clickable Link</div>
+        <div class="cell-canvas">
+          <svg width="68" height="60" viewBox="0 0 68 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+            <!-- Interlocking Chain Link -->
+            <path d="M 52 24 L 56 20 C 58 18 61 18 63 20 C 65 22 65 25 63 27 L 59 31 C 57 33 54 33 52 31" stroke="#c4b5fd" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M 54 28 L 50 32 C 48 34 45 34 43 32 C 41 30 41 27 43 25 L 47 21" stroke="#a78bfa" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 15. NOT ALLOWED -->
+      <div class="cell" onclick="demoState('notallowed')">
+        <div class="cell-header">15. NOT ALLOWED</div>
+        <div class="cell-sub">Unavailable</div>
+        <div class="cell-canvas">
+          <svg width="68" height="60" viewBox="0 0 68 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+            <!-- Slashed Circle -->
+            <circle cx="54" cy="18" r="7.5" fill="none" stroke="#a78bfa" stroke-width="1.8" />
+            <line x1="49" y1="23" x2="59" y2="13" stroke="#a78bfa" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 16. RESIZE -->
+      <div class="cell" onclick="demoState('resize')">
+        <div class="cell-header">16. RESIZE</div>
+        <div class="cell-sub">Resize Elements</div>
+        <div class="cell-canvas">
+          <svg width="68" height="60" viewBox="0 0 68 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+            <!-- Dual Diagonal Arrows -->
+            <path d="M 50 14 L 60 14 M 60 14 L 60 24 M 60 14 L 50 24" stroke="#c4b5fd" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M 46 28 L 46 38 M 46 38 L 56 38 M 46 38 L 56 28" stroke="#a78bfa" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 17. AI AGENT -->
+      <div class="cell" onclick="demoState('agent')">
+        <div class="cell-header">17. AI AGENT</div>
+        <div class="cell-sub">Thinking...</div>
+        <div class="cell-canvas">
+          <svg width="68" height="60" viewBox="0 0 68 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+            <!-- Radiant Star Sparkles Cluster -->
+            <path d="M 53 12 Q 53 16 57 16 Q 53 16 53 20 Q 53 16 49 16 Q 53 16 53 12 Z" fill="#ffffff" />
+            <path d="M 60 22 Q 60 24.5 62.5 24.5 Q 60 24.5 60 27 Q 60 24.5 57.5 24.5 Q 60 24.5 60 22 Z" fill="#c4b5fd" />
+            <path d="M 47 24 Q 47 26 49 26 Q 47 26 47 28 Q 47 26 45 26 Q 47 26 47 24 Z" fill="#a78bfa" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 18. IDLE -->
+      <div class="cell" onclick="demoState('idle')">
+        <div class="cell-header">18. IDLE</div>
+        <div class="cell-sub">Subtle Animation</div>
+        <div class="cell-canvas">
+          <div class="orbital-ring"></div>
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none" class="glass-svg">
+            <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" stroke-linejoin="round" />
+            <circle cx="37" cy="38" r="8" fill="rgba(14, 10, 26, 0.9)" stroke="url(#rim-01)" stroke-width="2" />
+            <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 19. Complete Flow Section -->
+    <div class="flow-section">
+      <div class="flow-header">19. COMPLETE FLOW</div>
+      <div class="flow-sub">From Move &rarr; Hover &rarr; Click &rarr; Typing &rarr; Selecting &rarr; Filling &rarr; Submit</div>
+
+      <div class="flow-stages">
+        <!-- Stage 1: Move -->
+        <div class="flow-stage">
+          <div class="flow-icon-box">
+            <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
+              <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" />
+              <circle cx="37" cy="38" r="8" stroke="url(#rim-01)" stroke-width="2" />
+              <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" />
+            </svg>
+          </div>
+          <span class="flow-label">Move</span>
+        </div>
+
+        <div class="flow-arrow">&rarr;</div>
+
+        <!-- Stage 2: Hover -->
+        <div class="flow-stage">
+          <div class="flow-icon-box">
+            <div class="glow-bloom" style="width: 50px; height: 50px;"></div>
+            <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
+              <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" />
+              <circle cx="37" cy="38" r="8" stroke="url(#rim-01)" stroke-width="2" />
+              <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" />
+            </svg>
+          </div>
+          <span class="flow-label">Hover</span>
+        </div>
+
+        <div class="flow-arrow">&rarr;</div>
+
+        <!-- Stage 3: Click -->
+        <div class="flow-stage">
+          <div class="flow-icon-box">
+            <div class="ripple-ring-1" style="width: 44px; height: 44px;"></div>
+            <svg width="46" height="46" viewBox="0 0 64 64" fill="none" style="transform: scale(0.9);">
+              <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" />
+              <circle cx="37" cy="38" r="8" stroke="url(#rim-01)" stroke-width="2" />
+              <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" />
+            </svg>
+          </div>
+          <span class="flow-label">Click</span>
+        </div>
+
+        <div class="flow-arrow">&rarr;</div>
+
+        <!-- Stage 4: Typing -->
+        <div class="flow-stage">
+          <div class="flow-icon-box">
+            <svg width="50" height="46" viewBox="0 0 68 64" fill="none">
+              <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" />
+              <circle cx="37" cy="38" r="8" stroke="url(#rim-01)" stroke-width="2" />
+              <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" />
+              <line x1="54" y1="14" x2="62" y2="14" stroke="#c4b5fd" stroke-width="2" />
+              <line x1="58" y1="14" x2="58" y2="44" stroke="#ffffff" stroke-width="2" />
+              <line x1="54" y1="44" x2="62" y2="44" stroke="#c4b5fd" stroke-width="2" />
+            </svg>
+          </div>
+          <span class="flow-label">Typing</span>
+        </div>
+
+        <div class="flow-arrow">&rarr;</div>
+
+        <!-- Stage 5: Selecting -->
+        <div class="flow-stage">
+          <div class="flow-icon-box">
+            <svg width="50" height="46" viewBox="0 0 68 64" fill="none">
+              <rect x="8" y="10" width="46" height="38" rx="2" fill="none" stroke="#c4b5fd" stroke-width="1.2" stroke-dasharray="2 2" />
+              <path d="M 22 18 L 52 35 L 38 39 L 30 52 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.2" />
+              <circle cx="44" cy="44" r="6" stroke="url(#rim-01)" stroke-width="1.6" />
+            </svg>
+          </div>
+          <span class="flow-label">Selecting</span>
+        </div>
+
+        <div class="flow-arrow">&rarr;</div>
+
+        <!-- Stage 6: Filling -->
+        <div class="flow-stage">
+          <div class="flow-icon-box">
+            <svg width="52" height="46" viewBox="0 0 70 64" fill="none">
+              <rect x="36" y="10" width="30" height="22" rx="3" fill="rgba(30,22,50,0.85)" stroke="#c4b5fd" stroke-width="1.4" />
+              <line x1="42" y1="16" x2="54" y2="16" stroke="#a78bfa" stroke-width="1.4" />
+              <line x1="42" y1="21" x2="60" y2="21" stroke="#a78bfa" stroke-width="1.4" />
+              <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" />
+              <circle cx="37" cy="38" r="8" stroke="url(#rim-01)" stroke-width="2" />
+              <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" />
+            </svg>
+          </div>
+          <span class="flow-label">Filling</span>
+        </div>
+
+        <div class="flow-arrow">&rarr;</div>
+
+        <!-- Stage 7: Submit -->
+        <div class="flow-stage">
+          <div class="flow-icon-box">
+            <svg width="50" height="46" viewBox="0 0 68 64" fill="none">
+              <path d="M 14 8 L 46 27 L 30 31 L 20 46 Z" fill="url(#body-01)" stroke="url(#rim-01)" stroke-width="2.6" />
+              <circle cx="37" cy="38" r="8" stroke="url(#rim-01)" stroke-width="2" />
+              <line x1="31" y1="44" x2="43" y2="32" stroke="url(#rim-01)" stroke-width="2" />
+              <circle cx="53" cy="18" r="7.5" fill="#15102a" stroke="#c4b5fd" stroke-width="1.8" />
+              <path d="M 49.5 18 L 52 20.5 L 56.5 15.5" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </div>
+          <span class="flow-label">Submit</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Interactive Agent Simulator Playground -->
+    <div class="playground-section">
+      <div class="playground-header">
+        <div class="playground-title">
+          <h2>Live Virtual Agent Cursor Playground</h2>
+          <p>Watch the ZeroApply Dark Liquid Glass Cursor glide, ripple, type, and submit in real-time.</p>
+        </div>
+        <div class="playground-controls">
+          <button class="btn-action btn-primary" onclick="runFullAutoApplySimulation()">
+            <span>✦</span> Run Full AutoApply Flow
+          </button>
+          <button class="btn-action" onclick="simulateAction('click')">Click Test</button>
+          <button class="btn-action" onclick="simulateAction('type')">Typing Test</button>
+          <button class="btn-action" onclick="simulateAction('upload')">Upload Test</button>
+        </div>
+      </div>
+
+      <div class="sandbox-stage" id="sandbox-stage">
+        <button class="interactive-target" id="btn-easy-apply">
+          ✦ Easy Apply
+        </button>
+        <input type="text" class="interactive-input" id="input-candidate-location" placeholder="City or Location..." readonly value="" />
+        <button class="interactive-target" id="btn-submit-step">
+          Submit Application
+        </button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <div>Zero Apply &bull; Opportunities Without Barriers</div>
+      <div>Cursoring A More Open Tomorrow</div>
+    </footer>
+  </div>
+
+  <!-- Injected ZeroApply Codex Cursor Engine Script -->
+  <script src="./clone-linkedin/agent-cursor.js"></script>
+
+  <script>
+    function demoState(stateName) {
+      if (!window.__zeroapplyCursor) return;
+      if (typeof window.__zeroapplyCursor.setMode === 'function') {
+        window.__zeroapplyCursor.setMode(stateName);
+      }
+    }
+
+    async function simulateAction(type) {
+      if (!window.__zeroapplyCursor) return;
+      if (type === 'click') {
+        await window.__zeroapplyCursor.clickElement('#btn-easy-apply', 'AI: Click "Easy Apply"');
+      } else if (type === 'type') {
+        await window.__zeroapplyCursor.typeElement('#input-candidate-location', 'Bengaluru, Karnataka', 'AI: Fill Location');
+      } else if (type === 'upload') {
+        await window.__zeroapplyCursor.uploadElement('#btn-easy-apply', 'SaiPrasad_Chary_Resume.pdf', 'AI: 📄 Attach Resume');
+      }
+    }
+
+    async function runFullAutoApplySimulation() {
+      if (!window.__zeroapplyCursor) return;
+      const input = document.getElementById('input-candidate-location');
+      if (input) input.value = '';
+
+      // Stage 1: Move & Click Easy Apply
+      await window.__zeroapplyCursor.clickElement('#btn-easy-apply', 'AI: Click "Easy Apply"');
+      await new Promise(r => setTimeout(r, 400));
+
+      // Stage 2: Move & Type Location
+      await window.__zeroapplyCursor.typeElement('#input-candidate-location', 'Hyderabad, Telangana', 'AI: Fill Location (PIN: 500081)');
+      await new Promise(r => setTimeout(r, 400));
+
+      // Stage 3: Attach Resume
+      await window.__zeroapplyCursor.uploadElement('#input-candidate-location', 'Resume_SWE_SaiPrasad.pdf', 'AI: 📄 Resume Attached');
+      await new Promise(r => setTimeout(r, 400));
+
+      // Stage 4: Submit Application
+      await window.__zeroapplyCursor.clickElement('#btn-submit-step', 'AI: Submitting Application ✓');
+      await new Promise(r => setTimeout(r, 800));
+
+      if (typeof window.__zeroapplyCursor.setMode === 'function') {
+        window.__zeroapplyCursor.setMode('success');
+      }
+    }
+  </script>
+</body>
+</html>

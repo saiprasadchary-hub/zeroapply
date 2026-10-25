@@ -1,0 +1,21 @@
+{
+  "name": "zeroapply-android-conversion",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@capacitor/core": "8.5.2",
+    "@capacitor/android": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  },
+  "overrides": {
+    "xcode": {
+      "uuid": "11.1.1"
+    }
+  },
+  "scripts": {
+    "bundle:model": "node bundle-model.mjs"
+  }
+}

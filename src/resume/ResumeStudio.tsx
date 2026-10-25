@@ -111,7 +111,7 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
       (persona.techStack && persona.techStack.length > 0)
     );
     if (hasPersonaData) {
-      return personaToResume(persona, DEFAULT_RESUME_DOCUMENT);
+      return personaToResume(persona);
     }
     return DEFAULT_RESUME_DOCUMENT;
   });
@@ -127,7 +127,15 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
     | 'custom_sections'
   >('contact');
 
-  const [zoom, setZoom] = useState<number>(100);
+  const [zoom, setZoom] = useState<number>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      const availableWidth = window.innerWidth - 24;
+      const fitZoom = Math.floor((availableWidth / 850) * 100);
+      return Math.max(38, Math.min(fitZoom, 50));
+    }
+    return 100;
+  });
+  const [mobileResumeSubTab, setMobileResumeSubTab] = useState<'editor' | 'preview'>('editor');
   const [showAtsDetails, setShowAtsDetails] = useState(false);
   const [llmFeedback, setLlmFeedback] = useState<LlmAtsFeedback | null>(null);
   const [isAnalyzingLlm, setIsAnalyzingLlm] = useState(false);
@@ -463,19 +471,19 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
   };
 
   return (
-    <div className="flex-1 bg-[#F8FAFC] flex flex-col h-full overflow-hidden font-sans select-none">
+    <div className="flex-1 min-h-0 bg-[#F8FAFC] flex flex-col overflow-hidden font-sans select-none">
       
       {/* Top Action Toolbar */}
-      <div className="bg-white border-b border-zinc-200/90 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0 shadow-2xs z-20">
+      <div className="bg-white border-b border-zinc-200/90 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 sm:gap-3 shrink-0 shadow-2xs z-20 overflow-x-auto no-scrollbar flex-nowrap">
         
         {/* Left: Brand & Template Selector */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-nowrap">
           <div className="flex items-center gap-2 shrink-0">
             <div className="p-1.5 bg-zinc-900 text-white rounded-lg shadow-2xs">
               <FileText size={14} />
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-xs tracking-tight text-zinc-900">
+              <span className="font-extrabold text-xs tracking-tight text-zinc-900 whitespace-nowrap">
                 Resume Studio
               </span>
               <span className="hidden lg:inline px-2 py-0.5 text-[10px] font-mono font-semibold text-zinc-500 bg-zinc-100 border border-zinc-200/80 rounded-md">
@@ -487,7 +495,7 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
           <div className="h-4 w-px bg-zinc-200 hidden sm:block" />
 
           {/* Template Switcher */}
-          <div className="flex items-center gap-1 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/70 text-xs font-semibold">
+          <div className="flex items-center gap-1 bg-zinc-100/90 p-1 rounded-xl border border-zinc-200/70 text-xs font-semibold shrink-0">
             {(
               [
                 { id: 'harvard', label: 'Harvard Classic' },
@@ -504,144 +512,243 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
                     settings: { ...prev.settings, templateId: tpl.id },
                   }))
                 }
-                className={`px-3 py-1 rounded-lg transition-all text-xs shrink-0 ${
+                className={`px-2.5 sm:px-3 py-1 rounded-lg transition-all text-xs shrink-0 ${
                   document.settings.templateId === tpl.id
                     ? 'bg-white text-zinc-900 shadow-2xs font-bold border border-zinc-200/60'
                     : 'text-zinc-500 hover:text-zinc-900 font-medium'
                 }`}
               >
-                {tpl.label}
+                <span className="hidden sm:inline">{tpl.label}</span>
+                <span className="sm:hidden">
+                  {tpl.id === 'harvard' ? 'Harvard' : tpl.id === 'modern' ? 'Modern' : 'Executive'}
+                </span>
               </button>
             ))}
           </div>
         </div>
 
         {/* Right: Actions (Versions, Standardize, 1-Page Fit, Export Menu) */}
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap">
           {/* Multi-Version Switcher */}
           <button
             type="button"
             onClick={() => setShowVersionModal(true)}
-            className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs"
+            className="px-2.5 sm:px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs shrink-0"
             title="Manage and switch between saved resume versions"
           >
-            <Bookmark size={13} className="text-zinc-500" />
-            <span>Versions ({savedVersions.length})</span>
+            <Bookmark size={13} className="text-zinc-500 shrink-0" />
+            <span><span className="hidden sm:inline">Versions </span>({savedVersions.length})</span>
           </button>
 
           {/* Standardize Formatting */}
           <button
             type="button"
             onClick={handleAutoFix}
-            className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs"
+            className="px-2.5 sm:px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs shrink-0"
             title="Standardize punctuation, date formats, and bullet typography"
           >
-            <CheckCheck size={13} className="text-zinc-700" />
-            <span>Standardize</span>
+            <CheckCheck size={13} className="text-zinc-700 shrink-0" />
+            <span><span className="hidden sm:inline">Standardize</span><span className="sm:hidden">Format</span></span>
           </button>
 
           {/* 1-Click Fit to 1-Page */}
           <button
             type="button"
             onClick={handleFitToOnePage}
-            className="px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs"
+            className="px-2.5 sm:px-3 py-1.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs shrink-0"
             title="Auto-adjust spacing, density & line-height to fit exactly 1 page"
           >
-            <Maximize2 size={13} className="text-zinc-700" />
-            <span>Fit 1-Page</span>
+            <Maximize2 size={13} className="text-zinc-700 shrink-0" />
+            <span><span className="hidden sm:inline">Fit 1-Page</span><span className="sm:hidden">1-Page</span></span>
           </button>
 
           {/* Export Dropdown Menu */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setShowExportMenu(!showExportMenu)}
-              className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition"
+              className="px-3 sm:px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition shrink-0"
               title="Export Resume in multiple formats"
             >
-              <FileDown size={13} className="text-zinc-300" />
+              <FileDown size={13} className="text-zinc-300 shrink-0" />
               <span>Export</span>
               <ChevronDown size={12} className={`text-zinc-400 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
             </button>
 
             {showExportMenu && (
-              <div className="absolute right-0 top-full mt-1.5 w-48 bg-white border border-zinc-200 rounded-2xl shadow-xl p-1.5 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
-                <button
-                  onClick={() => {
-                    exportResumeToDocx(document);
-                    setShowExportMenu(false);
-                    onSaveToast('📄 Exported ATS Word (.doc) document!');
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
+              <>
+                {/* Mobile Bottom Sheet Modal */}
+                <div
+                  className="md:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-end justify-center p-0"
+                  onClick={() => setShowExportMenu(false)}
                 >
-                  <FileDown size={14} className="text-blue-600" />
-                  <span>Word Document (.doc)</span>
-                </button>
+                  <div
+                    className="w-full bg-white rounded-t-2xl p-4 space-y-2 shadow-2xl animate-in slide-in-from-bottom duration-200 pb-mobile-safe"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
+                      <span className="font-extrabold text-sm text-zinc-900">Export Resume</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowExportMenu(false)}
+                        className="text-zinc-400 hover:text-zinc-700 text-sm font-bold p-1"
+                      >
+                        ✕
+                      </button>
+                    </div>
 
-                <button
-                  onClick={() => {
-                    exportResumeToLatex(document);
-                    setShowExportMenu(false);
-                    onSaveToast('📐 Exported LaTeX (.tex) resume!');
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
-                >
-                  <Code size={14} className="text-purple-600" />
-                  <span>LaTeX Source (.tex)</span>
-                </button>
+                    <button
+                      onClick={() => {
+                        exportResumeToDocx(document);
+                        setShowExportMenu(false);
+                        onSaveToast('📄 Exported ATS Word (.doc) document!');
+                      }}
+                      className="w-full text-left px-3 py-2.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 rounded-xl flex items-center gap-2.5 transition"
+                    >
+                      <FileDown size={15} className="text-blue-600" />
+                      <span>Word Document (.doc)</span>
+                    </button>
 
-                <button
-                  onClick={() => {
-                    handleCopyPlainText();
-                    setShowExportMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
-                >
-                  <Copy size={14} className="text-zinc-600" />
-                  <span>Copy Plain Text</span>
-                </button>
+                    <button
+                      onClick={() => {
+                        exportResumeToLatex(document);
+                        setShowExportMenu(false);
+                        onSaveToast('📐 Exported LaTeX (.tex) resume!');
+                      }}
+                      className="w-full text-left px-3 py-2.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 rounded-xl flex items-center gap-2.5 transition"
+                    >
+                      <Code size={15} className="text-purple-600" />
+                      <span>LaTeX Source (.tex)</span>
+                    </button>
 
-                <button
-                  onClick={() => {
-                    exportResumeToPlainText(document);
-                    setShowExportMenu(false);
-                    onSaveToast('📝 Exported Plain Text (.txt) file!');
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
-                >
-                  <FileText size={14} className="text-zinc-600" />
-                  <span>Download .txt File</span>
-                </button>
+                    <button
+                      onClick={() => {
+                        handleCopyPlainText();
+                        setShowExportMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 rounded-xl flex items-center gap-2.5 transition"
+                    >
+                      <Copy size={15} className="text-zinc-600" />
+                      <span>Copy Plain Text</span>
+                    </button>
 
-                <button
-                  onClick={() => {
-                    handlePrint();
-                    setShowExportMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
-                >
-                  <Printer size={14} className="text-cyan-600" />
-                  <span>PDF / Print</span>
-                </button>
+                    <button
+                      onClick={() => {
+                        exportResumeToPlainText(document);
+                        setShowExportMenu(false);
+                        onSaveToast('📝 Exported Plain Text (.txt) file!');
+                      }}
+                      className="w-full text-left px-3 py-2.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 rounded-xl flex items-center gap-2.5 transition"
+                    >
+                      <FileText size={15} className="text-zinc-600" />
+                      <span>Download .txt File</span>
+                    </button>
 
-                <div className="border-t border-zinc-100 my-1" />
+                    <button
+                      onClick={() => {
+                        handlePrint();
+                        setShowExportMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 rounded-xl flex items-center gap-2.5 transition"
+                    >
+                      <Printer size={15} className="text-cyan-600" />
+                      <span>PDF / Print</span>
+                    </button>
 
-                <button
-                  onClick={() => {
-                    exportResumeJson(document);
-                    setShowExportMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
-                >
-                  <Download size={14} className="text-emerald-600" />
-                  <span>JSON Backup</span>
-                </button>
-              </div>
+                    <div className="border-t border-zinc-100 my-1" />
+
+                    <button
+                      onClick={() => {
+                        exportResumeJson(document);
+                        setShowExportMenu(false);
+                      }}
+                      className="w-full text-left px-3 py-2.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-100 rounded-xl flex items-center gap-2.5 transition"
+                    >
+                      <Download size={15} className="text-emerald-600" />
+                      <span>JSON Backup</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Desktop Dropdown */}
+                <div className="hidden md:block absolute right-0 top-full mt-1.5 w-48 bg-white border border-zinc-200 rounded-2xl shadow-xl p-1.5 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                  <button
+                    onClick={() => {
+                      exportResumeToDocx(document);
+                      setShowExportMenu(false);
+                      onSaveToast('📄 Exported ATS Word (.doc) document!');
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
+                  >
+                    <FileDown size={14} className="text-blue-600" />
+                    <span>Word Document (.doc)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      exportResumeToLatex(document);
+                      setShowExportMenu(false);
+                      onSaveToast('📐 Exported LaTeX (.tex) resume!');
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
+                  >
+                    <Code size={14} className="text-purple-600" />
+                    <span>LaTeX Source (.tex)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handleCopyPlainText();
+                      setShowExportMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
+                  >
+                    <Copy size={14} className="text-zinc-600" />
+                    <span>Copy Plain Text</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      exportResumeToPlainText(document);
+                      setShowExportMenu(false);
+                      onSaveToast('📝 Exported Plain Text (.txt) file!');
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
+                  >
+                    <FileText size={14} className="text-zinc-600" />
+                    <span>Download .txt File</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handlePrint();
+                      setShowExportMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
+                  >
+                    <Printer size={14} className="text-cyan-600" />
+                    <span>PDF / Print</span>
+                  </button>
+
+                  <div className="border-t border-zinc-100 my-1" />
+
+                  <button
+                    onClick={() => {
+                      exportResumeJson(document);
+                      setShowExportMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 rounded-xl flex items-center gap-2 transition"
+                  >
+                    <Download size={14} className="text-emerald-600" />
+                    <span>JSON Backup</span>
+                  </button>
+                </div>
+              </>
             )}
           </div>
 
           <label
-            className="p-1.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-600 rounded-xl text-xs transition-all shadow-2xs cursor-pointer"
+            className="p-1.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-600 rounded-xl text-xs transition-all shadow-2xs cursor-pointer shrink-0"
             title="Import JSON backup"
           >
             <Upload size={14} />
@@ -650,17 +757,47 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
         </div>
       </div>
 
+      {/* Mobile View Toggle Bar: Form Editor vs Document Preview */}
+      <div className="md:hidden flex items-center justify-center p-2 bg-zinc-100/90 border-b border-zinc-200/80 shrink-0 backdrop-blur-xs">
+        <div className="flex items-center bg-zinc-200/70 p-1 rounded-xl w-full max-w-sm gap-1 border border-zinc-300/60 shadow-inner">
+          <button
+            type="button"
+            onClick={() => setMobileResumeSubTab('editor')}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              mobileResumeSubTab === 'editor'
+                ? 'bg-white text-zinc-950 shadow-xs font-black'
+                : 'text-zinc-600 hover:text-zinc-900'
+            }`}
+          >
+            <span>✏️ Form Editor</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileResumeSubTab('preview')}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              mobileResumeSubTab === 'preview'
+                ? 'bg-white text-zinc-950 shadow-xs font-black'
+                : 'text-zinc-600 hover:text-zinc-900'
+            }`}
+          >
+            <span>📄 ATS Preview ({liveAtsScore.overallScore}%)</span>
+          </button>
+        </div>
+      </div>
+
       {/* Main Studio 2-Pane Split */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden relative">
         
         {/* ========================================================= */}
         {/* LEFT PANE: Interactive Structured Resume Editor (45% Width) */}
         {/* ========================================================= */}
-        <div className="w-full md:w-[48%] lg:w-[44%] xl:w-[42%] bg-white border-r border-zinc-200 flex flex-col h-full overflow-hidden shrink-0 z-10">
+        <div className={`w-full md:w-[48%] lg:w-[44%] xl:w-[42%] bg-white border-r border-zinc-200 flex flex-col min-h-0 overflow-hidden ${
+          mobileResumeSubTab === 'editor' ? 'flex-1 md:flex-none' : 'hidden md:flex'
+        }`}>
           
           {/* Section Navigation Tabs (Segmented Glassmorphism Pill Bar) */}
           <div className="p-2 bg-zinc-100/80 border-b border-zinc-200/80 backdrop-blur-sm shrink-0">
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
               {[
                 { id: 'contact', label: 'Contact', icon: User },
                 { id: 'skills', label: 'Skills', icon: Code },
@@ -711,7 +848,7 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
           </div>
 
           {/* Editor Form Body (Scrollable) */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-4 sm:space-y-5">
             
             {/* 1. WORK EXPERIENCE EDITOR */}
             {activeSection === 'experience' && (
@@ -1335,15 +1472,15 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
           </div>
 
           {/* Bottom Bar: Import from Persona Trigger & Demo Loader */}
-          <div className="p-3 bg-zinc-50 border-t border-zinc-200 flex items-center justify-between gap-2 shrink-0 text-xs">
-            <span className="text-[11px] text-zinc-500 font-medium truncate">
+          <div className="p-2.5 sm:p-3 bg-zinc-50 border-t border-zinc-200 flex items-center justify-between gap-2 shrink-0 text-xs">
+            <span className="text-[11px] text-zinc-500 font-medium truncate hidden xs:inline">
               Auto-saved in real-time
             </span>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
               <button
                 type="button"
                 onClick={handleLoadDemoResume}
-                className="px-2.5 py-1 text-amber-700 hover:text-amber-900 bg-amber-50/80 hover:bg-amber-100/80 border border-amber-200/80 rounded-lg font-bold flex items-center gap-1 transition-colors"
+                className="px-2.5 py-1 text-amber-700 hover:text-amber-900 bg-amber-50/80 hover:bg-amber-100/80 border border-amber-200/80 rounded-lg font-bold flex items-center gap-1 transition-colors text-[11px] sm:text-xs"
                 title="Load full ATS-optimized engineering demo resume"
               >
                 <Sparkles size={11} className="text-amber-600" />
@@ -1352,7 +1489,7 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
               <button
                 type="button"
                 onClick={handleImportFromPersona}
-                className="px-2.5 py-1 text-cyan-700 hover:text-cyan-900 bg-cyan-50/80 hover:bg-cyan-100/80 border border-cyan-200/80 rounded-lg font-bold flex items-center gap-1 transition-colors"
+                className="px-2.5 py-1 text-cyan-700 hover:text-cyan-900 bg-cyan-50/80 hover:bg-cyan-100/80 border border-cyan-200/80 rounded-lg font-bold flex items-center gap-1 transition-colors text-[11px] sm:text-xs"
               >
                 <RefreshCw size={11} />
                 <span>Reload from Persona</span>
@@ -1365,35 +1502,37 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
         {/* ========================================================= */}
         {/* RIGHT PANE: Live Document Canvas & Real-time ATS Cockpit  */}
         {/* ========================================================= */}
-        <div className="flex-1 bg-[#E2E8F0] flex flex-col h-full overflow-hidden relative">
+        <div className={`flex-1 min-h-0 bg-[#E2E8F0] flex flex-col overflow-hidden relative ${
+          mobileResumeSubTab === 'preview' ? 'flex' : 'hidden md:flex'
+        }`}>
           
           {/* Top Live ATS Metrics HUD */}
-          <div className="bg-white/95 backdrop-blur-md border-b border-zinc-300/80 px-4 py-2.5 flex items-center justify-between gap-3 shadow-xs shrink-0 z-20">
+          <div className="bg-white/95 backdrop-blur-md border-b border-zinc-300/80 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-3 shadow-xs shrink-0 z-20 overflow-x-auto no-scrollbar flex-nowrap">
             
             {/* Left: Document View Label */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-extrabold text-zinc-800 tracking-tight">
-                Live Document Preview
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-xs font-extrabold text-zinc-800 tracking-tight whitespace-nowrap">
+                <span className="hidden sm:inline">Live Document </span>Preview
               </span>
             </div>
 
             {/* Right: Zoom & Suggestions Toggle */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap">
               <button
                 onClick={() => setShowAtsDetails(!showAtsDetails)}
-                className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 transition-all ${
+                className={`px-2 sm:px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 transition-all shrink-0 ${
                   showAtsDetails
                     ? 'bg-cyan-50 text-cyan-800 border-cyan-400'
                     : 'bg-zinc-100 text-zinc-700 border-zinc-300 hover:bg-zinc-200'
                 }`}
               >
-                <span>ATS Feedback</span>
+                <span>ATS<span className="hidden sm:inline"> Feedback</span></span>
                 {showAtsDetails ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
 
               <button
                 onClick={() => setIsDocumentEditMode(!isDocumentEditMode)}
-                className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-all ${
+                className={`px-2 sm:px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition-all shrink-0 ${
                   isDocumentEditMode
                     ? 'bg-gradient-to-r from-cyan-600 to-blue-600 border-cyan-500 text-white shadow-xs'
                     : 'bg-zinc-100 text-zinc-700 border-zinc-300 hover:bg-zinc-200'
@@ -1401,11 +1540,12 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
                 title="Toggle Direct WYSIWYG Document Editor (Click anywhere on page to edit directly)"
               >
                 <Edit3 size={12} className={isDocumentEditMode ? 'text-white' : 'text-cyan-600'} />
-                <span>{isDocumentEditMode ? 'Direct Edit: ON' : 'Edit Document'}</span>
+                <span className="hidden sm:inline">{isDocumentEditMode ? 'Direct Edit: ON' : 'Edit Document'}</span>
+                <span className="sm:hidden">{isDocumentEditMode ? 'Editing' : 'Edit'}</span>
               </button>
 
               {/* Undo / Redo Controls */}
-              <div className="flex items-center gap-0.5 bg-zinc-100 p-0.5 rounded-lg border border-zinc-300">
+              <div className="flex items-center gap-0.5 bg-zinc-100 p-0.5 rounded-lg border border-zinc-300 shrink-0">
                 <button
                   type="button"
                   onClick={handleUndo}
@@ -1426,21 +1566,21 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
                 </button>
               </div>
 
-              <div className="h-4 w-px bg-zinc-300 mx-1 hidden sm:block" />
+              <div className="h-4 w-px bg-zinc-300 mx-0.5 sm:mx-1 shrink-0" />
 
-              <div className="flex items-center gap-1 bg-zinc-100 p-0.5 rounded-lg border border-zinc-300">
+              <div className="flex items-center gap-0.5 sm:gap-1 bg-zinc-100 p-0.5 rounded-lg border border-zinc-300 shrink-0">
                 <button
-                  onClick={() => setZoom((z) => Math.max(65, z - 10))}
+                  onClick={() => setZoom((z) => Math.max(35, z - 5))}
                   className="p-1 text-zinc-600 hover:text-zinc-900"
                   title="Zoom Out"
                 >
                   <ZoomOut size={13} />
                 </button>
-                <span className="text-[10px] font-mono font-bold px-1 text-zinc-700 min-w-[34px] text-center">
+                <span className="text-[10px] font-mono font-bold px-1 text-zinc-700 min-w-[32px] sm:min-w-[34px] text-center">
                   {zoom}%
                 </span>
                 <button
-                  onClick={() => setZoom((z) => Math.min(130, z + 10))}
+                  onClick={() => setZoom((z) => Math.min(130, z + 5))}
                   className="p-1 text-zinc-600 hover:text-zinc-900"
                   title="Zoom In"
                 >
@@ -1579,22 +1719,26 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
           )}
 
           {/* Document Canvas Container with Scaling */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center items-start">
+          <div className="flex-1 min-h-0 w-full overflow-auto p-2 sm:p-8 flex justify-center items-start touch-pan-x touch-pan-y">
             {isDocumentEditMode ? (
-              <DocumentCanvas
-                document={document}
-                onUpdateDocument={setDocument}
-                isEditMode={true}
-                onToggleEditMode={() => setIsDocumentEditMode(!isDocumentEditMode)}
-                zoom={zoom}
-                onToast={onSaveToast}
-              />
+              <div className="w-full flex justify-center min-w-fit">
+                <DocumentCanvas
+                  document={document}
+                  onUpdateDocument={setDocument}
+                  isEditMode={true}
+                  onToggleEditMode={() => setIsDocumentEditMode(!isDocumentEditMode)}
+                  zoom={zoom}
+                  onToast={onSaveToast}
+                />
+              </div>
             ) : (
-              <div
-                style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
-                className="transition-transform duration-150"
-              >
-                {renderTemplate()}
+              <div className="w-full flex justify-center min-w-fit">
+                <div
+                  style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
+                  className="transition-transform duration-150"
+                >
+                  {renderTemplate()}
+                </div>
               </div>
             )}
           </div>
@@ -1606,7 +1750,7 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
       {/* Multi-Version Resume Management Modal */}
       {showVersionModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-scaleUp">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-scaleUp max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
               <div className="flex items-center gap-2">
                 <Bookmark className="text-cyan-600" size={18} />

@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Python Internship Easy Apply | Jobs | LinkedIn Clone</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230a66c2'><rect width='24' height='24' rx='4'/><text x='5' y='18' fill='%23fff' font-family='sans-serif' font-weight='bold' font-size='16'>in</text></svg>" />
+</head>
+<body>
+
+  <!-- Top Global Navigation Bar -->
+  <header class="global-nav" role="banner">
+    <div class="global-nav__content">
+      <div class="global-nav__left">
+        <div class="linkedin-logo-icon" title="LinkedIn Home">in</div>
+        <div class="search-box-wrapper">
+          <svg class="search-box-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input 
+            type="text" 
+            id="global-search-input" 
+            class="search-box-input" 
+            value="python internship Easy Apply" 
+            placeholder="Search by title, skill, or company"
+            autocomplete="off"
+          />
+          <button class="search-box-clear" id="search-clear-btn" title="Clear search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <nav class="global-nav__nav" role="navigation" aria-label="Primary Navigation">
+        <a href="#home" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          <span>Home</span>
+        </a>
+
+        <a href="#network" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <span>My Network</span>
+        </a>
+
+        <a href="#jobs" class="nav-item active">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <path d="M20 6h-3V4a2 2 0 0 0-2-2h-6a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-9-2h2v2h-2V4zm9 16H4V8h16v12z"></path>
+          </svg>
+          <span>Jobs</span>
+        </a>
+
+        <a href="#messaging" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Messaging</span>
+        </a>
+
+        <a href="#notifications" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span class="nav-badge">1</span>
+          <span>Notifications</span>
+        </a>
+
+        <div class="nav-item">
+          <img 
+            src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%230284c7'/><circle cx='20' cy='15' r='7' fill='%23fff'/><path d='M8 34c0-6.6 5.4-12 12-12s12 5.4 12 12' fill='%23fff'/></svg>" 
+            alt="Profile" 
+            class="nav-user-avatar" 
+          />
+          <span>Me ▾</span>
+        </div>
+
+        <div class="nav-item" style="border-left: 1px solid var(--border-color); padding-left: 12px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>For Business ▾</span>
+        </div>
+
+        <a href="#premium" class="premium-link">
+          Try Premium for ₹0
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Filter Pills Bar -->
+  <section class="filter-bar" aria-label="Job Filters">
+    <div class="filter-bar__container">
+      <button class="pill-button pill-active-green" id="filter-jobs">
+        Jobs
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+
+      <button class="pill-button pill-active-green" id="filter-easy-apply">
+        Easy Apply
+      </button>
+
+      <button class="pill-button pill-secondary">
+        Date posted
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+
+      <button class="pill-button pill-secondary">
+        Company
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+
+      <button class="pill-button pill-secondary">Remote</button>
+
+      <button class="pill-button pill-secondary">
+        Experience level
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+
+      <button class="pill-button pill-secondary">
+        Employment type
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+
+      <button class="pill-button pill-secondary">AI/ML</button>
+      <button class="pill-button pill-secondary">Gen AI</button>
+      <button class="pill-button pill-secondary">LLM</button>
+      <button class="pill-button pill-secondary">Backend</button>
+      <button class="pill-button pill-secondary">
+        Learn more
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- Main Content: Split Two-Column Layout -->
+  <main class="main-layout" role="main">
+    
+    <!-- Left Column: Search Results List -->
+    <section class="search-results-panel" aria-label="Search Results">
+      <div class="results-header">
+        <div class="results-count-row">
+          <span class="results-count" id="results-count-text">3 results</span>
+          <span class="location-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"></path>
+            </svg>
+            Hyderabad (40 km) ▾
+          </span>
+        </div>
+        <a class="ranking-info" href="#ranking">
+          How promoted jobs are ranked
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        </a>
+      </div>
+
+      <div class="jobs-search-results-list" id="jobs-list" role="list">
+        
+        <!-- Job Card 1: HextGen Ai -->
+        <div 
+          class="job-card active" 
+          data-job-id="4461474023" 
+          role="listitem"
+          tabindex="0"
+        >
+          <div class="job-company-logo hextgen">HX</div>
+          <div class="job-card__body">
+            <a href="javascript:void(0)" class="job-card__title">AI Automation Intern</a>
+            <div class="job-card__company">HextGen Ai</div>
+            <div class="job-card__location">Hyderabad (On-site)</div>
+            <div class="job-card__meta">
+              <span>Viewed</span>
+              <span>·</span>
+              <span>1 day ago</span>
+              <span>·</span>
+              <span class="job-card__easy-apply-tag">
+                <span class="in-badge">in</span> Easy Apply
+              </span>
+            </div>
+          </div>
+          <button class="job-card__dismiss" title="Dismiss job" aria-label="Dismiss job">✕</button>
+        </div>
+
+        <!-- Job Card 2: SentLogic -->
+        <div 
+          class="job-card" 
+          data-job-id="4461474024" 
+          role="listitem"
+          tabindex="0"
+        >
+          <div class="job-company-logo sentlogic">SL</div>
+          <div class="job-card__body">
+            <a href="javascript:void(0)" class="job-card__title">Software Engineer Intern</a>
+            <div class="job-card__company">SentLogic</div>
+            <div class="job-card__location">Hyderabad (Remote)</div>
+            <div class="job-card__meta">
+              <span>1 week ago</span>
+              <span>·</span>
+              <span class="job-card__easy-apply-tag">
+                <span class="in-badge">in</span> Easy Apply
+              </span>
+            </div>
+          </div>
+          <button class="job-card__dismiss" title="Dismiss job" aria-label="Dismiss job">✕</button>
+        </div>
+
+        <!-- Notice Divider -->
+        <div class="feed-notice">
+          We found more results related to your search that may not be exact matches, but could still be a great fit.
+        </div>
+
+        <!-- Job Card 3: Qapita -->
+        <div 
+          class="job-card" 
+          data-job-id="4461474025" 
+          role="listitem"
+          tabindex="0"
+        >
+          <div class="job-company-logo qapita">QP</div>
+          <div class="job-card__body">
+            <a href="javascript:void(0)" class="job-card__title">Cyber Security & Compliance Intern</a>
+            <div class="job-card__company">Qapita</div>
+            <div class="job-card__location">Hyderabad (On-site)</div>
+            <div class="job-card__meta">
+              <span style="color: var(--linkedin-green); font-weight: 600;">Be an early applicant</span>
+              <span>·</span>
+              <span>3 hours ago</span>
+              <span>·</span>
+              <span class="job-card__easy-apply-tag">
+                <span class="in-badge">in</span> Easy Apply
+              </span>
+            </div>
+          </div>
+          <button class="job-card__dismiss" title="Dismiss job" aria-label="Dismiss job">✕</button>
+        </div>
+
+      </div>
+
+      <div class="feed-footer">
+        <div>
+          <span>Are these results helpful?</span>
+          <span class="feedback-buttons" style="margin-left: 8px;">
+            <button class="feedback-btn" title="Yes">👍</button>
+            <button class="feedback-btn" title="No">👎</button>
+          </span>
+        </div>
+        <div class="search-alert-toggle">
+          <span>This job search alert is on</span>
+          <label class="toggle-switch">
+            <input type="checkbox" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Job Details View -->
+    <section class="job-details-panel" id="job-details-panel" aria-label="Job Details">
+      
+      <div class="job-details__header">
+        <div class="company-branding-row">
+          <div class="company-banner">
+            <div class="job-company-logo hextgen" id="detail-company-logo" style="width: 44px; height: 44px;">HX</div>
+            <span class="company-banner__name" id="detail-company-name">HextGen Ai</span>
+          </div>
+          <button class="more-actions-btn" title="More options" aria-label="More options">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="2"></circle>
+              <circle cx="19" cy="12" r="2"></circle>
+              <circle cx="5" cy="12" r="2"></circle>
+            </svg>
+          </button>
+        </div>
+
+        <h1 class="job-details__title" id="detail-job-title">AI Automation Intern</h1>
+        <div class="job-details__subtitle" id="detail-job-subtitle">
+          Hyderabad, Telangana, India · 1 day ago · Over 100 applicants
+        </div>
+        <div class="job-details__promoted">
+          Promoted by hirer · No response insights available yet
+        </div>
+
+        <div class="job-tags-row">
+          <span class="tag-badge" id="detail-workplace">On-site</span>
+          <span class="tag-badge" id="detail-type">Full-time</span>
+        </div>
+
+        <!-- Primary Action Row: Easy Apply button -->
+        <div class="job-actions-row">
+          <button 
+            id="main-easy-apply-btn" 
+            class="jobs-apply-button artdeco-button artdeco-button--primary"
+            data-job-id="4461474023"
+            aria-label="Easy Apply to HextGen Ai"
+          >
+            <span class="in-icon-small">in</span>
+            <span>Easy Apply</span>
+          </button>
+
+          <button class="save-button" id="save-job-btn">
+            Save
+          </button>
+        </div>
+      </div>
+
+      <!-- Premium Banner -->
+      <div class="premium-card">
+        <div class="premium-card__header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+          </svg>
+          Premium
+        </div>
+        <div class="premium-card__headline">
+          You'd be a <span>top applicant</span>, we can help you stand out
+        </div>
+        <div class="premium-card__subtext">
+          Your profile and resume match several of the required qualifications.
+        </div>
+        <div class="premium-card__actions">
+          <button class="premium-action-pill">✦ Show match details</button>
+          <button class="premium-action-pill">✦ Tailor my resume</button>
+          <button class="premium-action-pill">✦ Help me stand out</button>
+        </div>
+      </div>
+
+      <!-- Job Description Section -->
+      <div class="job-description-section" id="detail-job-description">
+        <h3>About the job</h3>
+        <p>
+          We are seeking an ambitious <strong>AI Automation Intern</strong> with hands-on experience developing autonomous AI agents, tool-calling workflows, and production automation pipelines.
+        </p>
+        <p><strong>Key Responsibilities:</strong></p>
+        <ul>
+          <li>Build multi-step agentic workflows using Python, LangChain, and local LLMs (Qwen/Llama).</li>
+          <li>Design deterministic DOM automation, browser scrapers, and resilient retry architectures.</li>
+          <li>Integrate structured JSON parsers, vector context extraction, and prompt evaluations.</li>
+          <li>Collaborate with our engineering team on-site in Hyderabad, Telangana.</li>
+        </ul>
+        <p><strong>Requirements:</strong></p>
+        <ul>
+          <li>Proficiency in Python, TypeScript, and modern AI developer frameworks.</li>
+          <li>Experience with tool-calling agents, state machines, and browser control protocols.</li>
+          <li>Willingness to work from our Hyderabad office.</li>
+          <li>Stipend: ₹20,000 – ₹25,000 / month based on interview evaluation.</li>
+        </ul>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ==========================================================================
+       Easy Apply Multi-Step Modal (Matches Screenshots 2, 3, 4, 5)
+       ========================================================================== -->
+  <div 
+    class="modal-overlay" 
+    id="easy-apply-modal-overlay" 
+    role="dialog" 
+    aria-modal="true" 
+    aria-labelledby="modal-header-title"
+  >
+    <div class="artdeco-modal jobs-easy-apply-modal" role="document">
+      
+      <!-- Modal Header -->
+      <div class="artdeco-modal__header">
+        <h2 id="modal-header-title">Apply to HextGen Ai</h2>
+        <button 
+          class="artdeco-modal__dismiss" 
+          id="modal-close-btn" 
+          aria-label="Dismiss" 
+          data-test-modal-close-btn
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Step Progress Bar -->
+      <div class="progress-container" id="modal-progress-container">
+        <div class="progress-track" role="progressbar" aria-valuemin="1" aria-valuemax="5" aria-valuenow="1">
+          <div class="progress-bar-fill" id="modal-progress-bar" style="width: 20%;"></div>
+        </div>
+        <div class="progress-status-text" id="modal-progress-text">1/5 pages</div>
+      </div>
+
+      <!-- Modal Content Body -->
+      <div class="artdeco-modal__content" id="modal-content-body">
+        
+        <!-- STEP 1: Contact Info (Image 2) -->
+        <div class="modal-step active" id="step-1" data-step="1">
+          <h3 class="step-section-title">Contact info</h3>
+
+          <!-- Candidate Profile Card -->
+          <div class="user-profile-badge">
+            <img 
+              src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%230284c7'/><circle cx='20' cy='15' r='7' fill='%23fff'/><path d='M8 34c0-6.6 5.4-12 12-12s12 5.4 12 12' fill='%23fff'/></svg>" 
+              alt="Sai Prasad Chary Kammari" 
+              class="user-profile-badge__photo" 
+            />
+            <div class="user-profile-badge__info">
+              <h4>Sai Prasad Chary Kammari</h4>
+              <p>Student at MREC | Founder &amp; CEO of Impulsesearch | Google Campus Ambassador | Hyderabad, Telangana, India</p>
+            </div>
+          </div>
+
+          <!-- Email Dropdown -->
+          <div class="fb-form-element">
+            <label for="input-email-address">Email address <span class="required-asterisk">*</span></label>
+            <select id="input-email-address" class="fb-select" name="email" required>
+              <option value="" selected disabled>Select an email address</option>
+              <option value="kspchary077@gmail.com">kspchary077@gmail.com</option>
+              <option value="sai.work@gmail.com">sai.work@gmail.com</option>
+            </select>
+          </div>
+
+          <!-- Phone Country Code -->
+          <div class="fb-form-element">
+            <label for="input-phone-country">Phone country code <span class="required-asterisk">*</span></label>
+            <select id="input-phone-country" class="fb-select" name="phoneCountry" required>
+              <option value="" selected disabled>Select country code</option>
+              <option value="India (+91)">India (+91)</option>
+              <option value="United States (+1)">United States (+1)</option>
+              <option value="United Kingdom (+44)">United Kingdom (+44)</option>
+              <option value="Canada (+1)">Canada (+1)</option>
+              <option value="Germany (+49)">Germany (+49)</option>
+            </select>
+          </div>
+
+          <!-- Mobile Phone Number -->
+          <div class="fb-form-element">
+            <label for="input-phone-number">Mobile phone number <span class="required-asterisk">*</span></label>
+            <input 
+              type="tel" 
+              id="input-phone-number" 
+              class="fb-input" 
+              name="phoneNumber" 
+              value="" 
+              placeholder="e.g. 8374370572" 
+              required 
+            />
+          </div>
+        </div>
+
+        <!-- STEP 2: Resume (Image 3) -->
+        <div class="modal-step" id="step-2" data-step="2" style="display: none;">
+          <h3 class="step-section-title">Resume</h3>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px;">
+            Be sure to include an updated resume
+          </p>
+
+          <div class="resume-list" id="resume-selector-list" role="radiogroup" aria-label="Select a resume">
+            
+            <div class="resume-item" data-resume-name="Resume for SWE.pdf" tabindex="0" role="radio" aria-checked="false">
+              <div class="resume-item__left">
+                <span class="pdf-icon-badge">PDF</span>
+                <div class="resume-item__details">
+                  <h5>Resume for SWE.pdf</h5>
+                  <span>Uploaded on 4/29/2026</span>
+                </div>
+              </div>
+              <div class="resume-item__right">
+                <button class="download-icon-btn" title="Download">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                </button>
+                <div class="custom-radio"></div>
+              </div>
+            </div>
+
+            <div class="resume-item" data-resume-name="Resume.pdf (Aug 2025)" tabindex="0" role="radio" aria-checked="false">
+              <div class="resume-item__left">
+                <span class="pdf-icon-badge">PDF</span>
+                <div class="resume-item__details">
+                  <h5>Resume.pdf</h5>
+                  <span>Uploaded on 8/27/2025</span>
+                </div>
+              </div>
+              <div class="resume-item__right">
+                <button class="download-icon-btn" title="Download">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                </button>
+                <div class="custom-radio"></div>
+              </div>
+            </div>
+
+            <div class="resume-item" data-resume-name="Resume.pdf (Jul 2025)" tabindex="0" role="radio" aria-checked="false">
+              <div class="resume-item__left">
+                <span class="pdf-icon-badge">PDF</span>
+                <div class="resume-item__details">
+                  <h5>Resume.pdf</h5>
+                  <span>Uploaded on 7/14/2025</span>
+                </div>
+              </div>
+              <div class="resume-item__right">
+                <button class="download-icon-btn" title="Download">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                </button>
+                <div class="custom-radio"></div>
+              </div>
+            </div>
+
+            <div class="resume-item" data-resume-name="Resume (1).pdf" tabindex="0" role="radio" aria-checked="false">
+              <div class="resume-item__left">
+                <span class="pdf-icon-badge">PDF</span>
+                <div class="resume-item__details">
+                  <h5>Resume (1).pdf</h5>
+                  <span>Uploaded on 7/1/2025</span>
+                </div>
+              </div>
+              <div class="resume-item__right">
+                <button class="download-icon-btn" title="Download">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                </button>
+                <div class="custom-radio"></div>
+              </div>
+            </div>
+
+            <div class="resume-item" data-resume-name="sai prasad.pdf" tabindex="0" role="radio" aria-checked="false">
+              <div class="resume-item__left">
+                <span class="pdf-icon-badge">PDF</span>
+                <div class="resume-item__details">
+                  <h5>sai prasad.pdf</h5>
+                  <span>Uploaded on 4/30/2025</span>
+                </div>
+              </div>
+              <div class="resume-item__right">
+                <button class="download-icon-btn" title="Download">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                </button>
+                <div class="custom-radio"></div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="resume-actions-row">
+            <input type="file" id="resume-file-upload-input" style="display: none;" accept=".pdf,.doc,.docx" />
+            <button class="artdeco-button artdeco-button--secondary" id="btn-upload-resume-trigger">
+              Upload resume
+            </button>
+            <button class="pill-button" style="border: 1px solid var(--border-color); color: var(--linkedin-blue);">
+              ✦ Tailor resume with AI
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 3: Work Experience & Background -->
+        <div class="modal-step" id="step-3" data-step="3" style="display: none;">
+          <h3 class="step-section-title">Work experience</h3>
+
+          <div class="fb-form-element">
+            <label for="input-job-title">Recent Job Title <span class="required-asterisk">*</span></label>
+            <input type="text" id="input-job-title" class="fb-input" value="" placeholder="e.g. Software Engineer Intern" required />
+          </div>
+
+          <div class="fb-form-element">
+            <label for="input-company-name">Company <span class="required-asterisk">*</span></label>
+            <input type="text" id="input-company-name" class="fb-input" value="" placeholder="e.g. Acme Corp" required />
+          </div>
+
+          <div class="form-row">
+            <div class="fb-form-element">
+              <label for="input-location">Location <span class="required-asterisk">*</span></label>
+              <input type="text" id="input-location" class="fb-input" value="" placeholder="e.g. Hyderabad, India" required />
+            </div>
+
+            <div class="fb-form-element">
+              <label for="input-total-experience">Total Experience (Years) <span class="required-asterisk">*</span></label>
+              <input type="number" id="input-total-experience" class="fb-input" min="0" max="40" value="" placeholder="e.g. 2" required />
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4: Additional Questions (Image 4) -->
+        <div class="modal-step" id="step-4" data-step="4" style="display: none;">
+          <h3 class="step-section-title">Additional Questions</h3>
+
+          <!-- Question 1: Office in Hyderabad -->
+          <div class="fb-form-element" data-test-form-element>
+            <span class="question-title">
+              Are you willing to work from our office in Hyderabad for the duration of this internship? <span class="required-asterisk">*</span>
+            </span>
+            <div class="radio-group" role="radiogroup" aria-label="Are you willing to work from our office in Hyderabad?">
+              <label class="radio-option">
+                <input type="radio" name="q_office_hyderabad" value="Yes" />
+                <span>Yes</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="q_office_hyderabad" value="No" />
+                <span>No</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Question 2: Stipend Comfort -->
+          <div class="fb-form-element" data-test-form-element>
+            <span class="question-title">
+              The stipend for this internship is ₹20,000–₹25,000/month. Are you comfortable with this? <span class="required-asterisk">*</span>
+            </span>
+            <div class="radio-group" role="radiogroup" aria-label="Stipend comfort">
+              <label class="radio-option">
+                <input type="radio" name="q_stipend_comfort" value="Yes" />
+                <span>Yes</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="q_stipend_comfort" value="No" />
+                <span>No</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Question 3: AI Agents built -->
+          <div class="fb-form-element" data-test-form-element>
+            <span class="question-title">
+              Have you built AI agents (not just RAG-based Q&amp;A systems) — e.g., agents that take actions, call tools, or automate multi-step workflows? Please briefly describe one. <span class="required-asterisk">*</span>
+            </span>
+            <div class="radio-group" role="radiogroup" aria-label="Built AI agents">
+              <label class="radio-option">
+                <input type="radio" name="q_ai_agents" value="Yes" />
+                <span>Yes</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="q_ai_agents" value="No" />
+                <span>No</span>
+              </label>
+            </div>
+            <textarea 
+              id="q_ai_agents_desc" 
+              class="fb-textarea" 
+              rows="3" 
+              style="margin-top: 8px;"
+              placeholder="Briefly describe the agent workflow, tools used, and outcome..."
+            ></textarea>
+          </div>
+
+          <!-- Question 4: Python Experience Years -->
+          <div class="fb-form-element" data-test-form-element>
+            <label for="q_python_years">
+              How many years of work experience do you have with Python? <span class="required-asterisk">*</span>
+            </label>
+            <input type="number" id="q_python_years" name="q_python_years" class="fb-input" min="0" max="30" value="" placeholder="e.g. 2" required />
+          </div>
+
+          <!-- Question 5: Visa Sponsorship -->
+          <div class="fb-form-element" data-test-form-element>
+            <span class="question-title">
+              Do you require visa sponsorship now or in the future? <span class="required-asterisk">*</span>
+            </span>
+            <div class="radio-group" role="radiogroup" aria-label="Visa sponsorship">
+              <label class="radio-option">
+                <input type="radio" name="q_visa_sponsorship" value="No" />
+                <span>No</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="q_visa_sponsorship" value="Yes" />
+                <span>Yes</span>
+              </label>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- STEP 5: Review & Submit (Image 5) -->
+        <div class="modal-step" id="step-5" data-step="5" style="display: none;">
+          <h3 class="step-section-title">Review your application</h3>
+
+          <div class="review-summary-box">
+            <div class="review-summary-item">
+              <div class="review-summary-label">Contact info</div>
+              <div class="review-summary-value" id="summary-contact-info">-</div>
+            </div>
+
+            <div class="review-summary-item">
+              <div class="review-summary-label">Resume</div>
+              <div class="review-summary-value" id="summary-resume-info">-</div>
+            </div>
+
+            <div class="review-summary-item">
+              <div class="review-summary-label">Work from office in Hyderabad</div>
+              <div class="review-summary-value" id="summary-office-info">-</div>
+            </div>
+
+            <div class="review-summary-item">
+              <div class="review-summary-label">Stipend comfort (₹20,000–₹25,000/month)</div>
+              <div class="review-summary-value" id="summary-stipend-info">-</div>
+            </div>
+
+            <div class="review-summary-item">
+              <div class="review-summary-label">AI Agents experience</div>
+              <div class="review-summary-value" id="summary-agents-info">-</div>
+            </div>
+          </div>
+
+          <label class="follow-company-checkbox">
+            <input type="checkbox" id="follow-company-chk" />
+            <span>Follow <strong id="follow-company-name">HextGen Ai</strong> to stay up to date with their page</span>
+          </label>
+
+          <p class="legal-disclaimer">
+            Application powered by LinkedIn. Your <a href="#privacy">answers and resume will be saved</a> to simplify future applications and personalize your experience. <a href="#ai-info">Learn more</a> about how LinkedIn uses your data in AI-Assisted features that connect hirers and job seekers. <a href="#rights">Notice of Employment Rights</a>
+          </p>
+        </div>
+
+        <!-- SUCCESS VIEW: Submitted -->
+        <div class="modal-step" id="step-success" data-step="success" style="display: none;">
+          <div class="success-view">
+            <div class="success-icon-badge">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <h3>Your application was sent to <span id="success-company-name">HextGen Ai</span>!</h3>
+            <p>
+              We've notified the recruiter and saved this application in your Applied Jobs tab. You will receive updates via your registered email.
+            </p>
+            <button class="artdeco-button artdeco-button--primary" id="btn-success-done" style="padding: 10px 32px; font-size: 16px;">
+              Done
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Actions Footer -->
+      <div class="artdeco-modal__footer" id="modal-footer">
+        <button 
+          class="artdeco-button artdeco-button--secondary" 
+          id="modal-back-btn" 
+          style="display: none;"
+          data-easy-apply-back-button
+        >
+          Back
+        </button>
+
+        <button 
+          class="artdeco-button artdeco-button--primary" 
+          id="modal-next-btn" 
+          data-easy-apply-next-button
+          aria-label="Continue to next step"
+        >
+          Next
+        </button>
+
+        <button 
+          class="artdeco-button artdeco-button--primary" 
+          id="modal-submit-btn" 
+          style="display: none;"
+          data-easy-apply-submit-button
+          aria-label="Submit application"
+        >
+          Submit application
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Floating Messaging Widget -->
+  <div class="floating-messaging" id="messaging-widget">
+    <div class="floating-messaging__header">
+      <div class="messaging-user">
+        <img 
+          src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%230284c7'/><circle cx='20' cy='15' r='7' fill='%23fff'/><path d='M8 34c0-6.6 5.4-12 12-12s12 5.4 12 12' fill='%23fff'/></svg>" 
+          alt="Avatar" 
+        />
+        <span>Messaging</span>
+      </div>
+      <div class="messaging-icons">
+        <span>•••</span>
+        <span>︿</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real-time Agent Test Toast -->
+  <div class="test-toast" id="test-toast">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+      <polyline points="22 4 12 14.01 9 11.01"></polyline>
+    </svg>
+    <span id="test-toast-msg">Event logged</span>
+  </div>
+
+  <!-- Interactive JavaScript Logic -->
+  <script src="agent-cursor.js"></script>
+  <script src="live-agent-hud.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

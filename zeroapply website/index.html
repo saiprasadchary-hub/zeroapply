@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Meet ZeroApply. The desktop workspace for your job search. Organize your profile, manage resumes, and track applications in one focused native app.">
+  <title>ZeroApply — Desktop Workspace for Your Job Search</title>
+  <link rel="icon" href="./assets/logo.png">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="fluid-canvas" aria-hidden="true">
+    <div class="fluid-blob blob-1"></div>
+    <div class="fluid-blob blob-2"></div>
+    <div class="fluid-blob blob-3"></div>
+  </div>
+  <a class="skip-link" href="#experience">Skip to content</a>
+
+  <header>
+    <a class="brand" href="#" aria-label="ZeroApply home">
+      <img class="brand-mark" src="./assets/logo.png" alt="ZeroApply logo">
+      zeroapply<span class="desktop-label">DESKTOP</span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="./features.html">Features</a>
+      <a href="./how-it-works.html">How it works</a>
+      <a href="./faqs.html">FAQs</a>
+    </nav>
+    <a class="button small" href="#download">Download App <span>↓</span></a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-content">
+        <div class="eyebrow"><span class="app-tag">WINDOWS APP</span> NATIVE CAREER WORKSPACE</div>
+        <h1>A focused workspace<br><span>for your job search.</span></h1>
+        <p>Keep your profile, resumes, and applications organized in one private app.<br>Spend less time retyping forms. More time finding the right role.</p>
+        <div class="hero-actions">
+          <a class="button" href="#download">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5"/></svg>
+            Download for Windows
+          </a>
+          <button class="text-button" id="watch-demo"><span class="play">▶</span> Interactive preview</button>
+        </div>
+        <div class="hero-note">Built for Windows 10 & 11 · 100% Local & Private · No Subscription</div>
+      </div>
+    </section>
+
+    <section id="experience" class="experience section">
+      <div class="section-top">
+        <span class="eyebrow">DESKTOP WORKSPACE</span>
+      </div>
+      <h2>One place to organize<br><span>every application.</span></h2>
+      <p class="section-description">Store your work history, manage tailored resumes, and track your interview pipeline.<br>Click any tab below to test the workspace.</p>
+
+      <div class="preview-wrap">
+        <div class="app-window">
+          <div class="window-bar">
+            <div class="traffic">
+              <i class="traffic-close" title="Close"><span>×</span></i>
+              <i class="traffic-min" title="Minimize"><span>−</span></i>
+              <i class="traffic-zoom" title="Zoom"><span>+</span></i>
+            </div>
+            <span class="window-title">ZeroApply — Job Search Workspace</span>
+            <span class="window-badge">Local Database · Offline Ready</span>
+          </div>
+          <div class="app-body">
+            <aside>
+              <div class="app-logo">
+                <img class="brand-mark" src="./assets/logo.png" alt="">
+                <span>ZeroApply</span>
+              </div>
+              <div class="workspace-label">WORKSPACES</div>
+              <button data-view="dashboard" class="side-link active">◫ <span>Overview</span></button>
+              <button data-view="profile" class="side-link">◎ <span>Career Profile</span></button>
+              <button data-view="resume" class="side-link">▤ <span>Resume Studio</span></button>
+              <div class="side-bottom">
+                <span class="avatar">JD</span>
+                <div>
+                  Jamie Davis
+                  <small>Senior Frontend Engineer</small>
+                </div>
+              </div>
+            </aside>
+            <div class="dashboard">
+              <div class="dash-heading">
+                <div>
+                  <span class="mini-label">WORKSPACE DASHBOARD</span>
+                  <h3 id="dash-title">Active Applications</h3>
+                </div>
+                <div class="dash-controls">
+                  <div class="dash-search" title="Quick Filter">
+                    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+                    <span>Filter</span>
+                    <kbd>⌘K</kbd>
+                  </div>
+                  <span class="status-pill">Local Storage Active</span>
+                </div>
+              </div>
+              <div id="view-content" role="tabpanel" aria-label="Workspace preview"></div>
+            </div>
+          </div>
+        </div>
+        <div class="preview-caption">
+          <span>Select any section above to preview the desktop interface.</span>
+          <span>INTERACTIVE PRODUCT PREVIEW</span>
+        </div>
+      </div>
+
+      <div class="feature-tabs" role="tablist" aria-label="Explore features">
+        <button role="tab" aria-selected="true" data-view="dashboard">
+          <strong>Application Pipeline</strong>
+          <p>Organize roles by status, interviews, and deadlines.</p>
+        </button>
+        <button role="tab" aria-selected="false" data-view="profile">
+          <strong>Career Profile</strong>
+          <p>Keep your background, skills, and target roles in one spot.</p>
+        </button>
+        <button role="tab" aria-selected="false" data-view="resume">
+          <strong>Resume Studio</strong>
+          <p>Maintain tailored resume versions for different jobs.</p>
+        </button>
+      </div>
+    </section>
+
+    <section class="statement section">
+      <div class="statement-grid">
+        <div class="statement-copy">
+          <span class="eyebrow">BUILT FOR SPEED & CONTROL</span>
+          <h2>Your career history.<br><span>Your target roles.</span><br>Always ready.</h2>
+          <p>Stop searching through scattered PDFs, old notes, and endless browser tabs. ZeroApply stores your verified work history, portfolio links, and role preferences directly on your computer so you can apply quickly with zero friction.</p>
+        </div>
+        <div class="features-summary">
+          <div class="summary-card">
+            <div class="card-icon">⚡</div>
+            <h4>Instant Pre-filling</h4>
+            <p>Paste your background information into application forms with one click.</p>
+          </div>
+          <div class="summary-card">
+            <div class="card-icon">🔒</div>
+            <h4>100% Local & Private</h4>
+            <p>Your resume data never leaves your device. No cloud indexing, no data harvesting.</p>
+          </div>
+          <div class="summary-card">
+            <div class="card-icon">📁</div>
+            <h4>Tailored Resumes</h4>
+            <p>Save distinct versions targeted for different roles, industries, or job tiers.</p>
+          </div>
+          <div class="summary-card">
+            <div class="card-icon">📊</div>
+            <h4>Pipeline Tracking</h4>
+            <p>Keep an accurate log of where you applied, who contacted you, and next steps.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how-it-works" class="section steps-section">
+      <div class="section-top">
+        <span class="eyebrow">WORKFLOW OVERVIEW</span>
+      </div>
+      <h2>Get organized in<br><span>three simple steps.</span></h2>
+      <div class="steps">
+        <article>
+          <div class="step-art">
+            <div class="mini-card profile-card">
+              <span class="avatar">JD</span>
+              <div>
+                <b>Career Profile</b>
+                <span>Experience · Skills · Salary target</span>
+              </div>
+              <span class="check-pill">Saved</span>
+            </div>
+          </div>
+          <span class="step-num">01</span>
+          <h3>Fill your profile once.</h3>
+          <p>Add your work history, education, skills, and role preferences. Your data is stored locally for fast reuse across every application.</p>
+        </article>
+
+        <article>
+          <div class="step-art">
+            <div class="resume-paper">
+              <div class="resume-header-bar"></div>
+              <div class="doc-line"></div>
+              <div class="doc-line"></div>
+              <div class="resume-sub-bar"></div>
+              <div class="doc-line"></div>
+              <div class="doc-line short"></div>
+            </div>
+          </div>
+          <span class="step-num">02</span>
+          <h3>Organize your resumes.</h3>
+          <p>Import your master resume and create tailored versions. Keep your most relevant achievements ready for each position.</p>
+        </article>
+
+        <article>
+          <div class="step-art">
+            <div class="opportunity">
+              <div class="opp-badge">Application Sent</div>
+              <b>Frontend Engineer</b>
+              <small>Interview scheduled · Next Monday</small>
+            </div>
+          </div>
+          <span class="step-num">03</span>
+          <h3>Track every opportunity.</h3>
+          <p>Pre-fill repetitive fields with your desktop shortcuts and track your application pipeline without messy spreadsheets.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="download" class="download-section section">
+      <div class="download-copy">
+        <span class="eyebrow">NATIVE DESKTOP APP</span>
+        <h2>Your job search workspace.<br><span>Now on desktop.</span></h2>
+        <p>Download ZeroApply for Windows.<br>Set up your profile in minutes and start applying with speed.</p>
+
+        <div class="platform-picker" role="group" aria-label="Choose platform">
+          <button class="selected" data-platform="windows">⊞ Windows</button>
+          <button data-platform="mac">⌘ macOS</button>
+          <button data-platform="linux">◇ Linux</button>
+        </div>
+
+        <button class="button" id="download-button">Check Windows download <span>↓</span></button>
+        <p class="download-detail" id="platform-detail">Windows desktop · Installer availability below</p>
+        <div class="download-notice" id="download-notice" role="status" hidden></div>
+      </div>
+
+      <div class="download-art" aria-hidden="true">
+        <div class="installer-card">
+          <div class="installer-header">
+            <img class="brand-mark" src="./assets/logo.png" alt="">
+            <div>
+              <strong>ZeroApply Setup</strong>
+              <span>Windows 64-bit Edition</span>
+            </div>
+          </div>
+          <div class="installer-meta">
+            <div class="meta-row"><span>Version</span><b>1.0.0 Stable</b></div>
+            <div class="meta-row"><span>Compatibility</span><b>Windows 10 / 11</b></div>
+            <div class="meta-row"><span>File Size</span><b>~64 MB (.exe)</b></div>
+            <div class="meta-row"><span>Privacy</span><b>100% Local Data</b></div>
+          </div>
+          <div class="installer-footer">
+            <span class="verified-badge">✓ Verified Clean Build</span>
+            <span class="license-badge">Free Desktop App</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="questions" class="section faq-section">
+      <div>
+        <span class="eyebrow">FREQUENTLY ASKED QUESTIONS</span>
+        <h2>Good questions.<br><span>Clear answers.</span></h2>
+      </div>
+      <div class="faq-list">
+        <details>
+          <summary>What is ZeroApply?<span>+</span></summary>
+          <p>ZeroApply is a native desktop application designed to organize your job search. It centralizes your career profile, resume variations, and application tracking in one fast, private workspace so you never have to re-type repetitive details across job sites.</p>
+        </details>
+        <details>
+          <summary>Which platforms are supported?<span>+</span></summary>
+          <p>The current desktop package targets Windows 10 and 11 (64-bit). macOS and Linux builds are in development and will be released when testing is complete.</p>
+        </details>
+        <details>
+          <summary>Is my personal data private?<span>+</span></summary>
+          <p>Yes, completely. ZeroApply runs locally on your PC. Your resumes, profile details, and job submissions are stored on your local drive and are never uploaded to any remote analytics or third-party servers.</p>
+        </details>
+        <details>
+          <summary>Am I always in control of my applications?<span>+</span></summary>
+          <p>Yes. ZeroApply does not submit applications automatically without your explicit action. You review, approve, and finalize every application yourself with total transparency.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand" href="./index.html">
+      <img class="brand-mark" src="./assets/logo.png" alt="ZeroApply logo">
+      zeroapply
+    </a>
+    <nav style="display:flex; gap:20px; font-size:13px;">
+      <a href="./features.html">Features</a>
+      <a href="./how-it-works.html">How it works</a>
+      <a href="./faqs.html">FAQs</a>
+    </nav>
+    <a href="#download">Download for Windows ↓</a>
+    <div class="footer-bottom">
+      <span>© <span id="year"></span> ZeroApply</span>
+      <span>Native Windows Desktop App</span>
+      <a href="#">Back to top ↑</a>
+    </div>
+  </footer>
+
+  <dialog id="demo-dialog" aria-labelledby="demo-title">
+    <div class="modal-top">
+      <span class="eyebrow">WORKSPACE PREVIEW</span>
+      <button id="close-demo" aria-label="Close demo">×</button>
+    </div>
+    <h2 id="demo-title">Explore the workspace.<br><span>Try the essentials.</span></h2>
+    <p>Check out the application pipeline, career profile editor, and resume studio in the interactive preview below.</p>
+    <button class="button" id="explore-demo">Explore preview <span>↓</span></button>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

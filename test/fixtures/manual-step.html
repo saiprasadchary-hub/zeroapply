@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Next Step verification</title>
+<style>body{font:18px system-ui;background:#f4f5f8;color:#20252d;margin:50px}form{background:white;padding:28px;max-width:640px;border-radius:16px}label,input{display:block;margin:16px 0}input,button{font:inherit;padding:12px}button{background:#1645cb;color:white;border:0;border-radius:8px}.error-message{color:#b00020}</style></head>
+<body data-step="1" data-click-count="0" data-submit-count="0">
+<h1>Next Step verification</h1><p>Local test form. Each Next Step click should advance one stage.</p>
+<form onsubmit="return false"><h2>Step 1: Contact</h2><label for="answer">Contact name</label><input id="answer" value="Test Candidate"><button type="button" id="next">Next</button><p class="error-message" hidden>Correct the answer before continuing.</p></form>
+<p id="counts">Forward clicks: 0 · Submissions: 0</p>
+<script>
+const options = new URLSearchParams(location.search);
+let step = 1;
+let clicks = 0;
+let submissions = 0;
+const button = document.querySelector('#next');
+const input = document.querySelector('#answer');
+button.disabled = options.has('disabled');
+if(options.has('required')) { input.required = true; input.value = ''; }
+button.addEventListener('click', () => {
+  ++clicks;
+  document.body.dataset.clickCount = String(clicks);
+  if (step === 3) { ++submissions; document.body.dataset.submitCount = String(submissions); }
+  document.querySelector('#counts').textContent = `Forward clicks: ${clicks} · Submissions: ${submissions}`;
+  if(options.has('validation')) { document.querySelector('.error-message').hidden=false; return; }
+  if(options.has('silent') || step === 3) return;
+  setTimeout(() => {
+    ++step;
+    document.body.dataset.step=String(step);
+    document.querySelector('h2').textContent=step===2?'Step 2: Experience':'Step 3: Review';
+    document.querySelector('label').textContent=step===2?'Years of experience':'Review your answer';
+    button.textContent=step===2?'Review':'Submit application';
+  }, Number(options.get('delay') || 350));
+});
+</script></body></html>

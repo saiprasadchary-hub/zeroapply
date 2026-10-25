@@ -134,6 +134,9 @@ const agentBrowserSource = readFileSync('AgentBrowser/AgentBrowser.tsx', 'utf8')
 assert.match(easyBatchSource, /allowSubmit\s*&&\s*!workflow\.haltBatch/);
 assert.match(standardBatchSource, /allowSubmit\s*&&\s*!workflow\.haltBatch/);
 assert.match(agentBrowserSource, /Browser interruption detected\. Auto-restarting/);
-assert.match(agentBrowserSource, /Chrome connection interrupted\. Auto-restarting/);
+assert.match(agentBrowserSource, /Reconnecting to the current Chrome page/);
+
+assert.match(agentBrowserSource, /await page\.refreshTarget\(\)/);
+assert.doesNotMatch(agentBrowserSource, /(?<!const )page = await launchChromeAgentPage\(searchUrl\)/);
 
 console.log('Workflow recovery tests passed (22/22).');
