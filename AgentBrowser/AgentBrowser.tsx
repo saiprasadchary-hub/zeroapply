@@ -1,5 +1,7 @@
 import { SITE_ACCESS_CHECK_SCRIPT } from '../src/agent/security/siteAccess';
 import { initWebLlmEngine, stopEmbeddedModel, subscribeWebLlmState } from '../src/agent/llm/webLlmEngine';
+import { AutomationRecoveryPanel } from '../src/components/AutomationRecoveryPanel';
+import { canonicalJobUrl } from '../src/agent/workflow/automationStore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { 
   ArrowLeft, 
@@ -38,6 +40,7 @@ import { isRecoverableWorkflowError } from '../src/agent/recovery/workflowRecove
 import { matchesStartupDestination, waitForAutoApplyPage } from '../src/agent/navigation/autoApplyStartup';
 import {
   ensureVisualCursor,
+  cursorSyncAll,
   cursorSetTheme,
   cursorSetCombination,
   cursorSetPointer,
@@ -49,6 +52,7 @@ import {
   loadStoredPointerId,
   loadStoredAvatarId,
   loadStoredDisplayMode,
+  loadStoredAvatarScale,
   getPointerOption,
   getAvatarOption,
   type CursorPointerId,
@@ -87,6 +91,7 @@ interface AgentBrowserProps {
   onSaveToast: (message: string) => void;
   onGlobalLog?: (log: any) => void;
   pendingAction?: { action: 'search' | 'fillApply' | 'autoApply'; platform: PlatformId; timestamp: number } | null;
+  onNavigateToTab?: (tab: 'dashboard' | 'browser' | 'qa' | 'resume' | 'profile') => void;
 }
 
 const LINKEDIN_SIGNUP_URL = 'https://www.linkedin.com/signup/cold-join';
@@ -192,7 +197,7 @@ const BrowserWebview: React.FC<BrowserWebviewProps> = ({
           }
         } catch {}
       }
-      void ensureVisualCursor(view).catch(() => {});
+      void cursorSyncAll(view).catch(() => {});
     };
     const handleStartLoading = (event: { isMainFrame?: boolean; isInPlace?: boolean }): void => {
       if (event.isMainFrame === true && !event.isInPlace) {
@@ -219,7 +224,7 @@ const BrowserWebview: React.FC<BrowserWebviewProps> = ({
     const handleDomReady = () => {
       callbacksRef.current.onLoading(tab.id, false);
       callbacksRef.current.onReady(tab.id, view);
-      void ensureVisualCursor(view).catch(() => {});
+      void cursorSyncAll(view).catch(() => {});
     };
     const handleIpc = (event: { channel?: string; args?: unknown[] }) => callbacksRef.current.onIpcMessage(tab.id, event);
     const handleNewWindow = (event: { url?: string }) => {
@@ -344,7 +349,7 @@ function isInternalJobUrl(targetUrl: string, sourceUrl?: string): boolean {
   }
 }
 
-export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast, onGlobalLog, pendingAction }) => {
+export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast, onGlobalLog, pendingAction, onNavigateToTab }) => {
   const initialSession = useMemo(() => restoreBrowserSession(PLATFORMS[0].loginUrl, 'linkedin'), []);
   const initialActiveTab = initialSession.tabs.find((tab) => tab.id === initialSession.activeTabId) || initialSession.tabs[0];
   const [tabs, setTabs] = useState<BrowserTab[]>(initialSession.tabs);
@@ -393,6 +398,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
   const [activeCursorPointerId, setActiveCursorPointerId] = useState<CursorPointerId>(() => loadStoredPointerId());
   const [activeCursorAvatarId, setActiveCursorAvatarId] = useState<CursorAvatarId>(() => loadStoredAvatarId());
   const [activeCursorDisplayMode, setActiveCursorDisplayMode] = useState<CursorDisplayMode>(() => loadStoredDisplayMode());
+  const [activeCursorAvatarScale, setActiveCursorAvatarScale] = useState<number>(() => loadStoredAvatarScale());
 
   const activePointerOpt = useMemo(() => getPointerOption(activeCursorPointerId), [activeCursorPointerId]);
   const activeAvatarOpt = useMemo(() => getAvatarOption(activeCursorAvatarId), [activeCursorAvatarId]);
@@ -440,31 +446,38 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
       themeIdOverride?: string,
       pointerIdOverride?: CursorPointerId,
       avatarIdOverride?: CursorAvatarId,
-      modeOverride?: CursorDisplayMode
+      modeOverride?: CursorDisplayMode,
+      scaleOverride?: number
     ) => {
       const targetTheme = themeIdOverride || loadStoredCursorId();
       const targetPointer = pointerIdOverride || loadStoredPointerId();
       const targetAvatar = avatarIdOverride || loadStoredAvatarId();
       const targetMode = modeOverride || loadStoredDisplayMode();
+      const targetScale = typeof scaleOverride === 'number' ? scaleOverride : loadStoredAvatarScale();
 
       queueMicrotask(() => {
         setActiveCursorPointerId(targetPointer);
         setActiveCursorAvatarId(targetAvatar);
         setActiveCursorDisplayMode(targetMode);
+        setActiveCursorAvatarScale(targetScale);
       });
+
+      const syncConfig = {
+        themeId: targetTheme,
+        pointerId: targetPointer,
+        avatarId: targetAvatar,
+        mode: targetMode,
+        scale: targetScale,
+      };
 
       for (const view of webviewRefs.current.values()) {
         if (view && typeof view.executeJavaScript === 'function') {
-          void cursorSetTheme(view, targetTheme, targetPointer, targetAvatar).catch(() => {});
-          void cursorSetCombination(view, targetPointer, targetAvatar).catch(() => {});
-          void cursorSetDisplayMode(view, targetMode).catch(() => {});
+          void cursorSyncAll(view, syncConfig).catch(() => {});
         }
       }
 
       if (agentPageRef.current && typeof agentPageRef.current.executeJavaScript === 'function') {
-        void cursorSetTheme(agentPageRef.current, targetTheme, targetPointer, targetAvatar).catch(() => {});
-        void cursorSetCombination(agentPageRef.current, targetPointer, targetAvatar).catch(() => {});
-        void cursorSetDisplayMode(agentPageRef.current, targetMode).catch(() => {});
+        void cursorSyncAll(agentPageRef.current, syncConfig).catch(() => {});
       }
     };
 
@@ -487,19 +500,28 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
       }
     };
 
+    const handleScaleChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ scale?: number }>;
+      if (typeof customEvent.detail?.scale === 'number') {
+        syncCursorToWebviews(undefined, undefined, undefined, undefined, customEvent.detail.scale);
+      }
+    };
+
     const handleCombinationChange = (e: Event) => {
       const customEvent = e as CustomEvent<{
         pointerId?: CursorPointerId;
         avatarId?: CursorAvatarId;
         mode?: CursorDisplayMode;
         baseThemeId?: string;
+        avatarScale?: number;
       }>;
       if (customEvent.detail) {
         syncCursorToWebviews(
           customEvent.detail.baseThemeId,
           customEvent.detail.pointerId,
           customEvent.detail.avatarId,
-          customEvent.detail.mode
+          customEvent.detail.mode,
+          customEvent.detail.avatarScale
         );
       }
     };
@@ -529,6 +551,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
     window.addEventListener('zeroapply_cursor_changed', handleCursorChange);
     window.addEventListener('zeroapply_cursor_pointer_changed', handlePointerChange);
     window.addEventListener('zeroapply_cursor_avatar_changed', handleAvatarChange);
+    window.addEventListener('zeroapply_cursor_avatar_scale_changed', handleScaleChange);
     window.addEventListener('zeroapply_cursor_combination_changed', handleCombinationChange);
     window.addEventListener('zeroapply_cursor_display_mode_changed', handleDisplayModeChange);
     window.addEventListener('zeroapply_settings_updated', handleSettingsUpdate);
@@ -543,6 +566,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
       window.removeEventListener('zeroapply_cursor_changed', handleCursorChange);
       window.removeEventListener('zeroapply_cursor_pointer_changed', handlePointerChange);
       window.removeEventListener('zeroapply_cursor_avatar_changed', handleAvatarChange);
+      window.removeEventListener('zeroapply_cursor_avatar_scale_changed', handleScaleChange);
       window.removeEventListener('zeroapply_cursor_combination_changed', handleCombinationChange);
       window.removeEventListener('zeroapply_cursor_display_mode_changed', handleDisplayModeChange);
       window.removeEventListener('zeroapply_settings_updated', handleSettingsUpdate);
@@ -571,13 +595,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
     activeTabIdRef.current = activeTabId;
     const view = (browserMode === 'agent' && agentPageRef.current) ? agentPageRef.current : webviewRefs.current.get(activeTabId);
     if (view && typeof view.executeJavaScript === 'function') {
-      void ensureVisualCursor(
-        view,
-        loadStoredCursorId(),
-        loadStoredPointerId(),
-        loadStoredAvatarId(),
-        loadStoredDisplayMode()
-      ).catch(() => {});
+      void cursorSyncAll(view).catch(() => {});
     }
   }, [activeTabId, browserMode]);
 
@@ -599,6 +617,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
       webviewRefs.current.set(tabId, view);
       const tab = tabsRef.current.find((candidate) => candidate.id === tabId);
       if (tab && typeof view.setZoomFactor === 'function') view.setZoomFactor(tab.zoomFactor);
+      void cursorSyncAll(view).catch(() => {});
     }
     else webviewRefs.current.delete(tabId);
   }, []);
@@ -1223,8 +1242,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
 
     return () => {
       unsubscribe();
-      autoApplyEngine.stop();
-      standardFormsEngine.stop();
+      // Callback changes only rebind observers; they must not cancel an active run.
     };
   }, [onGlobalLog, onSaveToast]);
 
@@ -1673,6 +1691,9 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
   };
 
   useEffect(() => (): void => {
+    // Only actual unmount tears down engines; callback rebinding does not.
+    autoApplyEngineRef.current.stop('Browser closed');
+    standardFormsEngineRef.current.stop();
     // React's initial cleanup must not cancel the desktop's local AI startup.
     if (isAutoApplyingRef.current || agentActionInFlightRef.current) {
       void stopEmbeddedModel().catch(() => {});
@@ -1682,7 +1703,7 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
   useEffect(() => subscribeWebLlmState((state) => {
     if (!state.error || state.isLoading || !isAutoApplyingRef.current) return;
     isAutoApplyingRef.current = false;
-    autoApplyEngineRef.current.stop();
+    autoApplyEngineRef.current.stop(`Local AI unavailable: ${state.error}`);
     standardFormsEngineRef.current.stop();
     setIsAutoApplying(false);
     onSaveToast(`AutoApply paused: ${state.error}`);
@@ -1797,17 +1818,35 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Active Visual Agent Cursor Rig Badge */}
             <div
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-sky-50 to-indigo-50/70 text-sky-950 border border-sky-200/90 rounded-xl text-[11px] font-bold shadow-2xs"
-              title={`Visual Agent Cursor Studio: ${activePointerOpt.name} + ${activeAvatarOpt.name} (${activeCursorDisplayMode})`}
+              onClick={() => {
+                if (onNavigateToTab) {
+                  onNavigateToTab('profile');
+                } else if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('zeroapply_navigate_tab', { detail: { tab: 'profile' } }));
+                }
+              }}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-sky-50 to-indigo-50/70 text-sky-950 border border-sky-200/90 rounded-xl text-[11px] font-bold shadow-2xs cursor-pointer hover:border-sky-400 hover:bg-sky-100/70 transition-all active:scale-95 group select-none"
+              title={`Visual Agent Cursor Studio: ${activePointerOpt.name} + ${activeAvatarOpt.name} (${activeCursorDisplayMode}${activeCursorAvatarScale !== 1 ? `, ${activeCursorAvatarScale.toFixed(1)}x` : ''}) • Click to customize in Cursor Studio`}
             >
-              <Sparkles size={12} className="text-sky-600 animate-pulse shrink-0" />
-              <span className="truncate max-w-[210px]">
+              <div className="relative flex items-center justify-center">
+                <Sparkles size={12} className="text-sky-600 animate-pulse shrink-0" />
+                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping opacity-75" />
+              </div>
+              <span className="truncate max-w-[210px] group-hover:text-sky-700">
                 {activeCursorDisplayMode === 'cursor'
                   ? activePointerOpt.name
                   : activeCursorDisplayMode === 'avatar'
                     ? activeAvatarOpt.name
                     : `${activePointerOpt.name} + ${activeAvatarOpt.name}`}
               </span>
+              <span className="text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.2 rounded-md bg-sky-200/60 text-sky-800">
+                {activeCursorDisplayMode}
+              </span>
+              {activeCursorAvatarScale !== 1 && (
+                <span className="text-[9px] font-mono font-bold text-sky-600 bg-white/70 px-1 py-0.2 rounded">
+                  {activeCursorAvatarScale.toFixed(1)}x
+                </span>
+              )}
             </div>
 
             <div className="hidden md:flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-xl text-[11px] font-bold shadow-2xs">
@@ -1945,6 +1984,12 @@ export const AgentBrowser: React.FC<AgentBrowserProps> = ({ persona, onSaveToast
             {automationStatus}
           </div>
         )}
+        <AutomationRecoveryPanel persona={persona} jobUrl={activeUrl} running={isAutoApplying} onResume={async () => {
+          const view = webviewRefs.current.get(activeTabIdRef.current);
+          const liveUrl = view?.getURL?.();
+          if (!liveUrl || canonicalJobUrl(liveUrl) !== canonicalJobUrl(activeUrl)) throw new Error('The application tab changed. Open the original application before resuming.');
+          await handleAutoFillAndApply(true);
+        }} />
 
         {/* Sign-in advisory banner if user is on an authentication or guest page */}
         {(activeUrl.includes('/login') || activeUrl.includes('/signup') || activeUrl.includes('/auth') || activeUrl.includes('/checkpoint')) && (

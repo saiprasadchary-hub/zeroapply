@@ -1,4 +1,6 @@
+import { needsAvailabilityInterpretation } from '../localLlm/availabilityFacts';
 import { resolveScreeningFact } from '../localLlm/screeningFacts';
+import { formatFieldAnswer, resolveFieldScreeningFact } from '../localLlm/fieldAnswer';
 /**
  * ZeroApply DOM Scanner - Advanced Field Classifier
  * Semantically classifies discovered DOM form fields into 20+ standardized candidate attributes,
@@ -233,8 +235,9 @@ export function extractDegreeFromResume(persona?: PersonaData): string {
  */
 export function classifySingleField(field: ScannedField, persona?: PersonaData): ClassifiedField {
   const classified = classifySingleFieldUnchecked(field, persona);
-  const fact = persona ? resolveScreeningFact(field.label || '', persona) : undefined;
-  return fact === undefined ? classified : { ...classified, mappedValue: fact };
+  const fact = persona ? resolveFieldScreeningFact(field, persona) : undefined;
+  const value = needsAvailabilityInterpretation(field.label) ? undefined : (fact || classified.mappedValue);
+  return { ...classified, mappedValue: value === undefined ? undefined : formatFieldAnswer(value, field) };
 }
 
 function classifySingleFieldUnchecked(field: ScannedField, persona?: PersonaData): ClassifiedField {
@@ -1067,9 +1070,10 @@ export function classifyFields(fields: ScannedField[], persona?: PersonaData): C
       }
     }
     if (persona) {
-      const fact = resolveScreeningFact(classified.label || '', persona);
-      if (fact !== undefined) classified.mappedValue = fact;
+      const fact = resolveFieldScreeningFact(classified, persona);
+      if (fact !== undefined && (fact !== '' || !classified.mappedValue)) classified.mappedValue = fact;
     }
+    if (classified.mappedValue !== undefined) classified.mappedValue = formatFieldAnswer(classified.mappedValue, classified);
     return classified;
   });
 }

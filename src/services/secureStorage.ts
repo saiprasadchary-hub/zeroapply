@@ -21,7 +21,7 @@ interface ZeroApplyDesktopBridge {
   cancelGoogleLogin?: () => Promise<void>;
   startEmbeddedLlm?: () => Promise<WebLlmEngineState>;
   getEmbeddedLlmStatus?: () => Promise<WebLlmEngineState>;
-  generateEmbeddedLlm?: (payload: { prompt: string; systemPrompt: string; temperature: number; maxTokens: number; images?: string[] }) => Promise<string>;
+  generateEmbeddedLlm?: (payload: { prompt: string; systemPrompt: string; temperature: number; maxTokens: number; images?: string[]; responseSchema?: Record<string, unknown> }) => Promise<string>;
   stopEmbeddedLlm?: () => Promise<void>;
   onEmbeddedLlmState?: (callback: (state: WebLlmEngineState) => void) => () => void;
   launchChromeAgent?: (url: string) => Promise<{ ok: boolean; url?: string; error?: string }>;
@@ -50,13 +50,30 @@ declare global {
 
 const memoryCache = new Map<string, string>();
 
+const storageFailures = new Set<string>();
+const failureSubscribers = new Set<() => void>();
+export function hasSecureStorageFailure(): boolean { return storageFailures.size > 0; }
+export function subscribeSecureStorageFailure(callback: () => void): () => void {
+  failureSubscribers.add(callback);
+  return () => { failureSubscribers.delete(callback); };
+}
+function markStorageFailure(key: string): void {
+  storageFailures.add(key);
+  for (const callback of failureSubscribers) callback();
+}
+export function assertSecureStorageHealthy(): void {
+  if (hasSecureStorageFailure()) throw new Error('Saved data could not be read. Writes and automation are disabled; restart using the original storage configuration.');
+}
+
 export function getSecureItem(key: string): string | null {
   if (memoryCache.has(key)) return memoryCache.get(key) ?? null;
 
   const bridge = typeof window === 'undefined' ? undefined : window.zeroApply;
   const storage = typeof localStorage === 'undefined' ? null : localStorage;
   if (bridge?.secureGet) {
-    const secured = bridge.secureGet(key);
+    let secured: string | null;
+    try { secured = bridge.secureGet(key); }
+    catch (error: unknown) { markStorageFailure(key); throw error; }
     if (secured !== null) {
       memoryCache.set(key, secured);
       return secured;
@@ -65,9 +82,10 @@ export function getSecureItem(key: string): string | null {
     const legacy = storage?.getItem(key) ?? null;
     if (legacy !== null) {
       memoryCache.set(key, legacy);
-      void bridge.secureSet?.(key, legacy).then(() => storage?.removeItem(key)).catch((error) => {
-        console.warn('Secure storage migration failed:', error);
-      });
+      void bridge.secureSet?.(key, legacy).then(ok => {
+        if (ok) storage?.removeItem(key);
+        else markStorageFailure(key);
+      }).catch(() => markStorageFailure(key));
     }
     return legacy;
   }
@@ -76,20 +94,33 @@ export function getSecureItem(key: string): string | null {
 }
 
 export function setSecureItem(key: string, value: string): void {
+  assertSecureStorageHealthy();
   memoryCache.set(key, value);
   const bridge = typeof window === 'undefined' ? undefined : window.zeroApply;
   if (bridge?.secureSet) {
-    void bridge.secureSet(key, value).catch((error) => console.warn('Secure storage write failed:', error));
+    void bridge.secureSet(key, value).then(ok => { if (!ok) markStorageFailure(key); }).catch(() => markStorageFailure(key));
     return;
   }
   if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
 }
 
+/** Await the desktop write before acknowledging recovery or submission state. */
+export async function setSecureItemDurable(key: string, value: string): Promise<void> {
+  assertSecureStorageHealthy();
+  const bridge = typeof window === 'undefined' ? undefined : window.zeroApply;
+  if (bridge?.secureSet) {
+    try { if (!await bridge.secureSet(key, value)) throw new Error('Secure storage did not confirm the write.'); }
+    catch (error: unknown) { markStorageFailure(key); throw error; }
+  } else if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
+  memoryCache.set(key, value);
+}
+
 export function removeSecureItem(key: string): void {
+  assertSecureStorageHealthy();
   memoryCache.delete(key);
   const bridge = typeof window === 'undefined' ? undefined : window.zeroApply;
   if (bridge?.secureRemove) {
-    void bridge.secureRemove(key).catch((error) => console.warn('Secure storage removal failed:', error));
+    void bridge.secureRemove(key).then(ok => { if (!ok) markStorageFailure(key); }).catch(() => markStorageFailure(key));
     return;
   }
   if (typeof localStorage !== 'undefined') localStorage.removeItem(key);

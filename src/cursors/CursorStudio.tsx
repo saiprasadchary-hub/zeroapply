@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   Layers,
+  Sliders,
 } from 'lucide-react';
 import {
   CURSOR_THEMES,
@@ -22,6 +23,11 @@ import {
   saveStoredAvatarId,
   loadStoredDisplayMode,
   saveStoredDisplayMode,
+  loadStoredAvatarScale,
+  saveStoredAvatarScale,
+  DEFAULT_AVATAR_SCALE,
+  MIN_AVATAR_SCALE,
+  MAX_AVATAR_SCALE,
   getPointerOption,
   getAvatarOption,
   saveCustomCombination,
@@ -36,6 +42,7 @@ interface CursorStudioProps {
   onCursorChange?: (cursorId: string) => void;
   onDisplayModeChange?: (mode: CursorDisplayMode) => void;
   onCombinationChange?: (pointerId: CursorPointerId, avatarId: CursorAvatarId) => void;
+  onAvatarScaleChange?: (scale: number) => void;
 }
 
 export const CursorStudio: React.FC<CursorStudioProps> = ({
@@ -43,9 +50,13 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
   onCursorChange,
   onDisplayModeChange,
   onCombinationChange,
+  onAvatarScaleChange,
 }) => {
   // Active Display Mode: 'combined' by default
   const [displayMode, setDisplayMode] = useState<CursorDisplayMode>(() => loadStoredDisplayMode());
+
+  // Active Companion Avatar Scale
+  const [avatarScale, setAvatarScale] = useState<number>(() => loadStoredAvatarScale());
 
   // 1. User's chosen Cursor Pointer ID
   const [selectedPointerId, setSelectedPointerId] = useState<CursorPointerId>(() => loadStoredPointerId());
@@ -73,6 +84,7 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
     setSelectedPointerId(loadStoredPointerId());
     setSelectedAvatarId(loadStoredAvatarId());
     setDisplayMode(loadStoredDisplayMode());
+    setAvatarScale(loadStoredAvatarScale());
   }, [selectedCursorId]);
 
   // Synchronize with external cursor combination change events
@@ -82,10 +94,12 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
         pointerId?: CursorPointerId;
         avatarId?: CursorAvatarId;
         mode?: CursorDisplayMode;
+        avatarScale?: number;
       }>;
       if (custom.detail?.pointerId) setSelectedPointerId(custom.detail.pointerId);
       if (custom.detail?.avatarId) setSelectedAvatarId(custom.detail.avatarId);
       if (custom.detail?.mode) setDisplayMode(custom.detail.mode);
+      if (typeof custom.detail?.avatarScale === 'number') setAvatarScale(custom.detail.avatarScale);
     };
     const handlePointer = (e: Event) => {
       const custom = e as CustomEvent<{ id?: CursorPointerId }>;
@@ -99,17 +113,23 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
       const custom = e as CustomEvent<{ mode?: CursorDisplayMode }>;
       if (custom.detail?.mode) setDisplayMode(custom.detail.mode);
     };
+    const handleScale = (e: Event) => {
+      const custom = e as CustomEvent<{ scale?: number }>;
+      if (typeof custom.detail?.scale === 'number') setAvatarScale(custom.detail.scale);
+    };
 
     window.addEventListener('zeroapply_cursor_combination_changed', handleCombination);
     window.addEventListener('zeroapply_cursor_pointer_changed', handlePointer);
     window.addEventListener('zeroapply_cursor_avatar_changed', handleAvatar);
     window.addEventListener('zeroapply_cursor_display_mode_changed', handleMode);
+    window.addEventListener('zeroapply_cursor_avatar_scale_changed', handleScale);
 
     return () => {
       window.removeEventListener('zeroapply_cursor_combination_changed', handleCombination);
       window.removeEventListener('zeroapply_cursor_pointer_changed', handlePointer);
       window.removeEventListener('zeroapply_cursor_avatar_changed', handleAvatar);
       window.removeEventListener('zeroapply_cursor_display_mode_changed', handleMode);
+      window.removeEventListener('zeroapply_cursor_avatar_scale_changed', handleScale);
     };
   }, []);
 
@@ -145,7 +165,7 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
     (pointerId: CursorPointerId) => {
       setSelectedPointerId(pointerId);
       setIsCursorDropdownOpen(false);
-      saveCustomCombination(pointerId, selectedAvatarId, displayMode);
+      saveCustomCombination(pointerId, selectedAvatarId, displayMode, avatarScale);
       setRecentlyUpdated(true);
       setTimeout(() => setRecentlyUpdated(false), 2500);
 
@@ -153,7 +173,7 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
       if (onCursorChange) onCursorChange(baseThemeId);
       if (onCombinationChange) onCombinationChange(pointerId, selectedAvatarId);
     },
-    [selectedAvatarId, displayMode, onCursorChange, onCombinationChange]
+    [selectedAvatarId, displayMode, avatarScale, onCursorChange, onCombinationChange]
   );
 
   // Handle picking wanted companion avatar
@@ -161,7 +181,7 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
     (avatarId: CursorAvatarId) => {
       setSelectedAvatarId(avatarId);
       setIsAvatarDropdownOpen(false);
-      saveCustomCombination(selectedPointerId, avatarId, displayMode);
+      saveCustomCombination(selectedPointerId, avatarId, displayMode, avatarScale);
       setRecentlyUpdated(true);
       setTimeout(() => setRecentlyUpdated(false), 2500);
 
@@ -169,7 +189,20 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
       if (onCursorChange) onCursorChange(baseThemeId);
       if (onCombinationChange) onCombinationChange(selectedPointerId, avatarId);
     },
-    [selectedPointerId, displayMode, onCursorChange, onCombinationChange]
+    [selectedPointerId, displayMode, avatarScale, onCursorChange, onCombinationChange]
+  );
+
+  // Handle adjusting avatar size / scale
+  const handleAvatarScaleChange = useCallback(
+    (newScale: number) => {
+      const clamped = Math.max(MIN_AVATAR_SCALE, Math.min(MAX_AVATAR_SCALE, Number(newScale.toFixed(2))));
+      setAvatarScale(clamped);
+      saveStoredAvatarScale(clamped);
+      onAvatarScaleChange?.(clamped);
+      setRecentlyUpdated(true);
+      setTimeout(() => setRecentlyUpdated(false), 2000);
+    },
+    [onAvatarScaleChange]
   );
 
   // Handle switching display mode (combined, cursor, avatar)
@@ -198,7 +231,7 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
 
   // Live SVG for the interactive stage sandbox
   const stageSvg = useMemo(() => {
-    let svg = getCustomCombinedCursorMarkup(selectedPointerId, selectedAvatarId, 'stage-live', displayMode);
+    let svg = getCustomCombinedCursorMarkup(selectedPointerId, selectedAvatarId, 'stage-live', displayMode, avatarScale);
     if (previewAnimState === 'typing') {
       svg = svg.replace(/class="za-bot-eyes"/g, 'class="za-bot-eyes za-anim-typing"');
     } else if (previewAnimState === 'thinking') {
@@ -207,7 +240,7 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
       svg = svg.replace(/class="za-bot-eyes"/g, 'class="za-bot-eyes za-anim-happy"');
     }
     return svg;
-  }, [selectedPointerId, selectedAvatarId, displayMode, previewAnimState]);
+  }, [selectedPointerId, selectedAvatarId, displayMode, previewAnimState, avatarScale]);
 
   return (
     <div className="rounded-2xl border border-[#dadce0] bg-white p-5 sm:p-6 shadow-[0_1px_2px_rgba(60,64,67,0.08)] space-y-6 transition-all">
@@ -467,90 +500,141 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
           </div>
 
           {/* Surface & Animation Controls */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Element Display Toggle (Combined vs Cursor vs Avatar) */}
-            <div className="flex items-center p-0.5 rounded-full bg-white border border-[#dadce0] shadow-2xs">
-              <button
-                type="button"
-                onClick={() => handleDisplayModeChange('combined')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
-                  displayMode === 'combined'
-                    ? 'bg-[#1a73e8] text-white shadow-2xs font-semibold'
-                    : 'text-[#5f6368] hover:text-[#202124] hover:bg-[#f1f3f4]'
-                }`}
-                title="Show Combined (Cursor + Avatar)"
-              >
-                <Layers size={12} />
-                <span>Combined</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDisplayModeChange('cursor')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
-                  displayMode === 'cursor'
-                    ? 'bg-[#1a73e8] text-white shadow-2xs font-semibold'
-                    : 'text-[#5f6368] hover:text-[#202124] hover:bg-[#f1f3f4]'
-                }`}
-                title="Show Cursor Pointer Only"
-              >
-                <MousePointer2 size={12} />
-                <span>Cursor</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDisplayModeChange('avatar')}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
-                  displayMode === 'avatar'
-                    ? 'bg-[#1a73e8] text-white shadow-2xs font-semibold'
-                    : 'text-[#5f6368] hover:text-[#202124] hover:bg-[#f1f3f4]'
-                }`}
-                title="Show Companion Avatar Only"
-              >
-                <Bot size={12} />
-                <span>Avatar</span>
-              </button>
-            </div>
-
-            {/* Surface Toggle (Dark OLED vs Light Paper) */}
-            <div className="flex items-center p-0.5 rounded-full bg-white border border-[#dadce0] shadow-2xs">
-              <button
-                type="button"
-                onClick={() => setPreviewSurface('dark')}
-                className={`p-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                  previewSurface === 'dark' ? 'bg-[#202124] text-white shadow-2xs' : 'text-[#5f6368] hover:text-[#202124]'
-                }`}
-                title="Dark OLED Background"
-              >
-                <Moon size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewSurface('light')}
-                className={`p-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                  previewSurface === 'light' ? 'bg-[#e8f0fe] text-[#1a73e8] shadow-2xs' : 'text-[#5f6368] hover:text-[#202124]'
-                }`}
-                title="Light Paper Background"
-              >
-                <Sun size={13} />
-              </button>
-            </div>
-
-            {/* Test Mood / Reaction Buttons */}
-            <div className="flex items-center gap-1">
-              {(['default', 'typing', 'thinking', 'success'] as const).map((mood) => (
+          <div className="flex flex-col sm:items-end gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Element Display Toggle (Combined vs Cursor vs Avatar) */}
+              <div className="flex items-center p-0.5 rounded-full bg-white border border-[#dadce0] shadow-2xs">
                 <button
-                  key={mood}
                   type="button"
-                  onClick={() => setPreviewAnimState(mood)}
-                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium capitalize transition-all cursor-pointer ${
-                    previewAnimState === mood
-                      ? 'bg-[#1a73e8] text-white shadow-2xs'
-                      : 'bg-white border border-[#dadce0] text-[#5f6368] hover:bg-[#f1f3f4]'
+                  onClick={() => handleDisplayModeChange('combined')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+                    displayMode === 'combined'
+                      ? 'bg-[#1a73e8] text-white shadow-2xs font-semibold'
+                      : 'text-[#5f6368] hover:text-[#202124] hover:bg-[#f1f3f4]'
                   }`}
+                  title="Show Combined (Cursor + Avatar)"
                 >
-                  {mood}
+                  <Layers size={12} />
+                  <span>Combined</span>
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => handleDisplayModeChange('cursor')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+                    displayMode === 'cursor'
+                      ? 'bg-[#1a73e8] text-white shadow-2xs font-semibold'
+                      : 'text-[#5f6368] hover:text-[#202124] hover:bg-[#f1f3f4]'
+                  }`}
+                  title="Show Cursor Pointer Only"
+                >
+                  <MousePointer2 size={12} />
+                  <span>Cursor</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDisplayModeChange('avatar')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+                    displayMode === 'avatar'
+                      ? 'bg-[#1a73e8] text-white shadow-2xs font-semibold'
+                      : 'text-[#5f6368] hover:text-[#202124] hover:bg-[#f1f3f4]'
+                  }`}
+                  title="Show Companion Avatar Only"
+                >
+                  <Bot size={12} />
+                  <span>Avatar</span>
+                </button>
+              </div>
+
+              {/* Surface Toggle (Dark OLED vs Light Paper) */}
+              <div className="flex items-center p-0.5 rounded-full bg-white border border-[#dadce0] shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setPreviewSurface('dark')}
+                  className={`p-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                    previewSurface === 'dark' ? 'bg-[#202124] text-white shadow-2xs' : 'text-[#5f6368] hover:text-[#202124]'
+                  }`}
+                  title="Dark OLED Background"
+                >
+                  <Moon size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewSurface('light')}
+                  className={`p-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                    previewSurface === 'light' ? 'bg-[#e8f0fe] text-[#1a73e8] shadow-2xs' : 'text-[#5f6368] hover:text-[#202124]'
+                  }`}
+                  title="Light Paper Background"
+                >
+                  <Sun size={13} />
+                </button>
+              </div>
+
+              {/* Test Mood / Reaction Buttons */}
+              <div className="flex items-center gap-1">
+                {(['default', 'typing', 'thinking', 'success'] as const).map((mood) => (
+                  <button
+                    key={mood}
+                    type="button"
+                    onClick={() => setPreviewAnimState(mood)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium capitalize transition-all cursor-pointer ${
+                      previewAnimState === mood
+                        ? 'bg-[#1a73e8] text-white shadow-2xs'
+                        : 'bg-white border border-[#dadce0] text-[#5f6368] hover:bg-[#f1f3f4]'
+                    }`}
+                  >
+                    {mood}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Avatar Size Adjustment Control (Positioned directly below default, typing, thinking, success) */}
+            <div className="flex items-center gap-2 bg-white border border-[#dadce0] rounded-full px-2.5 py-1 shadow-2xs self-start sm:self-end">
+              <span className="text-[11px] font-medium text-[#5f6368] flex items-center gap-1.5 shrink-0 select-none">
+                <Sliders size={12} className="text-[#1a73e8]" />
+                <span className="font-semibold text-[#202124]">Avatar Size:</span>
+              </span>
+
+              {/* Slider */}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="range"
+                  min="0.6"
+                  max="1.6"
+                  step="0.05"
+                  value={avatarScale}
+                  onChange={(e) => handleAvatarScaleChange(parseFloat(e.target.value))}
+                  className="w-16 sm:w-20 h-1.5 bg-[#e8eaed] rounded-lg appearance-none cursor-pointer accent-[#1a73e8]"
+                  title={`Avatar Size: ${Math.round(avatarScale * 100)}%`}
+                />
+                <span className="text-[10px] font-mono font-medium text-[#1a73e8] bg-[#e8f0fe] px-1.5 py-0.5 rounded border border-[#d2e3fc] min-w-[36px] text-center">
+                  {Math.round(avatarScale * 100)}%
+                </span>
+              </div>
+
+              {/* Quick Presets: 75% Compact, 100% Default, 125% Large, 150% XL */}
+              <div className="flex items-center gap-0.5 border-l border-[#dadce0] pl-1.5 ml-0.5">
+                {[
+                  { label: '75%', val: 0.75, title: 'Compact (75%)' },
+                  { label: '100%', val: 1.0, title: 'Default (100%)' },
+                  { label: '125%', val: 1.25, title: 'Large (125%)' },
+                  { label: '150%', val: 1.5, title: 'Extra Large (150%)' },
+                ].map((preset) => (
+                  <button
+                    key={preset.val}
+                    type="button"
+                    onClick={() => handleAvatarScaleChange(preset.val)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
+                      Math.abs(avatarScale - preset.val) < 0.02
+                        ? 'bg-[#1a73e8] text-white shadow-2xs font-semibold'
+                        : 'text-[#5f6368] hover:text-[#202124] hover:bg-[#f1f3f4]'
+                    }`}
+                    title={preset.title}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -593,6 +677,8 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
             <span>Mode: {displayMode}</span>
             <span>•</span>
             <span className="capitalize">Mood: {previewAnimState}</span>
+            <span>•</span>
+            <span>Size: {Math.round(avatarScale * 100)}%</span>
           </div>
 
           <div className="absolute top-2.5 right-3">

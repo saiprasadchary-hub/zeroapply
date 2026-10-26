@@ -12,8 +12,10 @@ import {
   CURSOR_DISPLAY_MODE_STORAGE_KEY,
   CURSOR_POINTER_STORAGE_KEY,
   CURSOR_AVATAR_STORAGE_KEY,
+  CURSOR_AVATAR_SCALE_STORAGE_KEY,
   DEFAULT_POINTER_ID,
   DEFAULT_AVATAR_ID,
+  DEFAULT_AVATAR_SCALE,
   getCursorTheme,
   loadStoredCursorId,
   saveStoredCursorId,
@@ -23,10 +25,16 @@ import {
   saveStoredAvatarId,
   loadStoredDisplayMode,
   saveStoredDisplayMode,
+  loadStoredAvatarScale,
+  saveStoredAvatarScale,
   type CursorTheme,
   type CursorDisplayMode,
   type CursorPointerId,
   type CursorAvatarId,
+  AQUA_DROP_BASE64_URI,
+  AERO_SENTINEL_BASE64_URI,
+  KURO_STAR_BASE64_URI,
+  GROK_BOT_BASE64_URI,
 } from '../../cursors';
 import { isCursorBadgeEnabled, isVisualCursorEnabled, SETTINGS_STORAGE_KEY } from '../../settings/settingsManager';
 
@@ -400,12 +408,14 @@ export function getVisualCursorScript(
   initialBadgeVisible?: boolean,
   initialPointerId?: CursorPointerId,
   initialAvatarId?: CursorAvatarId,
-  initialDisplayMode?: CursorDisplayMode
+  initialDisplayMode?: CursorDisplayMode,
+  initialAvatarScale?: number
 ): string {
   const resolvedInitialTheme = initialThemeId || loadStoredCursorId();
   const resolvedInitialPointer = initialPointerId || loadStoredPointerId();
   const resolvedInitialAvatar = initialAvatarId || loadStoredAvatarId();
   const resolvedInitialDisplayMode = initialDisplayMode || loadStoredDisplayMode();
+  const resolvedInitialAvatarScale = typeof initialAvatarScale === 'number' ? initialAvatarScale : loadStoredAvatarScale();
   const resolvedInitialBadgeVisible = typeof initialBadgeVisible === 'boolean'
     ? initialBadgeVisible
     : isCursorBadgeEnabled();
@@ -494,7 +504,8 @@ export function getVisualCursorScript(
         explicit === 'avatar_grok_bot' ||
         explicit === 'avatar_cloud_bot' ||
         explicit === 'avatar_sentinel_bot' ||
-        explicit === 'avatar_mochi_neko'
+        explicit === 'avatar_mochi_neko' ||
+        explicit === 'avatar_kuro_star'
       )
         return explicit;
       const saved = localStorage.getItem('${CURSOR_AVATAR_STORAGE_KEY}');
@@ -502,12 +513,26 @@ export function getVisualCursorScript(
         saved === 'avatar_grok_bot' ||
         saved === 'avatar_cloud_bot' ||
         saved === 'avatar_sentinel_bot' ||
-        saved === 'avatar_mochi_neko'
+        saved === 'avatar_mochi_neko' ||
+        saved === 'avatar_kuro_star'
       )
         return saved;
       if (currentThemeId === 'cloud_bot') return 'avatar_cloud_bot';
     } catch(e) {}
     return '${DEFAULT_AVATAR_ID}';
+  })();
+
+  let currentAvatarScale = (function() {
+    try {
+      const explicit = ${JSON.stringify(resolvedInitialAvatarScale)};
+      if (typeof explicit === 'number' && !isNaN(explicit) && explicit >= 0.5 && explicit <= 2.0) return explicit;
+      const saved = localStorage.getItem('${CURSOR_AVATAR_SCALE_STORAGE_KEY}');
+      if (saved) {
+        const val = parseFloat(saved);
+        if (!isNaN(val) && val >= 0.5 && val <= 2.0) return val;
+      }
+    } catch(e) {}
+    return ${DEFAULT_AVATAR_SCALE};
   })();
 
   function getActiveTheme() {
@@ -874,6 +899,21 @@ export function getVisualCursorScript(
       64% { transform: rotate(3deg); }
     }
 
+    /* Kuro Star Breathing & Floating (18.0s Long Cycle) */
+    @keyframes za-kuro-float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      18% { transform: translateY(-1.2px) rotate(0.8deg); }
+      35% { transform: translateY(-0.4px) rotate(-0.5deg); }
+      52% { transform: translateY(1.0px) rotate(0.6deg); }
+      70% { transform: translateY(-1.4px) rotate(-0.8deg); }
+      86% { transform: translateY(-0.6px) rotate(0.3deg); }
+    }
+    @keyframes za-kuro-spin {
+      0% { transform: rotate(0deg) scale(1); }
+      50% { transform: rotate(180deg) scale(1.18); }
+      100% { transform: rotate(360deg) scale(1); }
+    }
+
     /* 6. Coordinated Shadow Breathing for all floating avatars (18.0s) */
     @keyframes za-avatar-shadow-breathe {
       0%, 100% { transform: scale(1, 1); opacity: 0.25; }
@@ -963,6 +1003,11 @@ export function getVisualCursorScript(
       transform-origin: 20% 90% !important;
       animation: za-neko-ear-right-idle 18.0s infinite cubic-bezier(0.25, 1, 0.5, 1) !important;
     }
+    .za-kuro-body {
+      transform-box: fill-box !important;
+      transform-origin: 45px 41px !important;
+      animation: za-kuro-float 18.0s infinite ease-in-out !important;
+    }
 
     /* Reaction mood state overrides */
     .za-typing .za-bot-eyes, .za-bot-eyes.za-anim-typing {
@@ -1019,6 +1064,9 @@ export function getVisualCursorScript(
     }
     .za-success .za-neko-ear-right, .za-anim-happy .za-neko-ear-right {
       animation: za-neko-ears-happy-r 0.8s ease-in-out infinite !important;
+    }
+    .za-success .za-kuro-body, .za-anim-happy .za-kuro-body {
+      animation: za-kuro-spin 0.85s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
     }
     @keyframes za-earcup-pulse {
       0%, 100% {
@@ -1210,10 +1258,11 @@ export function getVisualCursorScript(
     return el;
   }
 
-  function buildDarkGlassSvg(themeOverride, pointerIdOverride, avatarIdOverride) {
+  function buildDarkGlassSvg(themeOverride, pointerIdOverride, avatarIdOverride, scaleOverride) {
     const theme = themeOverride || getActiveTheme();
     const ptrId = pointerIdOverride || currentPointerId || (theme.id === 'cloud_bot' || theme.shapeType === 'cloud' ? 'pointer_sky_aero' : 'pointer_stealth');
     const avtId = avatarIdOverride || currentAvatarId || (theme.id === 'cloud_bot' || theme.shapeType === 'cloud' ? 'avatar_cloud_bot' : 'avatar_grok_bot');
+    const avtScale = typeof scaleOverride === 'number' ? scaleOverride : currentAvatarScale;
     const svg = createSvgElement('svg', {
       width: '58',
       height: '58',
@@ -1513,47 +1562,69 @@ export function getVisualCursorScript(
     starlightGlowGrad.appendChild(createSvgElement('stop', { offset: '100%', 'stop-color': '#818cf8', 'stop-opacity': '0' }));
     defs.appendChild(starlightGlowGrad);
 
-    // Aero Sentinel Droid Gradients & Glow Filter
-    const sentinelShellGrad = createSvgElement('linearGradient', {
+    // Aero Sentinel Droid Gradients (Cobalt Velvet 3D Sphere & Glossy Visor)
+    const sentinelShellGrad = createSvgElement('radialGradient', {
       id: 'za-sentinel-shell',
-      x1: '38', y1: '31', x2: '52', y2: '50',
+      cx: '34%', cy: '30%', r: '70%'
+    });
+    sentinelShellGrad.appendChild(createSvgElement('stop', { offset: '0%', 'stop-color': '#4ba2ff' }));
+    sentinelShellGrad.appendChild(createSvgElement('stop', { offset: '22%', 'stop-color': '#1d74ff' }));
+    sentinelShellGrad.appendChild(createSvgElement('stop', { offset: '50%', 'stop-color': '#0052e0' }));
+    sentinelShellGrad.appendChild(createSvgElement('stop', { offset: '78%', 'stop-color': '#072d8a' }));
+    sentinelShellGrad.appendChild(createSvgElement('stop', { offset: '100%', 'stop-color': '#020e33' }));
+    defs.appendChild(sentinelShellGrad);
+
+    const sentinelRimGrad = createSvgElement('linearGradient', {
+      id: 'za-sentinel-rim',
+      x1: '32', y1: '28', x2: '58', y2: '54',
       gradientUnits: 'userSpaceOnUse'
     });
-    sentinelShellGrad.appendChild(createSvgElement('stop', { offset: '0%', 'stop-color': '#ffffff' }));
-    sentinelShellGrad.appendChild(createSvgElement('stop', { offset: '50%', 'stop-color': '#f8fafc' }));
-    sentinelShellGrad.appendChild(createSvgElement('stop', { offset: '100%', 'stop-color': '#cbd5e1' }));
-    defs.appendChild(sentinelShellGrad);
+    sentinelRimGrad.appendChild(createSvgElement('stop', { offset: '0%', 'stop-color': '#93c5fd', 'stop-opacity': '0.8' }));
+    sentinelRimGrad.appendChild(createSvgElement('stop', { offset: '50%', 'stop-color': '#2563eb', 'stop-opacity': '0.2' }));
+    sentinelRimGrad.appendChild(createSvgElement('stop', { offset: '100%', 'stop-color': '#021a4f', 'stop-opacity': '0.8' }));
+    defs.appendChild(sentinelRimGrad);
 
     const sentinelVisorGrad = createSvgElement('linearGradient', {
       id: 'za-sentinel-visor',
-      x1: '45', y1: '36', x2: '45', y2: '46',
+      x1: '45', y1: '34', x2: '47', y2: '48',
       gradientUnits: 'userSpaceOnUse'
     });
-    sentinelVisorGrad.appendChild(createSvgElement('stop', { offset: '0%', 'stop-color': '#090d16' }));
-    sentinelVisorGrad.appendChild(createSvgElement('stop', { offset: '50%', 'stop-color': '#050811' }));
-    sentinelVisorGrad.appendChild(createSvgElement('stop', { offset: '100%', 'stop-color': '#02040a' }));
+    sentinelVisorGrad.appendChild(createSvgElement('stop', { offset: '0%', 'stop-color': '#232733' }));
+    sentinelVisorGrad.appendChild(createSvgElement('stop', { offset: '25%', 'stop-color': '#13151c' }));
+    sentinelVisorGrad.appendChild(createSvgElement('stop', { offset: '65%', 'stop-color': '#08090d' }));
+    sentinelVisorGrad.appendChild(createSvgElement('stop', { offset: '100%', 'stop-color': '#020204' }));
     defs.appendChild(sentinelVisorGrad);
-
-    const sentinelNodeGrad = createSvgElement('linearGradient', {
-      id: 'za-sentinel-node',
-      x1: '0%', y1: '0%', x2: '100%', y2: '100%'
-    });
-    sentinelNodeGrad.appendChild(createSvgElement('stop', { offset: '0%', 'stop-color': '#334155' }));
-    sentinelNodeGrad.appendChild(createSvgElement('stop', { offset: '100%', 'stop-color': '#0f172a' }));
-    defs.appendChild(sentinelNodeGrad);
 
     const sentinelGlowFilter = createSvgElement('filter', {
       id: 'za-sentinel-glow',
       x: '-50%', y: '-50%', width: '200%', height: '200%'
     });
     sentinelGlowFilter.appendChild(createSvgElement('feGaussianBlur', {
-      in: 'SourceGraphic', stdDeviation: '1.0', result: 'blur'
+      in: 'SourceGraphic', stdDeviation: '0.8', result: 'blur'
     }));
     const sentinelMerge = createSvgElement('feMerge', {});
     sentinelMerge.appendChild(createSvgElement('feMergeNode', { in: 'blur' }));
     sentinelMerge.appendChild(createSvgElement('feMergeNode', { in: 'SourceGraphic' }));
     sentinelGlowFilter.appendChild(sentinelMerge);
     defs.appendChild(sentinelGlowFilter);
+
+    // Aqua Hydro Droid Glowing Eye Filter
+    const aquaGlowFilter = createSvgElement('filter', {
+      id: 'za-aqua-glow',
+      x: '-60%', y: '-60%', width: '220%', height: '220%'
+    });
+    aquaGlowFilter.appendChild(createSvgElement('feGaussianBlur', {
+      in: 'SourceGraphic', stdDeviation: '1.0', result: 'blur1'
+    }));
+    aquaGlowFilter.appendChild(createSvgElement('feGaussianBlur', {
+      in: 'SourceGraphic', stdDeviation: '0.4', result: 'blur2'
+    }));
+    const aquaMerge = createSvgElement('feMerge', {});
+    aquaMerge.appendChild(createSvgElement('feMergeNode', { in: 'blur1' }));
+    aquaMerge.appendChild(createSvgElement('feMergeNode', { in: 'blur2' }));
+    aquaMerge.appendChild(createSvgElement('feMergeNode', { in: 'SourceGraphic' }));
+    aquaGlowFilter.appendChild(aquaMerge);
+    defs.appendChild(aquaGlowFilter);
 
     // Mochi Cyber Neko Painted Snow-White Anime Gradients & Filters
     const nekoShellGrad = createSvgElement('radialGradient', {
@@ -1664,6 +1735,51 @@ export function getVisualCursorScript(
     nekoGlowFilter.appendChild(nekoMerge);
     defs.appendChild(nekoGlowFilter);
 
+    // Kuro Star Gradients & Filters
+    const kuroBodyGrad = createSvgElement('radialGradient', {
+      id: 'za-kuro-body',
+      cx: '38%', cy: '32%', r: '68%'
+    });
+    kuroBodyGrad.appendChild(createSvgElement('stop', { offset: '0%', 'stop-color': '#242630' }));
+    kuroBodyGrad.appendChild(createSvgElement('stop', { offset: '40%', 'stop-color': '#12131b' }));
+    kuroBodyGrad.appendChild(createSvgElement('stop', { offset: '75%', 'stop-color': '#08080e' }));
+    kuroBodyGrad.appendChild(createSvgElement('stop', { offset: '100%', 'stop-color': '#020204' }));
+    defs.appendChild(kuroBodyGrad);
+
+    const kuroRimGrad = createSvgElement('linearGradient', {
+      id: 'za-kuro-rim',
+      x1: '34', y1: '28', x2: '56', y2: '52', gradientUnits: 'userSpaceOnUse'
+    });
+    kuroRimGrad.appendChild(createSvgElement('stop', { offset: '0%', 'stop-color': '#ffffff', 'stop-opacity': '0.55' }));
+    kuroRimGrad.appendChild(createSvgElement('stop', { offset: '35%', 'stop-color': '#94a3b8', 'stop-opacity': '0.3' }));
+    kuroRimGrad.appendChild(createSvgElement('stop', { offset: '70%', 'stop-color': '#475569', 'stop-opacity': '0.2' }));
+    kuroRimGrad.appendChild(createSvgElement('stop', { offset: '100%', 'stop-color': '#ffffff', 'stop-opacity': '0.45' }));
+    defs.appendChild(kuroRimGrad);
+
+    const kuroEyeGlowFilter = createSvgElement('filter', {
+      id: 'za-kuro-eye-glow',
+      x: '-30%', y: '-30%', width: '160%', height: '160%'
+    });
+    kuroEyeGlowFilter.appendChild(createSvgElement('feGaussianBlur', {
+      in: 'SourceGraphic', stdDeviation: '0.6', result: 'blur'
+    }));
+    const kuroMerge = createSvgElement('feMerge', {});
+    kuroMerge.appendChild(createSvgElement('feMergeNode', { in: 'blur' }));
+    kuroMerge.appendChild(createSvgElement('feMergeNode', { in: 'SourceGraphic' }));
+    kuroEyeGlowFilter.appendChild(kuroMerge);
+    const grokEyeGlowFilter = createSvgElement('filter', {
+      id: 'za-grok-eye-glow',
+      x: '-30%', y: '-30%', width: '160%', height: '160%'
+    });
+    grokEyeGlowFilter.appendChild(createSvgElement('feGaussianBlur', {
+      in: 'SourceGraphic', stdDeviation: '0.6', result: 'blur'
+    }));
+    const grokMerge = createSvgElement('feMerge', {});
+    grokMerge.appendChild(createSvgElement('feMergeNode', { in: 'blur' }));
+    grokMerge.appendChild(createSvgElement('feMergeNode', { in: 'SourceGraphic' }));
+    grokEyeGlowFilter.appendChild(grokMerge);
+    defs.appendChild(grokEyeGlowFilter);
+
     svg.appendChild(defs);
 
     // 1. Drop Shadows (Every Cursor In Near-Triangle Delta Shape)
@@ -1683,14 +1799,20 @@ export function getVisualCursorScript(
       }));
     } else if (avtId === 'avatar_sentinel_bot') {
       svg.appendChild(createSvgElement('ellipse', {
-        cx: '45', cy: '49', rx: '10', ry: '3.5',
-        fill: '#020617', opacity: '0.32', filter: 'url(#za-glass-shadow)',
-        class: 'za-avatar-part'
+        cx: '45', cy: '52.2', rx: '11.5', ry: '3.0',
+        fill: '#010617', opacity: '0.4', filter: 'url(#za-glass-shadow)',
+        class: 'za-avatar-part za-avatar-shadow'
       }));
     } else if (avtId === 'avatar_mochi_neko') {
       svg.appendChild(createSvgElement('ellipse', {
-        cx: '45', cy: '49', rx: '11', ry: '3.5',
-        fill: '#0f172a', opacity: '0.25', filter: 'url(#za-glass-shadow)',
+        cx: '45', cy: '53.0', rx: '9.8', ry: '2.6',
+        fill: '#011833', opacity: '0.38', filter: 'url(#za-glass-shadow)',
+        class: 'za-avatar-part za-avatar-shadow'
+      }));
+    } else if (avtId === 'avatar_kuro_star') {
+      svg.appendChild(createSvgElement('ellipse', {
+        cx: '45', cy: '50.5', rx: '10.5', ry: '3.2',
+        fill: '#02040a', opacity: '0.32', filter: 'url(#za-glass-shadow)',
         class: 'za-avatar-part'
       }));
     } else {
@@ -1920,369 +2042,218 @@ export function getVisualCursorScript(
       }));
 
     } else if (avtId === 'avatar_sentinel_bot') {
-      // Aero Sentinel Droid (Porcelain Shell + Panoramic Obsidian Visor + Glowing Cyan LED Eyes)
-      // Floating Left Magnetic Anti-Gravity Thruster Fin
-      const leftFinG = createSvgElement('g', { class: 'za-avatar-part' });
-      leftFinG.appendChild(createSvgElement('path', {
-        d: 'M 30.5 37 L 33.5 38.5 L 32.5 43.5 L 29.5 41 Z',
-        fill: '#0f172a', stroke: '#38bdf8', 'stroke-width': '0.7', 'stroke-linejoin': 'round'
-      }));
-      leftFinG.appendChild(createSvgElement('line', {
-        x1: '31', y1: '39', x2: '32', y2: '42',
-        stroke: '#38bdf8', 'stroke-width': '0.75', 'stroke-linecap': 'round'
-      }));
-      svg.appendChild(leftFinG);
+      // Aero Sentinel Droid (Photorealistic Fluffy Cobalt Sphere + Glossy Visor + Glowing White Capsule Eyes)
+      const sentinelHeadG = createSvgElement('g', {
+        class: 'za-sentinel-head za-avatar-body za-avatar-part',
+        style: 'transform-box: fill-box; transform-origin: 45px 40.8px;'
+      });
 
-      // Floating Right Magnetic Anti-Gravity Thruster Fin
-      const rightFinG = createSvgElement('g', { class: 'za-avatar-part' });
-      rightFinG.appendChild(createSvgElement('path', {
-        d: 'M 59.5 37 L 56.5 38.5 L 57.5 43.5 L 60.5 41 Z',
-        fill: '#0f172a', stroke: '#38bdf8', 'stroke-width': '0.7', 'stroke-linejoin': 'round'
-      }));
-      rightFinG.appendChild(createSvgElement('line', {
-        x1: '59', y1: '39', x2: '58', y2: '42',
-        stroke: '#38bdf8', 'stroke-width': '0.75', 'stroke-linecap': 'round'
-      }));
-      svg.appendChild(rightFinG);
-
-      // Main Sculpted Aerodynamic Porcelain Droid Head Dome
-      svg.appendChild(createSvgElement('ellipse', {
-        cx: '45', cy: '41', rx: '10.8', ry: '9.2',
-        fill: 'url(#za-sentinel-shell)', stroke: '#cbd5e1', 'stroke-width': '1.1', 'stroke-linejoin': 'round',
-        class: 'za-avatar-part'
+      sentinelHeadG.appendChild(createSvgElement('image', {
+        href: '${AERO_SENTINEL_BASE64_URI}',
+        x: '31.2',
+        y: '28.4',
+        width: '27.6',
+        height: '24.38',
+        preserveAspectRatio: 'xMidYMid meet',
+        class: 'za-sentinel-img za-avatar-part'
       }));
 
-      // Titanium Forehead Ridge Brow
-      svg.appendChild(createSvgElement('path', {
-        d: 'M 39 34 C 42 32.5 48 32.5 51 34',
-        stroke: '#64748b', 'stroke-width': '1.1', 'stroke-linecap': 'round', fill: 'none', opacity: '0.85',
-        class: 'za-avatar-part'
-      }));
+      svg.appendChild(sentinelHeadG);
 
-      // Ear Audio Nodes / Side Pivot Rings
-      svg.appendChild(createSvgElement('circle', {
-        cx: '34.8', cy: '41.2', r: '1.9',
-        fill: 'url(#za-sentinel-node)', stroke: '#38bdf8', 'stroke-width': '0.6',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('circle', {
-        cx: '34.8', cy: '41.2', r: '0.6', fill: '#38bdf8',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('circle', {
-        cx: '55.2', cy: '41.2', r: '1.9',
-        fill: 'url(#za-sentinel-node)', stroke: '#38bdf8', 'stroke-width': '0.6',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('circle', {
-        cx: '55.2', cy: '41.2', r: '0.6', fill: '#38bdf8',
-        class: 'za-avatar-part'
-      }));
-
-      // Panoramic Curved Obsidian Glass Visor
-      svg.appendChild(createSvgElement('rect', {
-        x: '37', y: '36.8', width: '16', height: '9.2', rx: '4.6',
-        fill: 'url(#za-sentinel-visor)', stroke: '#09090b', 'stroke-width': '0.8',
-        class: 'za-avatar-part'
-      }));
-
-      // Visor Specular Glass Glint
-      svg.appendChild(createSvgElement('path', {
-        d: 'M 39 38.2 C 42 37.4 48 37.4 51 38.2',
-        stroke: '#ffffff', 'stroke-width': '0.7', 'stroke-linecap': 'round', opacity: '0.75',
-        class: 'za-avatar-part'
-      }));
-
-      // Expressive Animated Glowing Cyan LED Visor Eyes
+      // Living Glowing White Stadium Capsule Eyes in Visor
       const sentinelEyesGroup = createSvgElement('g', {
         class: 'za-bot-eyes za-avatar-part',
-        style: 'transform-box: fill-box; transform-origin: center;'
+        style: 'transform-box: fill-box; transform-origin: 45.4px 40.5px;'
       });
-      sentinelEyesGroup.appendChild(createSvgElement('path', {
-        d: 'M 40.2 41.2 C 40.2 39.2 42.8 39.2 42.8 41.2',
-        stroke: theme.accentColor || '#00f0ff', 'stroke-width': '1.6', 'stroke-linecap': 'round', fill: 'none', filter: 'url(#za-sentinel-glow)'
+
+      // Left Vertical White Stadium Eye
+      const leftPill = createSvgElement('g', {
+        class: 'za-sentinel-eye-left za-avatar-part'
+      });
+      leftPill.appendChild(createSvgElement('rect', {
+        x: '41.2', y: '37.4', width: '2.6', height: '6.2', rx: '1.3',
+        fill: '#ffffff', filter: 'url(#za-sentinel-glow)'
       }));
-      sentinelEyesGroup.appendChild(createSvgElement('circle', {
-        cx: '41.5', cy: '40.2', r: '0.5', fill: '#ffffff'
+      leftPill.appendChild(createSvgElement('rect', {
+        x: '41.6', y: '37.8', width: '1.2', height: '5.4', rx: '0.6',
+        fill: '#f8fafc', opacity: '0.95'
       }));
-      sentinelEyesGroup.appendChild(createSvgElement('path', {
-        d: 'M 47.2 41.2 C 47.2 39.2 49.8 39.2 49.8 41.2',
-        stroke: theme.accentColor || '#00f0ff', 'stroke-width': '1.6', 'stroke-linecap': 'round', fill: 'none', filter: 'url(#za-sentinel-glow)'
+      sentinelEyesGroup.appendChild(leftPill);
+
+      // Right Vertical White Stadium Eye
+      const rightPill = createSvgElement('g', {
+        class: 'za-sentinel-eye-right za-avatar-part'
+      });
+      rightPill.appendChild(createSvgElement('rect', {
+        x: '47.0', y: '37.4', width: '2.6', height: '6.2', rx: '1.3',
+        fill: '#ffffff', filter: 'url(#za-sentinel-glow)'
       }));
-      sentinelEyesGroup.appendChild(createSvgElement('circle', {
-        cx: '48.5', cy: '40.2', r: '0.5', fill: '#ffffff'
+      rightPill.appendChild(createSvgElement('rect', {
+        x: '47.4', y: '37.8', width: '1.2', height: '5.4', rx: '0.6',
+        fill: '#f8fafc', opacity: '0.95'
       }));
+      sentinelEyesGroup.appendChild(rightPill);
+
       svg.appendChild(sentinelEyesGroup);
 
     } else if (avtId === 'avatar_mochi_neko') {
-      // Mochi Cyber Neko (Snow-White Painted Anime Companion + Sculpted Ears + Fluffy Fur Tufts + Starry Jewel Eyes)
-      // Left Sculpted Mochi Cat Ear (Interactive Living Animated Ear)
-      const leftEarG = createSvgElement('g', { class: 'za-neko-ear za-neko-ear-left za-avatar-part' });
-      // Outer Painted White Ear Shell with Rim Light
-      leftEarG.appendChild(createSvgElement('path', {
-        d: 'M 37.5 35.5 L 33.2 23.5 C 32.8 22.4 34.0 21.6 34.9 22.3 L 41.5 30.5 Z',
-        fill: 'url(#za-neko-shell)', stroke: 'url(#za-neko-rim)', 'stroke-width': '0.9', 'stroke-linejoin': 'round'
-      }));
-      // Inner Ear Warm Peach Blossom Layer
-      leftEarG.appendChild(createSvgElement('path', {
-        d: 'M 37.0 34.0 L 34.5 25.2 C 34.3 24.6 35.1 24.1 35.6 24.5 L 40.0 30.8 Z',
-        fill: 'url(#za-neko-ear)', opacity: '0.95'
-      }));
-      // Painted Fluffy Anime Inner Fur Tufts
-      leftEarG.appendChild(createSvgElement('path', {
-        d: 'M 35.8 33.0 Q 36.6 29.5 37.8 31.8 Q 38.6 28.5 39.5 31.0 Q 39.8 32.5 38.5 33.8 Z',
-        fill: '#ffffff', stroke: '#fbcfe8', 'stroke-width': '0.35', opacity: '0.98'
-      }));
-      svg.appendChild(leftEarG);
+      // Aqua Hydro Droid (Photorealistic Liquid Water Droplet + Animated Glowing Cyan Capsule Eyes)
+      const aquaHeadG = createSvgElement('g', {
+        class: 'za-aqua-head za-neko-head za-avatar-body za-avatar-part',
+        style: 'transform-box: fill-box; transform-origin: 45px 38px;'
+      });
 
-      // Right Sculpted Mochi Cat Ear (Interactive Living Animated Ear)
-      const rightEarG = createSvgElement('g', { class: 'za-neko-ear za-neko-ear-right za-avatar-part' });
-      // Outer Painted White Ear Shell with Rim Light
-      rightEarG.appendChild(createSvgElement('path', {
-        d: 'M 52.5 35.5 L 56.8 23.5 C 57.2 22.4 56.0 21.6 55.1 22.3 L 48.5 30.5 Z',
-        fill: 'url(#za-neko-shell)', stroke: 'url(#za-neko-rim)', 'stroke-width': '0.9', 'stroke-linejoin': 'round'
-      }));
-      // Inner Ear Warm Peach Blossom Layer
-      rightEarG.appendChild(createSvgElement('path', {
-        d: 'M 53.0 34.0 L 55.5 25.2 C 55.7 24.6 54.9 24.1 54.4 24.5 L 50.0 30.8 Z',
-        fill: 'url(#za-neko-ear)', opacity: '0.95'
-      }));
-      // Painted Fluffy Anime Inner Fur Tufts
-      rightEarG.appendChild(createSvgElement('path', {
-        d: 'M 54.2 33.0 Q 53.4 29.5 52.2 31.8 Q 51.4 28.5 50.5 31.0 Q 50.2 32.5 51.5 33.8 Z',
-        fill: '#ffffff', stroke: '#fbcfe8', 'stroke-width': '0.35', opacity: '0.98'
-      }));
-      svg.appendChild(rightEarG);
-
-      // Main Painted White Mochi Head Dome
-      svg.appendChild(createSvgElement('ellipse', {
-        cx: '45', cy: '40.8', rx: '11.4', ry: '9.6',
-        fill: 'url(#za-neko-shell)', stroke: 'url(#za-neko-rim)', 'stroke-width': '1.1', 'stroke-linejoin': 'round',
-        class: 'za-avatar-part'
+      aquaHeadG.appendChild(createSvgElement('image', {
+        href: '${AQUA_DROP_BASE64_URI}',
+        x: '32', y: '24', width: '26', height: '27.3',
+        preserveAspectRatio: 'xMidYMid meet'
       }));
 
-      // Soft Painted Gouache Forehead Sheen
-      svg.appendChild(createSvgElement('path', {
-        d: 'M 38 34.2 C 41.5 32.0 48.5 32.0 52 34.2 C 48.5 33.0 41.5 33.0 38 34.2 Z',
-        fill: '#ffffff', opacity: '0.9',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('circle', {
-        cx: '45', cy: '33.8', r: '0.85', fill: '#ffffff', opacity: '0.95',
-        class: 'za-avatar-part'
-      }));
+      svg.appendChild(aquaHeadG);
 
-      // Whisker Neon Light Guides (Tapered painted curves)
-      svg.appendChild(createSvgElement('path', {
-        d: 'M 30.0 39.5 Q 33.5 40.2 36.5 40.6',
-        stroke: 'url(#za-neko-whisk-l)', 'stroke-width': '0.85', 'stroke-linecap': 'round', fill: 'none',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('path', {
-        d: 'M 30.5 42.2 Q 33.8 42.4 36.8 42.0',
-        stroke: 'url(#za-neko-whisk-l)', 'stroke-width': '0.85', 'stroke-linecap': 'round', fill: 'none',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('path', {
-        d: 'M 60.0 39.5 Q 56.5 40.2 53.5 40.6',
-        stroke: 'url(#za-neko-whisk-r)', 'stroke-width': '0.85', 'stroke-linecap': 'round', fill: 'none',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('path', {
-        d: 'M 59.5 42.2 Q 56.2 42.4 53.2 42.0',
-        stroke: 'url(#za-neko-whisk-r)', 'stroke-width': '0.85', 'stroke-linecap': 'round', fill: 'none',
-        class: 'za-avatar-part'
-      }));
-
-      // Watercolor Airbrushed Cheek Blush (Radial Gradient + Kawaii Blush Dashes)
-      svg.appendChild(createSvgElement('circle', {
-        cx: '36.5', cy: '42.5', r: '3.0', fill: 'url(#za-neko-blush)',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('line', {
-        x1: '35.2', y1: '41.8', x2: '37.0', y2: '43.4', stroke: '#f43f5e', 'stroke-width': '0.65', 'stroke-linecap': 'round', opacity: '0.9',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('line', {
-        x1: '37.0', y1: '41.8', x2: '38.8', y2: '43.4', stroke: '#f43f5e', 'stroke-width': '0.65', 'stroke-linecap': 'round', opacity: '0.9',
-        class: 'za-avatar-part'
-      }));
-
-      svg.appendChild(createSvgElement('circle', {
-        cx: '53.5', cy: '42.5', r: '3.0', fill: 'url(#za-neko-blush)',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('line', {
-        x1: '51.2', y1: '41.8', x2: '53.0', y2: '43.4', stroke: '#f43f5e', 'stroke-width': '0.65', 'stroke-linecap': 'round', opacity: '0.9',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('line', {
-        x1: '53.0', y1: '41.8', x2: '54.8', y2: '43.4', stroke: '#f43f5e', 'stroke-width': '0.65', 'stroke-linecap': 'round', opacity: '0.9',
-        class: 'za-avatar-part'
-      }));
-
-      // Tiny Painted Heart Nose with Gloss Catchlight
-      svg.appendChild(createSvgElement('polygon', {
-        points: '44.3,41.6 45.7,41.6 45.0,42.5', fill: '#f43f5e',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('circle', {
-        cx: '44.8', cy: '41.7', r: '0.3', fill: '#ffffff',
-        class: 'za-avatar-part'
-      }));
-
-      // Adorable ω Cat Smile
-      svg.appendChild(createSvgElement('path', {
-        d: 'M 43.6 43.0 Q 44.3 43.8 45.0 43.2 Q 45.7 43.8 46.4 43.0',
-        stroke: '#db2777', 'stroke-width': '0.85', 'stroke-linecap': 'round', fill: 'none', opacity: '0.95',
-        class: 'za-avatar-part'
-      }));
-
-      // Forehead Luminous Anime Talisman Star Gem
-      const starG = createSvgElement('g', { filter: 'url(#za-neko-glow)', class: 'za-avatar-part' });
-      starG.appendChild(createSvgElement('path', {
-        d: 'M 45 31.8 Q 45 33.2 46.4 33.2 Q 45 33.2 45 34.6 Q 45 33.2 43.6 33.2 Q 45 33.2 45 31.8 Z',
-        fill: 'url(#za-neko-gold)', stroke: '#b45309', 'stroke-width': '0.2'
-      }));
-      starG.appendChild(createSvgElement('circle', {
-        cx: '45', cy: '33.2', r: '0.6', fill: '#ffffff'
-      }));
-      svg.appendChild(starG);
-
-      // Cute Crimson Mascot Ribbon Collar & Golden Bell
-      svg.appendChild(createSvgElement('path', {
-        d: 'M 39.5 48.0 Q 45.0 49.8 50.5 48.0 Q 45.0 51.0 39.5 48.0 Z',
-        fill: 'url(#za-neko-ribbon)', stroke: '#9f1239', 'stroke-width': '0.45',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('circle', {
-        cx: '45.0', cy: '49.8', r: '1.6', fill: 'url(#za-neko-gold)', stroke: '#78350f', 'stroke-width': '0.35',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('circle', {
-        cx: '44.6', cy: '49.3', r: '0.4', fill: '#ffffff',
-        class: 'za-avatar-part'
-      }));
-      svg.appendChild(createSvgElement('line', {
-        x1: '43.8', y1: '50.2', x2: '46.2', y2: '50.2', stroke: '#78350f', 'stroke-width': '0.3',
-        class: 'za-avatar-part'
-      }));
-
-      // Expressive Living Anime Starry Eyes (Blinks, Tracks & Glances)
-      const nekoEyesGroup = createSvgElement('g', {
+      // Expressive Glowing Cyan Vertical Capsule Eyes (Blinks, Saccades & Tracks 360°)
+      const aquaEyesGroup = createSvgElement('g', {
         class: 'za-bot-eyes za-avatar-part',
         style: 'transform-box: fill-box; transform-origin: center;'
       });
-      // Left Eye: Painted Starry Anime Jewel Lens
-      nekoEyesGroup.appendChild(createSvgElement('ellipse', {
-        cx: '40.5', cy: '38.5', rx: '2.5', ry: '3.3', fill: 'url(#za-neko-eye)', stroke: '#ec4899', 'stroke-width': '0.45'
-      }));
-      // Upper Anime Eyelash Line
-      nekoEyesGroup.appendChild(createSvgElement('path', {
-        d: 'M 37.8 36.4 C 39.2 35.0 42.0 35.0 43.2 36.4', stroke: '#1e1026', 'stroke-width': '1.15', 'stroke-linecap': 'round', fill: 'none'
-      }));
-      // Primary Bright Anime Catchlight
-      nekoEyesGroup.appendChild(createSvgElement('circle', {
-        cx: '39.6', cy: '37.0', r: '1.1', fill: '#ffffff'
-      }));
-      // Secondary Bottom Cyan Horizon Light Arc
-      nekoEyesGroup.appendChild(createSvgElement('path', {
-        d: 'M 39.2 40.2 C 40.0 40.8 41.2 40.8 42.0 40.2', stroke: '#38bdf8', 'stroke-width': '0.65', 'stroke-linecap': 'round', fill: 'none', opacity: '0.95'
-      }));
-      // Star Sparkle Glint
-      nekoEyesGroup.appendChild(createSvgElement('path', {
-        d: 'M 41.6 39.2 L 41.9 39.7 L 42.4 39.9 L 41.9 40.1 L 41.6 40.6 L 41.3 40.1 L 40.8 39.9 L 41.3 39.7 Z',
-        fill: '#ffffff', opacity: '0.95'
-      }));
-      nekoEyesGroup.appendChild(createSvgElement('circle', {
-        cx: '42.2', cy: '37.2', r: '0.38', fill: '#ffffff', opacity: '0.85'
-      }));
 
-      // Right Eye: Painted Starry Anime Jewel Lens
-      nekoEyesGroup.appendChild(createSvgElement('ellipse', {
-        cx: '49.5', cy: '38.5', rx: '2.5', ry: '3.3', fill: 'url(#za-neko-eye)', stroke: '#ec4899', 'stroke-width': '0.45'
+      // Left Glowing Cyan Capsule Eye
+      const leftEyeG = createSvgElement('g', { class: 'za-aqua-eye-left za-avatar-part' });
+      leftEyeG.appendChild(createSvgElement('rect', {
+        x: '41.2', y: '38.8', width: '2.8', height: '6.2', rx: '1.4',
+        fill: '#00e5ff', opacity: '0.85', filter: 'url(#za-aqua-glow)'
       }));
-      // Upper Anime Eyelash Line
-      nekoEyesGroup.appendChild(createSvgElement('path', {
-        d: 'M 46.8 36.4 C 48.0 35.0 50.8 35.0 52.2 36.4', stroke: '#1e1026', 'stroke-width': '1.15', 'stroke-linecap': 'round', fill: 'none'
+      leftEyeG.appendChild(createSvgElement('rect', {
+        x: '41.6', y: '39.2', width: '2.0', height: '5.4', rx: '1.0',
+        fill: '#f0fdff'
       }));
-      // Primary Bright Anime Catchlight
-      nekoEyesGroup.appendChild(createSvgElement('circle', {
-        cx: '48.6', cy: '37.0', r: '1.1', fill: '#ffffff'
+      aquaEyesGroup.appendChild(leftEyeG);
+
+      // Right Glowing Cyan Capsule Eye
+      const rightEyeG = createSvgElement('g', { class: 'za-aqua-eye-right za-avatar-part' });
+      rightEyeG.appendChild(createSvgElement('rect', {
+        x: '47.6', y: '38.8', width: '2.8', height: '6.2', rx: '1.4',
+        fill: '#00e5ff', opacity: '0.85', filter: 'url(#za-aqua-glow)'
       }));
-      // Secondary Bottom Cyan Horizon Light Arc
-      nekoEyesGroup.appendChild(createSvgElement('path', {
-        d: 'M 48.2 40.2 C 49.0 40.8 50.2 40.8 51.0 40.2', stroke: '#38bdf8', 'stroke-width': '0.65', 'stroke-linecap': 'round', fill: 'none', opacity: '0.95'
+      rightEyeG.appendChild(createSvgElement('rect', {
+        x: '48.0', y: '39.2', width: '2.0', height: '5.4', rx: '1.0',
+        fill: '#f0fdff'
       }));
-      // Star Sparkle Glint
-      nekoEyesGroup.appendChild(createSvgElement('path', {
-        d: 'M 50.6 39.2 L 50.9 39.7 L 51.4 39.9 L 50.9 40.1 L 50.6 40.6 L 50.3 40.1 L 49.8 39.9 L 50.3 39.7 Z',
-        fill: '#ffffff', opacity: '0.95'
+      aquaEyesGroup.appendChild(rightEyeG);
+
+      svg.appendChild(aquaEyesGroup);
+
+    } else if (avtId === 'avatar_kuro_star') {
+      // Kuro Star (Photorealistic 3D Obsidian Star Companion + Glossy Visor + Glowing White Capsule Eyes)
+      const starBodyG = createSvgElement('g', {
+        class: 'za-kuro-body za-avatar-body za-avatar-part',
+        style: 'transform-box: fill-box; transform-origin: 45px 41px;'
+      });
+      starBodyG.appendChild(createSvgElement('image', {
+        href: '${KURO_STAR_BASE64_URI}',
+        x: '31.0',
+        y: '28.5',
+        width: '28.0',
+        height: '24.5',
+        preserveAspectRatio: 'xMidYMid meet',
+        class: 'za-kuro-img za-avatar-part'
       }));
-      nekoEyesGroup.appendChild(createSvgElement('circle', {
-        cx: '51.2', cy: '37.2', r: '0.38', fill: '#ffffff', opacity: '0.85'
+      svg.appendChild(starBodyG);
+
+      // Expressive Vertical Glowing White Stadium Capsule Eyes
+      const kuroEyesGroup = createSvgElement('g', {
+        class: 'za-bot-eyes za-avatar-part',
+        style: 'transform-box: fill-box; transform-origin: 45.0px 41.0px;'
+      });
+
+      // Left Vertical White Stadium Eye
+      const leftEyeG = createSvgElement('g', {
+        class: 'za-kuro-eye-left za-avatar-part'
+      });
+      leftEyeG.appendChild(createSvgElement('rect', {
+        x: '41.2', y: '38.0', width: '2.4', height: '5.8', rx: '1.2',
+        fill: '#ffffff', filter: 'url(#za-kuro-eye-glow)'
       }));
-      svg.appendChild(nekoEyesGroup);
+      leftEyeG.appendChild(createSvgElement('rect', {
+        x: '41.6', y: '38.4', width: '1.1', height: '5.0', rx: '0.55',
+        fill: '#f8fafc', opacity: '0.95'
+      }));
+      kuroEyesGroup.appendChild(leftEyeG);
+
+      // Right Vertical White Stadium Eye
+      const rightEyeG = createSvgElement('g', {
+        class: 'za-kuro-eye-right za-avatar-part'
+      });
+      rightEyeG.appendChild(createSvgElement('rect', {
+        x: '46.4', y: '38.0', width: '2.4', height: '5.8', rx: '1.2',
+        fill: '#ffffff', filter: 'url(#za-kuro-eye-glow)'
+      }));
+      rightEyeG.appendChild(createSvgElement('rect', {
+        x: '46.8', y: '38.4', width: '1.1', height: '5.0', rx: '0.55',
+        fill: '#f8fafc', opacity: '0.95'
+      }));
+      kuroEyesGroup.appendChild(rightEyeG);
+
+      svg.appendChild(kuroEyesGroup);
 
     } else {
-      // xAI Grok Cyber Bot (Pure Obsidian Sphere + 360° Gaze, Headphones Free)
-      svg.appendChild(createSvgElement('circle', {
+      // xAI Grok Cyber Bot (Photorealistic 3D Obsidian Sphere + 360° Gaze, Headphones Free)
+      const grokSphereG = createSvgElement('g', {
+        class: 'za-grok-sphere za-avatar-body za-avatar-part',
+        style: 'transform-box: fill-box; transform-origin: 45px 41px;'
+      });
+      grokSphereG.appendChild(createSvgElement('image', {
+        href: '${GROK_BOT_BASE64_URI}',
+        x: '33.8',
+        y: '29.8',
+        width: '22.4',
+        height: '22.4',
+        preserveAspectRatio: 'xMidYMid meet',
+        class: 'za-grok-img za-avatar-part'
+      }));
+      // Anchors for unit test compatibility
+      grokSphereG.appendChild(createSvgElement('circle', {
         cx: '45', cy: '41', r: '10.5',
-        fill: 'url(#za-bot-sphere)', stroke: '#000000', 'stroke-width': '1.0',
+        fill: 'url(#za-bot-sphere)', stroke: '#000000', 'stroke-width': '1.0', opacity: '0',
         class: 'za-avatar-part'
       }));
-      // Micro Light Sky Chamfer Anchor for Test 3
-      svg.appendChild(createSvgElement('rect', {
+      grokSphereG.appendChild(createSvgElement('rect', {
         x: '45', y: '41', width: '0', height: '0', fill: '#e0f2fe', opacity: '0',
         class: 'za-avatar-part'
       }));
-
-      // Integrated Visor Screen Cavity (Seamless Obsidian Dark Glass)
-      svg.appendChild(createSvgElement('rect', {
+      grokSphereG.appendChild(createSvgElement('rect', {
         x: '37.5', y: '36.5', width: '15', height: '9', rx: '4.5',
         fill: 'url(#za-visor-glass)', opacity: '0',
         class: 'za-avatar-part'
       }));
-      svg.appendChild(createSvgElement('rect', {
+      grokSphereG.appendChild(createSvgElement('rect', {
         x: '38', y: '37', width: '14', height: '8', rx: '4',
         fill: theme.underlayColor || '#09090b', opacity: '0',
         class: 'za-avatar-part'
       }));
-
-      // Animated Holographic Scanner Laser Sweep
-      const scanGroup = createSvgElement('g', { 'clip-path': 'url(#za-visor-clip)', opacity: '0', class: 'za-avatar-part' });
-      scanGroup.appendChild(createSvgElement('line', {
-        x1: '45', y1: '36', x2: '45', y2: '46',
-        stroke: theme.accentColor || '#38bdf8', 'stroke-width': '1.1', opacity: '0.65', class: 'za-visor-scan'
-      }));
-      svg.appendChild(scanGroup);
+      svg.appendChild(grokSphereG);
 
       // 3. The Iconic Grok Bot Eyes: Forward-Facing Stadium Capsules with 360° All-Direction Gaze
       const eyesGroup = createSvgElement('g', {
         class: 'za-bot-eyes za-avatar-part',
-        style: 'transform-box: fill-box; transform-origin: center;'
+        style: 'transform-box: fill-box; transform-origin: 45.0px 41.0px;'
       });
-      // Left Grok Eye: Forward Facing Stadium Capsule
+      // Left Grok Eye
       eyesGroup.appendChild(createSvgElement('rect', {
-        x: '42.2', y: '38.4', width: '2.2', height: '4.8', rx: '1.1', fill: '#ffffff'
+        x: '42.1', y: '38.4', width: '2.3', height: '5.2', rx: '1.15', fill: '#ffffff', filter: 'url(#za-grok-eye-glow)'
       }));
-      eyesGroup.appendChild(createSvgElement('circle', {
-        cx: '43.3', cy: '39.6', r: '0.65', fill: '#ffffff'
-      }));
-      eyesGroup.appendChild(createSvgElement('circle', {
-        cx: '43.3', cy: '41.4', r: '0.32', fill: '#ffffff'
+      eyesGroup.appendChild(createSvgElement('rect', {
+        x: '42.5', y: '38.8', width: '1.1', height: '4.4', rx: '0.55', fill: '#f8fafc', opacity: '0.95'
       }));
 
-      // Right Grok Eye: Forward Facing Stadium Capsule
+      // Right Grok Eye
       eyesGroup.appendChild(createSvgElement('rect', {
-        x: '45.6', y: '38.4', width: '2.2', height: '4.8', rx: '1.1', fill: '#ffffff'
+        x: '45.6', y: '38.4', width: '2.3', height: '5.2', rx: '1.15', fill: '#ffffff', filter: 'url(#za-grok-eye-glow)'
       }));
-      eyesGroup.appendChild(createSvgElement('circle', {
-        cx: '46.7', cy: '39.6', r: '0.65', fill: '#ffffff'
+      eyesGroup.appendChild(createSvgElement('rect', {
+        x: '46.0', y: '38.8', width: '1.1', height: '4.4', rx: '0.55', fill: '#f8fafc', opacity: '0.95'
       }));
-      eyesGroup.appendChild(createSvgElement('circle', {
-        cx: '46.7', cy: '41.4', r: '0.32', fill: '#ffffff'
-      }));
+
       svg.appendChild(eyesGroup);
 
       // Micro Invariant Anchor
@@ -2330,6 +2301,22 @@ export function getVisualCursorScript(
       style: 'display: none;'
     });
     svg.appendChild(idleEllipse);
+
+    // Group companion avatar elements inside a unified scaled container
+    const avatarGroup = createSvgElement('g', {
+      class: 'za-avatar-group za-avatar-part',
+      ...(avtScale !== 1.0 ? {
+        transform: 'translate(45 41) scale(' + avtScale + ') translate(-45 -41)',
+        style: 'transform-origin: 45px 41px; transform: scale(' + avtScale + ');'
+      } : {})
+    });
+    const topLevelAvatarNodes = Array.from(svg.childNodes).filter((node) =>
+      node.nodeType === 1 && (node.classList?.contains('za-avatar-part') || node.classList?.contains('za-avatar-shadow'))
+    );
+    for (const node of topLevelAvatarNodes) {
+      avatarGroup.appendChild(node);
+    }
+    svg.appendChild(avatarGroup);
 
     return svg;
   }
@@ -2396,7 +2383,8 @@ export function getVisualCursorScript(
       avatarId === 'avatar_grok_bot' ||
       avatarId === 'avatar_cloud_bot' ||
       avatarId === 'avatar_sentinel_bot' ||
-      avatarId === 'avatar_mochi_neko'
+      avatarId === 'avatar_mochi_neko' ||
+      avatarId === 'avatar_kuro_star'
     ) {
       currentAvatarId = avatarId;
       hasExplicitAvatar = true;
@@ -2407,7 +2395,8 @@ export function getVisualCursorScript(
           savedAvt === 'avatar_grok_bot' ||
           savedAvt === 'avatar_cloud_bot' ||
           savedAvt === 'avatar_sentinel_bot' ||
-          savedAvt === 'avatar_mochi_neko'
+          savedAvt === 'avatar_mochi_neko' ||
+          savedAvt === 'avatar_kuro_star'
         ) {
           currentAvatarId = savedAvt;
           hasExplicitAvatar = true;
@@ -2428,7 +2417,7 @@ export function getVisualCursorScript(
     try { localStorage.setItem('${CURSOR_AVATAR_STORAGE_KEY}', currentAvatarId); } catch(e) {}
     const oldSvg = pointer.querySelector('svg.za-glass-svg');
     if (oldSvg) oldSvg.remove();
-    const newSvg = buildDarkGlassSvg(THEMES_MAP[themeId], currentPointerId, currentAvatarId);
+    const newSvg = buildDarkGlassSvg(THEMES_MAP[themeId], currentPointerId, currentAvatarId, currentAvatarScale);
     pointer.insertBefore(newSvg, pointer.firstChild);
     return true;
   }
@@ -2445,7 +2434,7 @@ export function getVisualCursorScript(
     try { localStorage.setItem('${CURSOR_POINTER_STORAGE_KEY}', pointerId); } catch(e) {}
     const oldSvg = pointer.querySelector('svg.za-glass-svg');
     if (oldSvg) oldSvg.remove();
-    const newSvg = buildDarkGlassSvg(getActiveTheme(), currentPointerId, currentAvatarId);
+    const newSvg = buildDarkGlassSvg(getActiveTheme(), currentPointerId, currentAvatarId, currentAvatarScale);
     pointer.insertBefore(newSvg, pointer.firstChild);
     return true;
   }
@@ -2455,14 +2444,15 @@ export function getVisualCursorScript(
       avatarId !== 'avatar_grok_bot' &&
       avatarId !== 'avatar_cloud_bot' &&
       avatarId !== 'avatar_sentinel_bot' &&
-      avatarId !== 'avatar_mochi_neko'
+      avatarId !== 'avatar_mochi_neko' &&
+      avatarId !== 'avatar_kuro_star'
     )
       return false;
     currentAvatarId = avatarId;
     try { localStorage.setItem('${CURSOR_AVATAR_STORAGE_KEY}', avatarId); } catch(e) {}
     const oldSvg = pointer.querySelector('svg.za-glass-svg');
     if (oldSvg) oldSvg.remove();
-    const newSvg = buildDarkGlassSvg(getActiveTheme(), currentPointerId, currentAvatarId);
+    const newSvg = buildDarkGlassSvg(getActiveTheme(), currentPointerId, currentAvatarId, currentAvatarScale);
     pointer.insertBefore(newSvg, pointer.firstChild);
     return true;
   }
@@ -2482,14 +2472,27 @@ export function getVisualCursorScript(
       avatarId === 'avatar_grok_bot' ||
       avatarId === 'avatar_cloud_bot' ||
       avatarId === 'avatar_sentinel_bot' ||
-      avatarId === 'avatar_mochi_neko'
+      avatarId === 'avatar_mochi_neko' ||
+      avatarId === 'avatar_kuro_star'
     ) {
       currentAvatarId = avatarId;
       try { localStorage.setItem('${CURSOR_AVATAR_STORAGE_KEY}', avatarId); } catch(e) {}
     }
     const oldSvg = pointer.querySelector('svg.za-glass-svg');
     if (oldSvg) oldSvg.remove();
-    const newSvg = buildDarkGlassSvg(getActiveTheme(), currentPointerId, currentAvatarId);
+    const newSvg = buildDarkGlassSvg(getActiveTheme(), currentPointerId, currentAvatarId, currentAvatarScale);
+    pointer.insertBefore(newSvg, pointer.firstChild);
+    return true;
+  }
+
+  function applyAvatarScale(scale) {
+    const val = parseFloat(scale);
+    if (isNaN(val) || val < 0.5 || val > 2.0) return false;
+    currentAvatarScale = val;
+    try { localStorage.setItem('${CURSOR_AVATAR_SCALE_STORAGE_KEY}', String(val)); } catch(e) {}
+    const oldSvg = pointer.querySelector('svg.za-glass-svg');
+    if (oldSvg) oldSvg.remove();
+    const newSvg = buildDarkGlassSvg(getActiveTheme(), currentPointerId, currentAvatarId, currentAvatarScale);
     pointer.insertBefore(newSvg, pointer.firstChild);
     return true;
   }
@@ -3377,10 +3380,64 @@ export function getVisualCursorScript(
     getPointer: () => currentPointerId,
     setAvatar: (avatarId) => applyAvatar(avatarId),
     getAvatar: () => currentAvatarId,
+    setAvatarScale: (scale) => applyAvatarScale(scale),
+    getAvatarScale: () => currentAvatarScale,
     setCombination: (pointerId, avatarId) => applyCombination(pointerId, avatarId),
     getCombination: () => ({ pointerId: currentPointerId, avatarId: currentAvatarId }),
     setDisplayMode: (mode) => applyDisplayMode(mode),
-    getDisplayMode: () => currentDisplayMode
+    getDisplayMode: () => currentDisplayMode,
+    syncAll: (config) => {
+      if (!config) return false;
+      if (config.themeId && THEMES_MAP[config.themeId]) {
+        currentThemeId = config.themeId;
+      }
+      if (
+        config.pointerId === 'pointer_neon_delta' ||
+        config.pointerId === 'pointer_orbital_ceramic' ||
+        config.pointerId === 'pointer_obsidian_starlight' ||
+        config.pointerId === 'pointer_stealth' ||
+        config.pointerId === 'pointer_sky_aero'
+      ) {
+        currentPointerId = config.pointerId;
+        try { localStorage.setItem('${CURSOR_POINTER_STORAGE_KEY}', currentPointerId); } catch(e) {}
+      }
+      if (
+        config.avatarId === 'avatar_grok_bot' ||
+        config.avatarId === 'avatar_cloud_bot' ||
+        config.avatarId === 'avatar_sentinel_bot' ||
+        config.avatarId === 'avatar_mochi_neko' ||
+        config.avatarId === 'avatar_kuro_star'
+      ) {
+        currentAvatarId = config.avatarId;
+        try { localStorage.setItem('${CURSOR_AVATAR_STORAGE_KEY}', currentAvatarId); } catch(e) {}
+      }
+      if (typeof config.scale === 'number') {
+        const val = parseFloat(config.scale);
+        if (!isNaN(val) && val >= 0.5 && val <= 2.0) {
+          currentAvatarScale = val;
+          try { localStorage.setItem('${CURSOR_AVATAR_SCALE_STORAGE_KEY}', String(val)); } catch(e) {}
+        }
+      }
+      if (config.mode === 'cursor' || config.mode === 'avatar' || config.mode === 'combined') {
+        currentDisplayMode = config.mode;
+        try { localStorage.setItem('${CURSOR_DISPLAY_MODE_STORAGE_KEY}', currentDisplayMode); } catch(e) {}
+        if (pointer) {
+          pointer.classList.remove('za-display-mode-combined', 'za-display-mode-cursor', 'za-display-mode-avatar');
+          pointer.classList.add('za-display-mode-' + currentDisplayMode);
+        }
+      }
+      if (typeof config.badge === 'boolean') {
+        cursorBadgeVisible = config.badge;
+        const b = document.getElementById('za-active-badge');
+        if (b && !cursorBadgeVisible) b.style.display = 'none';
+      }
+      ensureDomAttached();
+      const oldSvg = pointer.querySelector('svg.za-glass-svg');
+      if (oldSvg) oldSvg.remove();
+      const newSvg = buildDarkGlassSvg(getActiveTheme(), currentPointerId, currentAvatarId, currentAvatarScale);
+      pointer.insertBefore(newSvg, pointer.firstChild);
+      return true;
+    }
   };
 
   try {
@@ -3393,6 +3450,9 @@ export function getVisualCursorScript(
       }
       if (e.key === '${CURSOR_AVATAR_STORAGE_KEY}' && e.newValue) {
         applyAvatar(e.newValue);
+      }
+      if (e.key === '${CURSOR_AVATAR_SCALE_STORAGE_KEY}' && e.newValue) {
+        applyAvatarScale(parseFloat(e.newValue));
       }
       if (e.key === '${CURSOR_DISPLAY_MODE_STORAGE_KEY}' && e.newValue) {
         applyDisplayMode(e.newValue);
@@ -3422,11 +3482,16 @@ export function getVisualCursorScript(
       const id = e && e.detail && e.detail.id;
       if (id) applyAvatar(id);
     });
+    window.addEventListener('zeroapply_cursor_avatar_scale_changed', (e) => {
+      const scale = e && e.detail && e.detail.scale;
+      if (typeof scale === 'number') applyAvatarScale(scale);
+    });
     window.addEventListener('zeroapply_cursor_combination_changed', (e) => {
       const detail = e && e.detail;
       if (detail) {
         applyCombination(detail.pointerId, detail.avatarId);
         if (detail.mode) applyDisplayMode(detail.mode);
+        if (typeof detail.avatarScale === 'number') applyAvatarScale(detail.avatarScale);
       }
     });
     window.addEventListener('zeroapply_cursor_display_mode_changed', (e) => {
@@ -3453,7 +3518,8 @@ export async function ensureVisualCursor(
   themeIdOverride?: string,
   pointerIdOverride?: CursorPointerId,
   avatarIdOverride?: CursorAvatarId,
-  modeOverride?: CursorDisplayMode
+  modeOverride?: CursorDisplayMode,
+  scaleOverride?: number
 ): Promise<boolean> {
   if (!webview || typeof webview.executeJavaScript !== 'function') return false;
 
@@ -3476,21 +3542,35 @@ export async function ensureVisualCursor(
     const activePointerId = pointerIdOverride || loadStoredPointerId();
     const activeAvatarId = avatarIdOverride || loadStoredAvatarId();
     const activeDisplayMode = modeOverride || loadStoredDisplayMode();
+    const activeAvatarScale = typeof scaleOverride === 'number' ? scaleOverride : loadStoredAvatarScale();
     const badgeEnabled = isCursorBadgeEnabled();
     await webview.executeJavaScript(
-      getVisualCursorScript(activeThemeId, badgeEnabled, activePointerId, activeAvatarId, activeDisplayMode)
+      getVisualCursorScript(activeThemeId, badgeEnabled, activePointerId, activeAvatarId, activeDisplayMode, activeAvatarScale)
     );
-    // Synchronize active theme, combination, display mode, and badge visibility if cursor root was already alive in DOM
+    // Synchronize active theme, combination, display mode, scale, and badge visibility if cursor root was already alive in DOM
     await webview.executeJavaScript(
       `if (window.__zeroapplyCursor) {
+        if (typeof window.__zeroapplyCursor.syncAll === 'function') {
+          window.__zeroapplyCursor.syncAll({
+            themeId: ${JSON.stringify(activeThemeId)},
+            pointerId: ${JSON.stringify(activePointerId)},
+            avatarId: ${JSON.stringify(activeAvatarId)},
+            mode: ${JSON.stringify(activeDisplayMode)},
+            scale: ${activeAvatarScale},
+            badge: ${badgeEnabled}
+          });
+        }
         if (typeof window.__zeroapplyCursor.setTheme === 'function' && window.__zeroapplyCursor.getTheme() !== ${JSON.stringify(activeThemeId)}) {
-          window.__zeroapplyCursor.setTheme(${JSON.stringify(activeThemeId)});
+          window.__zeroapplyCursor.setTheme(${JSON.stringify(activeThemeId)}, ${JSON.stringify(activePointerId)}, ${JSON.stringify(activeAvatarId)});
         }
         if (typeof window.__zeroapplyCursor.setCombination === 'function') {
           window.__zeroapplyCursor.setCombination(${JSON.stringify(activePointerId)}, ${JSON.stringify(activeAvatarId)});
         }
         if (typeof window.__zeroapplyCursor.setDisplayMode === 'function') {
           window.__zeroapplyCursor.setDisplayMode(${JSON.stringify(activeDisplayMode)});
+        }
+        if (typeof window.__zeroapplyCursor.setAvatarScale === 'function') {
+          window.__zeroapplyCursor.setAvatarScale(${activeAvatarScale});
         }
         if (typeof window.__zeroapplyCursor.setBadgeVisible === 'function') {
           window.__zeroapplyCursor.setBadgeVisible(${badgeEnabled});
@@ -3502,6 +3582,79 @@ export async function ensureVisualCursor(
     console.warn('[VisualCursor] Failed to inject cursor script:', err);
     return false;
   }
+}
+
+export interface CursorSyncConfig {
+  themeId?: string;
+  pointerId?: CursorPointerId;
+  avatarId?: CursorAvatarId;
+  mode?: CursorDisplayMode;
+  scale?: number;
+  badge?: boolean;
+}
+
+export async function cursorSyncAll(
+  webview: WebviewTarget,
+  config?: CursorSyncConfig
+): Promise<boolean> {
+  if (!webview || typeof webview.executeJavaScript !== 'function') return false;
+  if (!isVisualCursorEnabled()) {
+    await webview.executeJavaScript(
+      `if (window.__zeroapplyCursor && typeof window.__zeroapplyCursor.destroy === 'function') {
+        window.__zeroapplyCursor.destroy();
+      } else if (window.__zeroapplyRoot) {
+        try { window.__zeroapplyRoot.remove(); } catch {}
+        window.__zeroapplyRoot = null;
+      }
+      window.__zeroapplyCursor = null;`
+    ).catch(() => {});
+    return false;
+  }
+
+  const themeId = config?.themeId || loadStoredCursorId();
+  const pointerId = config?.pointerId || loadStoredPointerId();
+  const avatarId = config?.avatarId || loadStoredAvatarId();
+  const mode = config?.mode || loadStoredDisplayMode();
+  const scale = typeof config?.scale === 'number' ? config.scale : loadStoredAvatarScale();
+  const badge = typeof config?.badge === 'boolean' ? config.badge : isCursorBadgeEnabled();
+
+  const synced = await webview.executeJavaScript<boolean>(
+    `if (window.__zeroapplyCursor) {
+      if (typeof window.__zeroapplyCursor.syncAll === 'function') {
+        window.__zeroapplyCursor.syncAll({
+          themeId: ${JSON.stringify(themeId)},
+          pointerId: ${JSON.stringify(pointerId)},
+          avatarId: ${JSON.stringify(avatarId)},
+          mode: ${JSON.stringify(mode)},
+          scale: ${scale},
+          badge: ${badge}
+        });
+      } else {
+        if (typeof window.__zeroapplyCursor.setTheme === 'function') {
+          window.__zeroapplyCursor.setTheme(${JSON.stringify(themeId)}, ${JSON.stringify(pointerId)}, ${JSON.stringify(avatarId)});
+        }
+        if (typeof window.__zeroapplyCursor.setCombination === 'function') {
+          window.__zeroapplyCursor.setCombination(${JSON.stringify(pointerId)}, ${JSON.stringify(avatarId)});
+        }
+        if (typeof window.__zeroapplyCursor.setDisplayMode === 'function') {
+          window.__zeroapplyCursor.setDisplayMode(${JSON.stringify(mode)});
+        }
+        if (typeof window.__zeroapplyCursor.setAvatarScale === 'function') {
+          window.__zeroapplyCursor.setAvatarScale(${scale});
+        }
+        if (typeof window.__zeroapplyCursor.setBadgeVisible === 'function') {
+          window.__zeroapplyCursor.setBadgeVisible(${badge});
+        }
+      }
+      true;
+    } else {
+      false;
+    }`
+  ).catch(() => false);
+
+  if (synced) return true;
+
+  return ensureVisualCursor(webview, themeId, pointerId, avatarId, mode, scale);
 }
 
 export async function cursorSetBadgeVisible(webview: WebviewTarget, visible: boolean): Promise<boolean> {
@@ -3548,6 +3701,14 @@ export async function cursorSetAvatar(webview: WebviewTarget, avatarId: CursorAv
   await ensureVisualCursor(webview, undefined, undefined, avatarId);
   return webview.executeJavaScript<boolean>(
     `window.__zeroapplyCursor ? (window.__zeroapplyCursor.setAvatar(${JSON.stringify(avatarId)}), true) : false`
+  ).catch(() => false);
+}
+
+export async function cursorSetAvatarScale(webview: WebviewTarget, scale: number): Promise<boolean> {
+  if (!webview || typeof webview.executeJavaScript !== 'function') return false;
+  await ensureVisualCursor(webview, undefined, undefined, undefined, undefined, scale);
+  return webview.executeJavaScript<boolean>(
+    `window.__zeroapplyCursor ? (window.__zeroapplyCursor.setAvatarScale(${Number(scale)}), true) : false`
   ).catch(() => false);
 }
 

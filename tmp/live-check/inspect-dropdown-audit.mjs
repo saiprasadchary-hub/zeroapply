@@ -1,0 +1,9 @@
+import { stepNavigator } from '../../src/agent/workflow/stepNavigator.ts';
+import { auditFormFields } from '../../src/agent/formFiller/formAuditor.ts';
+import { chromium } from 'playwright-core';
+import fs from 'node:fs/promises';
+const targets=await(await fetch('http://127.0.0.1:61831/json/list')).json();const target=targets.find(t=>t.type==='webview'&&t.url.includes('linkedin.com'));const ws=new WebSocket(target.webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r,{once:true}));let id=0;const callbacks=new Map();ws.addEventListener('message',e=>{const d=JSON.parse(e.data);if(callbacks.has(d.id)){callbacks.get(d.id)(d);callbacks.delete(d.id);}});const evaluate=async expression=>{const n=++id;const answer=new Promise(r=>callbacks.set(n,r));ws.send(JSON.stringify({id:n,method:'Runtime.evaluate',params:{expression,awaitPromise:true,returnByValue:true}}));const d=await answer;if(d.result?.exceptionDetails)throw Error(d.result.exceptionDetails.text);return d.result?.result?.value;};
+const view={executeJavaScript:evaluate};
+console.log('audit',JSON.stringify(await auditFormFields(view)));
+console.log('selects',JSON.stringify(await evaluate(`(()=>{const roots=[document];for(let i=0;i<roots.length;i++)for(const e of roots[i].querySelectorAll('*'))if(e.shadowRoot)roots.push(e.shadowRoot);return roots.flatMap(r=>Array.from(r.querySelectorAll('select,[role="combobox"],[role="listbox"]'))).filter(e=>e.getClientRects().length).map(e=>({tag:e.tagName,id:e.id,role:e.getAttribute('role'),value:e.value,text:e.textContent.slice(0,120),selected:e.selectedOptions?Array.from(e.selectedOptions).map(o=>({value:o.value,text:o.textContent,disabled:o.disabled})):undefined,labels:e.labels?Array.from(e.labels).map(l=>l.textContent):undefined,html:e.outerHTML.slice(0,1800)}))})()`)));
+ws.close();

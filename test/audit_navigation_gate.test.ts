@@ -3,7 +3,8 @@ import { chromium } from 'playwright-core';
 import { AutoApplyOrchestrator } from '../src/agent/workflow/orchestrator';
 import type { WebviewTarget } from '../src/agent/domScanner/injectedScanner';
 import type { PersonaData } from '../src/types';
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const server = await chromium.launchServer({ channel: 'chrome', headless: true });
+const browser = await chromium.connect(server.wsEndpoint());
 try {
   const page = await browser.newPage();
   await page.route('https://www.linkedin.com/**', route => route.fulfill({ contentType: 'text/html', body: '<dialog open><h2>Apply to Fixture Company</h2><div role="alert" class="artdeco-inline-feedback--error">Fixture validation failed</div><button id="next">Next</button></dialog>' }));
@@ -24,5 +25,14 @@ try {
   const done = await new AutoApplyOrchestrator().runApplication(target, { fullName: 'Fixture', location: 'Hyderabad, India', employmentStatus: 'fresher', experienceYears: 0, minSalary: 0, targetRoles: ['Engineer'], techStack: [] } as unknown as PersonaData, { maxSteps: 1, stepDelayMs: 0, allowSubmit: true });
   assert.notEqual(done.outcome, 'submitted', 'A Done button without a receipt cannot count as a submitted application');
   assert.equal(await page.evaluate('window.doneClicks'), 0);
+  await page.setContent('<dialog open><h2>Additional Questions</h2><label for="rating">How would you rate your Data Structures &amp; Algorithms skills on a scale of 1–10?*</label><input required id="rating"><label for="python">How many years of work experience do you have with Python (Programming Language)?</label><input required id="python"><label for="celery">How many years of exp do you have with Celery?</label><input required id="celery"><label for="join">in how many days can you join us ?*</label><input required id="join"><button id="next">Next</button></dialog>');
+  await page.evaluate('window.nextClicks = 0; document.querySelector("#next").addEventListener("click", () => window.nextClicks++);');
+  const pendingRating = await new AutoApplyOrchestrator().runApplication(target, { fullName: 'Fixture', location: 'Hyderabad, India', employmentStatus: 'fresher', experienceYears: 0, minSalary: 0, targetRoles: ['Engineer'], techStack: [] } as unknown as PersonaData, { maxSteps: 1, stepDelayMs: 0, allowSubmit: false });
+  assert.equal(await page.locator('#python').inputValue(), '0', 'A missing rating must not prevent other grounded answers');
+  assert.equal(await page.locator('#celery').inputValue(), '0');
+  assert.equal(await page.locator('#join').inputValue(), '0');
+  assert.equal(await page.locator('#rating').inputValue(), '', 'Personal ratings remain unanswered');
+  assert.equal(await page.evaluate('window.nextClicks'), 0);
+  assert.notEqual(pendingRating.outcome, 'submitted');
   console.log('Audit and submission gates passed: unresolved validation and review-only runs dispatch no forward click.');
-} finally { await browser.close(); }
+} finally { try { await browser.close(); } finally { await server.kill(); } }

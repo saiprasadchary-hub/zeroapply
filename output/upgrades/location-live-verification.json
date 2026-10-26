@@ -1,0 +1,17 @@
+{
+  "audit": {
+    "ready": true,
+    "missing": [],
+    "errors": []
+  },
+  "button": {
+    "exists": true,
+    "action": "next",
+    "selector": "[data-za-action-target=\"true\"]",
+    "text": "next",
+    "disabled": false
+  },
+  "state": [
+    "Apply to NxtSft Realtytech Innovations Pvt Ltd\n\n2/5 pages\n\nResume*\n\nSelect or upload a resume in DOC, DOCX, or PDF format that is less than 2MB\n\nPDF\n\nKSPChary_Resume_1Page copy.pdf\n\n10/25/2026\n\nPDF\n\nKSPChary_Resume_1Page copy.pdf\n\n9/26/2026\n\nPDF\n\nKSPChary_Resume_1Page copy.pdf\n\n9/24/2026\n\nPDF\n\nKSPChary_Resume_1Page copy.pdf\n\n9/24/2026\n\nPDF\n\nKSPChary_Resume_1Page copy.pdf\n\n9/24/2026\n\nPDF\n\nKSPChary_Resume_1Page copy.pdf\n\n9/24/2026\n\nPDF\n\nKSPChary_Resume_1Page copy.pdf\n\n9/24/2026\n\nPDF\n\nKSPChary_Resume_1Page copy.pdf\n\n9/24/2026\n\nPDF\n\nKSPChary_Resume_1Page.pdf\n\n9/24/2026\n\nPDF\n\nKSPChary_Resume_1Page.pdf\n\n9/22/2026\n\nPDF\n\nKSPChary_Resume_1Page (1).pdf\n\n9/22/2026\n\nPDF\n\nKSPChary_Resume_Google_AppEngineer.pdf\n\n8/15/2026\n\nPDF\n\nKSPChary_Resume_1Page (1).pdf\n\n8/14/2026\n\nPDF\n\nKSPChary_Resume_1Page.pdf\n\n8/1/2026\n\nPDF\n\nKSPcharyfinal.pdf\n\n4/30/2026\n\nPDF\n\nKSPcharyfinal.pdf\n\n4/30/2026\n\nPDF\n\nResume for SWE.pd"
+  ]
+}

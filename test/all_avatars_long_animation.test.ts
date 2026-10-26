@@ -17,6 +17,7 @@ assert.ok(avatarKeys.includes('avatar_grok_bot'), 'Must have avatar_grok_bot');
 assert.ok(avatarKeys.includes('avatar_cloud_bot'), 'Must have avatar_cloud_bot');
 assert.ok(avatarKeys.includes('avatar_sentinel_bot'), 'Must have avatar_sentinel_bot');
 assert.ok(avatarKeys.includes('avatar_mochi_neko'), 'Must have avatar_mochi_neko');
+assert.ok(avatarKeys.includes('avatar_kuro_star'), 'Must have avatar_kuro_star');
 
 // 2. Test getCustomCombinedCursorMarkup for all 4 avatars
 for (const avatarKey of avatarKeys) {
@@ -32,9 +33,10 @@ for (const avatarKey of avatarKeys) {
   // Avatar-specific structural classes and keyframe tests
   if (avatarKey === 'avatar_grok_bot') {
     assert.ok(svg.includes('za-grok-sphere'), 'Grok bot must have za-grok-sphere group');
+    assert.ok(svg.includes('data:image/png;base64,'), 'Grok bot must have embedded 3D obsidian sphere image');
     assert.ok(svg.includes('@keyframes za-grok-float'), 'Grok bot must have za-grok-float keyframes');
     assert.ok(svg.includes('animation: za-grok-float 18.0s'), 'Grok bot body must animate for 18.0s');
-    console.log('✅ Grok Bot 18.0s anti-gravity elevation & multi-phase gaze verified');
+    console.log('✅ Grok Bot 18.0s anti-gravity elevation & photorealistic 3D sphere verified');
   }
 
   if (avatarKey === 'avatar_cloud_bot') {
@@ -48,27 +50,34 @@ for (const avatarKey of avatarKeys) {
 
   if (avatarKey === 'avatar_sentinel_bot') {
     assert.ok(svg.includes('za-sentinel-head'), 'Sentinel bot must have za-sentinel-head group');
-    assert.ok(svg.includes('za-sentinel-fin-left'), 'Sentinel bot must have left fin group');
-    assert.ok(svg.includes('za-sentinel-fin-right'), 'Sentinel bot must have right fin group');
+    assert.ok(svg.includes('data:image/png;base64,'), 'Sentinel bot must have embedded mascot image');
+    assert.ok(svg.includes('za-sentinel-eye-left'), 'Sentinel bot must have left eye capsule');
+    assert.ok(svg.includes('za-sentinel-eye-right'), 'Sentinel bot must have right eye capsule');
+    assert.ok(svg.includes('za-sentinel-glow'), 'Sentinel bot must have white glow filter');
     assert.ok(svg.includes('@keyframes za-sentinel-hover'), 'Sentinel bot must have za-sentinel-hover keyframes');
-    assert.ok(svg.includes('@keyframes za-sentinel-fin-left'), 'Sentinel bot must have fin left keyframes');
-    assert.ok(svg.includes('@keyframes za-sentinel-fin-right'), 'Sentinel bot must have fin right keyframes');
-    assert.ok(svg.includes('@keyframes za-sentinel-visor-sweep'), 'Sentinel bot must have visor sweep keyframes');
     assert.ok(svg.includes('animation: za-sentinel-hover 18.0s'), 'Sentinel bot body must animate for 18.0s');
-    console.log('✅ Sentinel Bot 18.0s magnetic hover, wing fins & visor sweep verified');
+    console.log('✅ Sentinel Bot 18.0s magnetic hover & photorealistic fluffy mascot with glowing white eyes verified');
   }
 
   if (avatarKey === 'avatar_mochi_neko') {
-    assert.ok(svg.includes('za-neko-head'), 'Mochi Neko must have za-neko-head group');
-    assert.ok(svg.includes('za-neko-ear-left'), 'Mochi Neko must have left ear group');
-    assert.ok(svg.includes('za-neko-ear-right'), 'Mochi Neko must have right ear group');
-    assert.ok(svg.includes('za-neko-bell'), 'Mochi Neko must have bell group');
-    assert.ok(svg.includes('@keyframes za-neko-head-float'), 'Mochi Neko must have head float keyframes');
-    assert.ok(svg.includes('@keyframes za-neko-ear-left-idle'), 'Mochi Neko must have ear left keyframes');
-    assert.ok(svg.includes('@keyframes za-neko-ear-right-idle'), 'Mochi Neko must have ear right keyframes');
-    assert.ok(svg.includes('@keyframes za-neko-bell-jingle'), 'Mochi Neko must have bell jingle keyframes');
-    assert.ok(svg.includes('animation: za-neko-head-float 18.0s'), 'Mochi Neko head must animate for 18.0s');
-    console.log('✅ Mochi Neko 18.0s head float, ear perks & bell jingle verified');
+    assert.ok(svg.includes('za-aqua-head'), 'Aqua Drop must have za-aqua-head group');
+    assert.ok(svg.includes('za-aqua-glow'), 'Aqua Drop must have za-aqua-glow filter');
+    assert.ok(svg.includes('za-aqua-eye-left'), 'Aqua Drop must have left eye');
+    assert.ok(svg.includes('za-aqua-eye-right'), 'Aqua Drop must have right eye');
+    assert.ok(svg.includes('@keyframes za-neko-head-float'), 'Aqua Drop must have head float keyframes');
+    assert.ok(svg.includes('animation: za-neko-head-float 18.0s'), 'Aqua Drop head must animate for 18.0s');
+    console.log('✅ Aqua Hydro Droid 18.0s liquid float & glowing cyan capsule eyes verified');
+  }
+
+  if (avatarKey === 'avatar_kuro_star') {
+    assert.ok(svg.includes('za-kuro-body'), 'Kuro Star must have za-kuro-body group');
+    assert.ok(svg.includes('data:image/png;base64,'), 'Kuro Star must have embedded mascot image');
+    assert.ok(svg.includes('za-kuro-eye-left'), 'Kuro Star must have left eye capsule');
+    assert.ok(svg.includes('za-kuro-eye-right'), 'Kuro Star must have right eye capsule');
+    assert.ok(svg.includes('za-kuro-eye-glow'), 'Kuro Star must have white eye glow filter');
+    assert.ok(svg.includes('@keyframes za-kuro-float'), 'Kuro Star must have za-kuro-float keyframes');
+    assert.ok(svg.includes('animation: za-kuro-float 18.0s'), 'Kuro Star body must animate for 18.0s');
+    console.log('✅ Kuro Star 18.0s celestial float & photorealistic 3D star with glowing white eyes verified');
   }
 }
 
@@ -98,6 +107,7 @@ assert.ok(injectedScript.includes('za-grok-float 18.0s'), 'Injected script must 
 assert.ok(injectedScript.includes('za-cloud-drift 18.0s'), 'Injected script must have 18.0s cloud drift cycle');
 assert.ok(injectedScript.includes('za-sentinel-hover 18.0s'), 'Injected script must have 18.0s sentinel hover cycle');
 assert.ok(injectedScript.includes('za-neko-head-float 18.0s'), 'Injected script must have 18.0s neko head float cycle');
+assert.ok(injectedScript.includes('za-kuro-float 18.0s'), 'Injected script must have 18.0s kuro star float cycle');
 console.log('✅ Agent cursor injection script verified');
 
-console.log('\n🌟 ALL 4 AVATARS 18.0s LONG CONTINUOUS DEFAULT ANIMATIONS VERIFIED 100%! 🌟\n');
+console.log('\n🌟 ALL 5 AVATARS 18.0s LONG CONTINUOUS DEFAULT ANIMATIONS VERIFIED 100%! 🌟\n');

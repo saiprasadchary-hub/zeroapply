@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Kuro Star Celestial — Live Companion Avatar Showcase</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body {
+      background: #090a10;
+      color: #f1f5f9;
+      padding: 40px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 960px;
+      width: 100%;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    h1 {
+      font-size: 34px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #64748b 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+    p.desc {
+      color: #94a3b8;
+      font-size: 15px;
+      max-width: 620px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+    .loc-box {
+      margin-top: 20px;
+      background: #111420;
+      border: 1px solid #1e2638;
+      border-radius: 12px;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: #e2e8f0;
+      font-size: 14px;
+    }
+    .loc-box strong {
+      color: #38bdf8;
+    }
+    .showcase {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-top: 30px;
+      margin-bottom: 36px;
+    }
+    .card {
+      background: #10121a;
+      border: 1px solid #1e2230;
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+    .card:hover {
+      border-color: #3b82f6;
+      box-shadow: 0 8px 30px rgba(59, 130, 246, 0.15);
+      transform: translateY(-2px);
+    }
+    .card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      color: #ffffff;
+    }
+    .card p {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    .preview-stage {
+      width: 140px;
+      height: 140px;
+      border-radius: 20px;
+      background: radial-gradient(circle at center, #181b26 0%, #0d0f17 100%);
+      border: 1px solid #232838;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .preview-stage svg {
+      transform: scale(2.0);
+    }
+
+    /* Interactive Live Sandbox */
+    .sandbox-card {
+      background: #10121a;
+      border: 1px solid #1e2230;
+      border-radius: 20px;
+      padding: 24px;
+      margin-top: 10px;
+    }
+    .sandbox-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .sandbox-area {
+      height: 260px;
+      background: radial-gradient(circle at center, #151824 0%, #0b0d14 100%);
+      border: 1px dashed #2a3147;
+      border-radius: 14px;
+      position: relative;
+      cursor: none;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sandbox-instruction {
+      color: #64748b;
+      font-size: 13px;
+      pointer-events: none;
+      user-select: none;
+    }
+    #follower-cursor {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      pointer-events: none;
+      transform: translate(-16px, -8px);
+      z-index: 100;
+      transition: opacity 0.15s ease;
+    }
+    .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid #2d3748;
+      background: #1a202c;
+      color: #cbd5e1;
+      transition: all 0.15s ease;
+    }
+    .btn:hover {
+      background: #2d3748;
+      color: #ffffff;
+    }
+    .btn.active {
+      background: #2563eb;
+      border-color: #3b82f6;
+      color: #ffffff;
+    }
+    .btn-preset {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #94a3b8;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-preset:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+    }
+    .btn-preset.active {
+      background: #38bdf8;
+      border-color: #38bdf8;
+      color: #090a10;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <span class="badge">⭐ NEW COMPANION AVATAR LIVE</span>
+    <h1>Kuro Star Celestial</h1>
+    <p class="desc">
+      Pitch-black 5-pointed celestial star companion with living saccadic glowing white eyes, subtle cosmic glass sheen, and automated form celebration spins.
+    </p>
+
+    <div class="loc-box">
+      <span>📍 <strong>Where in ZeroApply:</strong></span>
+      <span>Go to <strong>Profile Page</strong> &rarr; scroll to <strong>Cursor Studio</strong> &rarr; click <strong>Choose Companion Bot</strong> dropdown &rarr; select <strong>Kuro Star Celestial</strong></span>
+    </div>
+  </div>
+
+  <!-- Showcase Cards with Live SVG -->
+  <div class="showcase">
+    <!-- Card 1: Kuro Star Solo -->
+    <div class="card">
+      <div class="preview-stage" id="stage-solo">
+        <!-- Live SVG -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 64 64" fill="none" class="za-glass-svg">
+          <defs>
+            <radialGradient id="kprev-body" cx="38%" cy="32%" r="68%">
+              <stop offset="0%" stop-color="#242630" />
+              <stop offset="40%" stop-color="#12131b" />
+              <stop offset="75%" stop-color="#08080e" />
+              <stop offset="100%" stop-color="#020204" />
+            </radialGradient>
+            <linearGradient id="kprev-rim" x1="34" y1="28" x2="56" y2="52" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55" />
+              <stop offset="35%" stop-color="#94a3b8" stop-opacity="0.3" />
+              <stop offset="70%" stop-color="#475569" stop-opacity="0.2" />
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="0.45" />
+            </linearGradient>
+            <filter id="kprev-glow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="kprev-shadow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="2.0" result="blur" />
+            </filter>
+            <style>
+              @keyframes kprev-float {
+                0%, 100% { transform: translateY(0px) rotate(0deg); }
+                18% { transform: translateY(-1.2px) rotate(0.8deg); }
+                35% { transform: translateY(-0.4px) rotate(-0.5deg); }
+                52% { transform: translateY(1.0px) rotate(0.6deg); }
+                70% { transform: translateY(-1.4px) rotate(-0.8deg); }
+                86% { transform: translateY(-0.6px) rotate(0.3deg); }
+              }
+              @keyframes kprev-blink {
+                0%, 7% { transform: translate(0px, 0px) scale(1, 1); }
+                7.8% { transform: translate(0px, 0px) scale(1.05, 0.08); }
+                8.6% { transform: translate(0px, 0px) scale(0.98, 1.06); }
+                9.4% { transform: translate(0px, 0px) scale(1.04, 0.12); }
+                10.2%, 24% { transform: translate(0px, 0px) scale(1, 1); }
+                25%, 32% { transform: translate(2.2px, -0.6px) scale(1, 1); }
+                33%, 45% { transform: translate(-2.2px, -0.6px) scale(1, 1); }
+                46%, 60% { transform: translate(0px, 1.8px) scale(1, 1); }
+                61%, 100% { transform: translate(0px, 0px) scale(1, 1); }
+              }
+              .kprev-star-body {
+                transform-origin: 32px 32px;
+                animation: kprev-float 8.0s infinite ease-in-out;
+              }
+              .kprev-star-eyes {
+                transform-origin: 32px 32px;
+                animation: kprev-blink 8.0s infinite ease-in-out;
+              }
+            </style>
+          </defs>
+          <g transform="translate(-13, -9)">
+            <ellipse cx="45" cy="50.5" rx="10.5" ry="3.2" fill="#02040a" opacity="0.32" filter="url(#kprev-shadow)" />
+            <g class="kprev-star-body">
+              <path d="M 44.08 30.77 Q 45.00 29.00 45.92 30.77 L 47.72 34.21 Q 48.64 35.98 50.61 36.31 L 54.44 36.96 Q 56.41 37.29 55.01 38.72 L 52.30 41.49 Q 50.90 42.92 51.19 44.90 L 51.76 48.73 Q 52.05 50.71 50.26 49.82 L 46.79 48.09 Q 45.00 47.20 43.21 48.09 L 39.74 49.82 Q 37.95 50.71 38.24 48.73 L 38.81 44.90 Q 39.10 42.92 37.70 41.49 L 34.99 38.72 Q 33.59 37.29 35.56 36.96 L 39.39 36.31 Q 41.36 35.98 42.28 34.21 Z"
+                    fill="url(#kprev-body)" stroke="url(#kprev-rim)" stroke-width="0.9" stroke-linejoin="round" />
+              <path d="M 45.00 30.2 Q 45.8 33.5 48.2 35.6" stroke="#ffffff" stroke-width="0.65" stroke-linecap="round" opacity="0.4" fill="none" />
+              <ellipse cx="38.8" cy="42.8" rx="1.6" ry="0.75" fill="#ffffff" opacity="0.25" />
+              <ellipse cx="51.2" cy="42.8" rx="1.6" ry="0.75" fill="#ffffff" opacity="0.25" />
+            </g>
+            <g class="kprev-star-eyes">
+              <ellipse cx="41.5" cy="40.0" rx="2.3" ry="3.3" fill="#ffffff" filter="url(#kprev-glow)" />
+              <circle cx="42.2" cy="40.2" r="1.15" fill="#090a10" />
+              <circle cx="41.8" cy="39.1" r="0.5" fill="#ffffff" />
+              <ellipse cx="48.5" cy="40.0" rx="2.3" ry="3.3" fill="#ffffff" filter="url(#kprev-glow)" />
+              <circle cx="47.8" cy="40.2" r="1.15" fill="#090a10" />
+              <circle cx="47.4" cy="39.1" r="0.5" fill="#ffffff" />
+            </g>
+          </g>
+        </svg>
+      </div>
+      <h3>Kuro Star Avatar</h3>
+      <p>5-pointed obsidian star with living white eyes and organic breathing animation.</p>
+    </div>
+
+    <!-- Card 2: Stealth Delta Pointer + Kuro Star -->
+    <div class="card">
+      <div class="preview-stage" id="stage-stealth">
+        <svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 64 64" fill="none" class="za-glass-svg">
+          <defs>
+            <linearGradient id="kprev-ptr" x1="16" y1="8" x2="26.5" y2="25.5" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#ffffff" />
+              <stop offset="55%" stop-color="#f8fafc" />
+              <stop offset="100%" stop-color="#e2e8f0" />
+            </linearGradient>
+            <linearGradient id="kprev-chamfer" x1="16" y1="8" x2="18" y2="23.5" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#ffffff" />
+              <stop offset="35%" stop-color="#e0f2fe" />
+              <stop offset="75%" stop-color="#bae6fd" />
+              <stop offset="100%" stop-color="#94a3b8" />
+            </linearGradient>
+          </defs>
+          <!-- Stealth Pointer -->
+          <path d="M 16 8 L 31.5 20 C 28.5 21, 26 22.5, 24.5 22.5 C 23 22.5, 21.5 25, 20.5 28.5 Z"
+                fill="url(#kprev-ptr)" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round" />
+          <path d="M 16 8 L 24.5 22.5 L 20.5 28.5 Z" fill="url(#kprev-chamfer)" opacity="0.85" />
+          <!-- Kuro Star -->
+          <ellipse cx="45" cy="50.5" rx="10.5" ry="3.2" fill="#02040a" opacity="0.32" filter="url(#kprev-shadow)" />
+          <g class="kprev-star-body">
+            <path d="M 44.08 30.77 Q 45.00 29.00 45.92 30.77 L 47.72 34.21 Q 48.64 35.98 50.61 36.31 L 54.44 36.96 Q 56.41 37.29 55.01 38.72 L 52.30 41.49 Q 50.90 42.92 51.19 44.90 L 51.76 48.73 Q 52.05 50.71 50.26 49.82 L 46.79 48.09 Q 45.00 47.20 43.21 48.09 L 39.74 49.82 Q 37.95 50.71 38.24 48.73 L 38.81 44.90 Q 39.10 42.92 37.70 41.49 L 34.99 38.72 Q 33.59 37.29 35.56 36.96 L 39.39 36.31 Q 41.36 35.98 42.28 34.21 Z"
+                  fill="url(#kprev-body)" stroke="url(#kprev-rim)" stroke-width="0.9" stroke-linejoin="round" />
+            <path d="M 45.00 30.2 Q 45.8 33.5 48.2 35.6" stroke="#ffffff" stroke-width="0.65" stroke-linecap="round" opacity="0.4" fill="none" />
+            <ellipse cx="38.8" cy="42.8" rx="1.6" ry="0.75" fill="#ffffff" opacity="0.25" />
+            <ellipse cx="51.2" cy="42.8" rx="1.6" ry="0.75" fill="#ffffff" opacity="0.25" />
+          </g>
+          <g class="kprev-star-eyes">
+            <ellipse cx="41.5" cy="40.0" rx="2.3" ry="3.3" fill="#ffffff" filter="url(#kprev-glow)" />
+            <circle cx="42.2" cy="40.2" r="1.15" fill="#090a10" />
+            <circle cx="41.8" cy="39.1" r="0.5" fill="#ffffff" />
+            <ellipse cx="48.5" cy="40.0" rx="2.3" ry="3.3" fill="#ffffff" filter="url(#kprev-glow)" />
+            <circle cx="47.8" cy="40.2" r="1.15" fill="#090a10" />
+            <circle cx="47.4" cy="39.1" r="0.5" fill="#ffffff" />
+          </g>
+        </svg>
+      </div>
+      <h3>Stealth Pointer + Kuro Star</h3>
+      <p>Clean ceramic split-facet delta paired with Kuro Star for high precision stealth automation.</p>
+    </div>
+
+    <!-- Card 3: Neon Aurora Delta + Kuro Star -->
+    <div class="card">
+      <div class="preview-stage" id="stage-neon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 64 64" fill="none" class="za-glass-svg">
+          <defs>
+            <linearGradient id="kprev-nd-rim" x1="16" y1="29" x2="31" y2="18" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#38bdf8" />
+              <stop offset="35%" stop-color="#3b82f6" />
+              <stop offset="70%" stop-color="#8b5cf6" />
+              <stop offset="100%" stop-color="#d946ef" />
+            </linearGradient>
+            <linearGradient id="kprev-nd-core" x1="17" y1="9" x2="25" y2="25" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#0a0c16" />
+              <stop offset="50%" stop-color="#121424" />
+              <stop offset="100%" stop-color="#1a1835" />
+            </linearGradient>
+          </defs>
+          <path d="M 16 8 L 31.5 20 C 28.5 21, 26 22.5, 24.5 22.5 C 23 22.5, 21.5 25, 20.5 28.5 Z"
+                fill="url(#kprev-nd-core)" stroke="url(#kprev-nd-rim)" stroke-width="1.8" stroke-linejoin="round" />
+          <!-- Kuro Star -->
+          <ellipse cx="45" cy="50.5" rx="10.5" ry="3.2" fill="#02040a" opacity="0.32" filter="url(#kprev-shadow)" />
+          <g class="kprev-star-body">
+            <path d="M 44.08 30.77 Q 45.00 29.00 45.92 30.77 L 47.72 34.21 Q 48.64 35.98 50.61 36.31 L 54.44 36.96 Q 56.41 37.29 55.01 38.72 L 52.30 41.49 Q 50.90 42.92 51.19 44.90 L 51.76 48.73 Q 52.05 50.71 50.26 49.82 L 46.79 48.09 Q 45.00 47.20 43.21 48.09 L 39.74 49.82 Q 37.95 50.71 38.24 48.73 L 38.81 44.90 Q 39.10 42.92 37.70 41.49 L 34.99 38.72 Q 33.59 37.29 35.56 36.96 L 39.39 36.31 Q 41.36 35.98 42.28 34.21 Z"
+                  fill="url(#kprev-body)" stroke="url(#kprev-rim)" stroke-width="0.9" stroke-linejoin="round" />
+            <path d="M 45.00 30.2 Q 45.8 33.5 48.2 35.6" stroke="#ffffff" stroke-width="0.65" stroke-linecap="round" opacity="0.4" fill="none" />
+            <ellipse cx="38.8" cy="42.8" rx="1.6" ry="0.75" fill="#ffffff" opacity="0.25" />
+            <ellipse cx="51.2" cy="42.8" rx="1.6" ry="0.75" fill="#ffffff" opacity="0.25" />
+          </g>
+          <g class="kprev-star-eyes">
+            <ellipse cx="41.5" cy="40.0" rx="2.3" ry="3.3" fill="#ffffff" filter="url(#kprev-glow)" />
+            <circle cx="42.2" cy="40.2" r="1.15" fill="#090a10" />
+            <circle cx="41.8" cy="39.1" r="0.5" fill="#ffffff" />
+            <ellipse cx="48.5" cy="40.0" rx="2.3" ry="3.3" fill="#ffffff" filter="url(#kprev-glow)" />
+            <circle cx="47.8" cy="40.2" r="1.15" fill="#090a10" />
+            <circle cx="47.4" cy="39.1" r="0.5" fill="#ffffff" />
+          </g>
+        </svg>
+      </div>
+      <h3>Neon Aurora Delta + Kuro Star</h3>
+      <p>High-contrast pairing of chromatic cyan-violet neon delta with obsidian Kuro Star.</p>
+    </div>
+  </div>
+
+  <!-- Interactive Sandbox -->
+  <div class="sandbox-card">
+    <div class="sandbox-header">
+      <div>
+        <h3 style="font-size: 16px; font-weight: 700; color: #fff;">Interactive Movement Sandbox</h3>
+        <p style="font-size: 12px; color: #94a3b8;">Move your mouse inside the box below to see Kuro Star accompany your cursor in real time.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+        <div class="btn-group">
+          <button class="btn active" onclick="setAnim('default', this)">Default Idle</button>
+          <button class="btn" onclick="setAnim('typing', this)">Typing State</button>
+          <button class="btn" onclick="setAnim('thinking', this)">Thinking State</button>
+          <button class="btn" onclick="setAnim('success', this)">Success Spin 🎉</button>
+        </div>
+        <!-- Avatar Size Adjustment Control (Right below default, typing, thinking, success) -->
+        <div style="display: flex; align-items: center; gap: 8px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 999px; padding: 4px 12px; font-size: 11px;">
+          <span style="color: #cbd5e1; font-weight: 600;">Avatar Size:</span>
+          <input type="range" id="size-slider" min="0.6" max="1.6" step="0.05" value="1.0" oninput="setAvatarSize(this.value)" style="width: 80px; accent-color: #38bdf8; cursor: pointer;">
+          <span id="size-badge" style="font-family: monospace; color: #38bdf8; font-weight: 700; min-width: 38px; text-align: center;">100%</span>
+          <div style="border-left: 1px solid rgba(255, 255, 255, 0.15); padding-left: 6px; display: flex; gap: 4px;">
+            <button class="btn-preset" onclick="setAvatarSize(0.75)">75%</button>
+            <button class="btn-preset active" onclick="setAvatarSize(1.0)">100%</button>
+            <button class="btn-preset" onclick="setAvatarSize(1.25)">125%</button>
+            <button class="btn-preset" onclick="setAvatarSize(1.5)">150%</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sandbox-area" id="sandbox">
+      <span class="sandbox-instruction">Hover and move mouse around in this canvas</span>
+      <div id="follower-cursor">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" id="live-cursor-svg">
+          <!-- Stealth Pointer -->
+          <path d="M 16 8 L 31.5 20 C 28.5 21, 26 22.5, 24.5 22.5 C 23 22.5, 21.5 25, 20.5 28.5 Z"
+                fill="url(#kprev-ptr)" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round" />
+          <path d="M 16 8 L 24.5 22.5 L 20.5 28.5 Z" fill="url(#kprev-chamfer)" opacity="0.85" />
+          <!-- Kuro Star Group (Dynamic Scaling) -->
+          <g id="live-star-group" style="transform-origin: 45px 41px;">
+            <ellipse cx="45" cy="50.5" rx="10.5" ry="3.2" fill="#02040a" opacity="0.32" filter="url(#kprev-shadow)" />
+            <g class="kprev-star-body" id="live-star-body">
+              <path d="M 44.08 30.77 Q 45.00 29.00 45.92 30.77 L 47.72 34.21 Q 48.64 35.98 50.61 36.31 L 54.44 36.96 Q 56.41 37.29 55.01 38.72 L 52.30 41.49 Q 50.90 42.92 51.19 44.90 L 51.76 48.73 Q 52.05 50.71 50.26 49.82 L 46.79 48.09 Q 45.00 47.20 43.21 48.09 L 39.74 49.82 Q 37.95 50.71 38.24 48.73 L 38.81 44.90 Q 39.10 42.92 37.70 41.49 L 34.99 38.72 Q 33.59 37.29 35.56 36.96 L 39.39 36.31 Q 41.36 35.98 42.28 34.21 Z"
+                    fill="url(#kprev-body)" stroke="url(#kprev-rim)" stroke-width="0.9" stroke-linejoin="round" />
+              <path d="M 45.00 30.2 Q 45.8 33.5 48.2 35.6" stroke="#ffffff" stroke-width="0.65" stroke-linecap="round" opacity="0.4" fill="none" />
+              <ellipse cx="38.8" cy="42.8" rx="1.6" ry="0.75" fill="#ffffff" opacity="0.25" />
+              <ellipse cx="51.2" cy="42.8" rx="1.6" ry="0.75" fill="#ffffff" opacity="0.25" />
+            </g>
+            <g class="kprev-star-eyes" id="live-star-eyes">
+              <ellipse cx="41.5" cy="40.0" rx="2.3" ry="3.3" fill="#ffffff" filter="url(#kprev-glow)" />
+              <circle cx="42.2" cy="40.2" r="1.15" fill="#090a10" />
+              <circle cx="41.8" cy="39.1" r="0.5" fill="#ffffff" />
+              <ellipse cx="48.5" cy="40.0" rx="2.3" ry="3.3" fill="#ffffff" filter="url(#kprev-glow)" />
+              <circle cx="47.8" cy="40.2" r="1.15" fill="#090a10" />
+              <circle cx="47.4" cy="39.1" r="0.5" fill="#ffffff" />
+            </g>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const sandbox = document.getElementById('sandbox');
+  const follower = document.getElementById('follower-cursor');
+  const starGroup = document.getElementById('live-star-group');
+  const starBody = document.getElementById('live-star-body');
+  const starEyes = document.getElementById('live-star-eyes');
+  const sizeSlider = document.getElementById('size-slider');
+  const sizeBadge = document.getElementById('size-badge');
+
+  function setAvatarSize(scale) {
+    const val = parseFloat(scale);
+    starGroup.style.transform = `translate(45px, 41px) scale(${val}) translate(-45px, -41px)`;
+    sizeSlider.value = val;
+    sizeBadge.textContent = Math.round(val * 100) + '%';
+    document.querySelectorAll('.btn-preset').forEach(b => {
+      b.classList.toggle('active', Math.abs(parseFloat(b.textContent) / 100 - val) < 0.02);
+    });
+  }
+
+  sandbox.addEventListener('mousemove', (e) => {
+    const rect = sandbox.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    follower.style.left = x + 'px';
+    follower.style.top = y + 'px';
+  });
+
+  function setAnim(mode, btn) {
+    document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    starBody.style.animation = '';
+    starEyes.style.animation = '';
+
+    if (mode === 'typing') {
+      starEyes.style.animation = 'kprev-blink 1.2s infinite ease-in-out';
+      starBody.style.transform = 'translateY(1px)';
+    } else if (mode === 'thinking') {
+      starEyes.style.transform = 'translate(1.5px, -1.5px)';
+      starBody.style.transform = 'rotate(-6deg)';
+    } else if (mode === 'success') {
+      starBody.animate([
+        { transform: 'rotate(0deg) scale(1)' },
+        { transform: 'rotate(180deg) scale(1.2)' },
+        { transform: 'rotate(360deg) scale(1)' }
+      ], {
+        duration: 850,
+        easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+      });
+    } else {
+      starBody.style.animation = 'kprev-float 8.0s infinite ease-in-out';
+      starEyes.style.animation = 'kprev-blink 8.0s infinite ease-in-out';
+    }
+  }
+</script>
+
+</body>
+</html>

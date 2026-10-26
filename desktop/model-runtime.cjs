@@ -4,6 +4,7 @@ const send = (message) => port ? port.postMessage(message) : process.send?.(mess
 let model;
 let context;
 let runtime;
+let llama;
 let busy = false;
 
 async function handle(message) {
@@ -35,7 +36,7 @@ async function handle(message) {
       // Apple Silicon ships one combined Metal/CPU binary; zero model GPU layers
       // keeps inference on the CPU. Other platforms use their CPU-only binary.
       const gpu = process.platform === 'darwin' && process.arch === 'arm64' ? 'metal' : false;
-      const llama = await runtime.getLlama({ gpu, build: 'never', skipDownload: true, maxThreads: threads });
+      llama = await runtime.getLlama({ gpu, build: 'never', skipDownload: true, maxThreads: threads });
       model = await llama.loadModel({
         modelPath: message.modelPath, gpuLayers: 0, useMmap: true,
         onLoadProgress: (progress) => send({ progress: 0.6 + 0.35 * progress, progressText: 'Loading built-in AI…' }),
@@ -51,7 +52,8 @@ async function handle(message) {
       if (promptTokens.length + systemTokens.length > 3200) throw new Error('This question contains too much context. Shorten it before using built-in AI.');
       const session = new runtime.LlamaChatSession({ contextSequence: context.getSequence(), systemPrompt });
       try {
-        const answer = await session.prompt(message.prompt, { temperature: message.temperature, maxTokens: message.maxTokens });
+        const grammar = message.responseSchema ? await llama.createGrammarForJsonSchema(message.responseSchema) : undefined;
+        const answer = await session.prompt(message.prompt, { temperature: message.temperature, maxTokens: message.maxTokens, grammar });
         if (!answer.trim()) throw new Error('Built-in AI returned an empty answer. Review this question manually.');
         send({ id: message.id, result: answer });
       } finally { session.dispose({ disposeSequence: true }); }

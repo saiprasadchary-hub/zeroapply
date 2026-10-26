@@ -39,7 +39,11 @@ try {
     camoufoxNavigate: (url) => ipcRenderer.invoke('camoufox-navigate', url),
     camoufoxEvaluate: (script) => ipcRenderer.invoke('camoufox-evaluate', script),
     camoufoxClose: () => ipcRenderer.invoke('camoufox-close'),
-    secureGet: (key) => ipcRenderer.sendSync('secure-storage-get', key),
+    secureGet: (key) => {
+      const value = ipcRenderer.sendSync('secure-storage-get', key);
+      if (value && typeof value === 'object' && value.error) throw new Error(value.error);
+      return value;
+    },
     secureSet: (key, value) => ipcRenderer.invoke('secure-storage-set', key, value),
     secureRemove: (key) => ipcRenderer.invoke('secure-storage-remove', key),
     onBrowserEvent: (callback) => {

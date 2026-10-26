@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { PersonaData } from './types';
 import { Header } from './components/Header';
+import { StorageHealthGuard } from './components/StorageHealthGuard';
+import { hasSecureStorageFailure } from './services/secureStorage';
 import { PersonaForm } from './components/PersonaForm';
 import { AgentBrowser } from '../AgentBrowser';
 import { ApplicationDashboard } from './components/ApplicationDashboard';
@@ -142,6 +144,15 @@ const MainDashboard: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleNav = (e: Event) => {
+      const custom = e as CustomEvent<{ tab?: NavTab }>;
+      if (custom.detail?.tab) setActiveTab(custom.detail.tab);
+    };
+    window.addEventListener('zeroapply_navigate_tab', handleNav);
+    return () => window.removeEventListener('zeroapply_navigate_tab', handleNav);
+  }, []);
+
   const triggerToast = useCallback((msg: string) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(msg);
@@ -239,6 +250,7 @@ const MainDashboard: React.FC = () => {
           persona={persona}
           onSaveToast={triggerToast}
           pendingAction={pendingBrowserAction}
+          onNavigateToTab={setActiveTab}
         />
       </main>
 
@@ -248,6 +260,7 @@ const MainDashboard: React.FC = () => {
 
       <main className={`flex-1 min-h-0 flex flex-col overflow-hidden relative max-md:pb-mobile-nav md:!pb-0 ${activeTab === 'resume' ? '' : 'hidden'}`}>
         <ResumeStudio
+          active={activeTab === 'resume'}
           persona={persona}
           onSaveToast={triggerToast}
         />
@@ -307,6 +320,7 @@ export const App: React.FC = () => {
   // CSS uses this class to disable all transitions and animations globally.
   useEffect(() => {
     const applyMotionClass = () => {
+      if (hasSecureStorageFailure()) return;
       if (isReducedMotionEnabled()) {
         document.documentElement.classList.add('reduce-motion');
       } else {
@@ -319,9 +333,9 @@ export const App: React.FC = () => {
   }, []);
 
   return (
-    <AuthProvider>
+    <StorageHealthGuard><AuthProvider>
       <AppContent />
-    </AuthProvider>
+    </AuthProvider></StorageHealthGuard>
   );
 };
 

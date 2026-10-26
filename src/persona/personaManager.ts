@@ -1,7 +1,7 @@
 import type { PersonaData } from '../types';
 import type { SavedResumeFile } from '../agent/autofill/resumeInjector';
 import { FirebaseCloudSync } from '../services/firebase/cloudSyncService';
-import { getSecureItem, setSecureItem } from '../services/secureStorage';
+import { assertSecureStorageHealthy, getSecureItem, setSecureItem } from '../services/secureStorage';
 
 export interface PersonaProfile {
   id: string;
@@ -120,11 +120,13 @@ export class PersonaManager {
     } catch (e) {
       console.error('Failed to load persona profiles:', e);
     }
+    assertSecureStorageHealthy();
     this.saveProfiles(DEFAULT_INITIAL_PROFILES);
     return DEFAULT_INITIAL_PROFILES;
   }
 
   public static saveProfiles(profiles: PersonaProfile[]): void {
+    assertSecureStorageHealthy();
     this.inMemoryProfiles = profiles;
     try {
       setSecureItem(PROFILES_STORAGE_KEY, JSON.stringify(profiles));

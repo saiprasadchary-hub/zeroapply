@@ -17,6 +17,12 @@ import type {
 } from './types';
 import { obsidianGlass } from './obsidianGlass';
 import { cloudBot } from './cloudBot';
+import { AQUA_DROP_BASE64_URI } from '../assets/aquaDropAsset';
+import { AERO_SENTINEL_BASE64_URI } from '../assets/aeroSentinelAsset';
+import { KURO_STAR_BASE64_URI } from '../assets/kuroStarAsset';
+import { GROK_BOT_BASE64_URI } from '../assets/grokBotAsset';
+
+export { AQUA_DROP_BASE64_URI, AERO_SENTINEL_BASE64_URI, KURO_STAR_BASE64_URI, GROK_BOT_BASE64_URI };
 
 export type {
   CursorTheme,
@@ -43,11 +49,15 @@ export const CURSOR_CATEGORY_STORAGE_KEY = 'zeroapply_cursor_studio_active_categ
 export const CURSOR_DISPLAY_MODE_STORAGE_KEY = 'zeroapply_cursor_display_mode';
 export const CURSOR_POINTER_STORAGE_KEY = 'zeroapply_selected_pointer_id';
 export const CURSOR_AVATAR_STORAGE_KEY = 'zeroapply_selected_avatar_id';
+export const CURSOR_AVATAR_SCALE_STORAGE_KEY = 'zeroapply_selected_avatar_scale';
 
 export const DEFAULT_DISPLAY_MODE: CursorDisplayMode = 'combined';
 export const DEFAULT_CATEGORY: CursorStudioCategory = 'cursor';
 export const DEFAULT_POINTER_ID: CursorPointerId = 'pointer_stealth';
 export const DEFAULT_AVATAR_ID: CursorAvatarId = 'avatar_grok_bot';
+export const DEFAULT_AVATAR_SCALE = 1.0;
+export const MIN_AVATAR_SCALE = 0.6;
+export const MAX_AVATAR_SCALE = 1.6;
 
 /**
  * 2 Distinct Studio Categories:
@@ -114,9 +124,9 @@ export const CURSOR_AVATAR_OPTIONS: CursorAvatarOption[] = [
     name: 'xAI Grok Cyber Bot',
     tag: 'CYBER COMPANION',
     badge: 'Autonomous Orb',
-    description: 'Pitch-black obsidian sphere with living 360° all-direction saccadic gaze, dynamic blinks, and pure headphones-free finish.',
+    description: 'Photorealistic 3D obsidian sphere with curved specular glass glints, living 360° all-direction saccadic gaze, and dynamic blinks.',
     accentColor: '#818cf8',
-    features: ['360° All-Direction Gaze', 'Stadium Capsule Eyes', 'Headphones-Free Pure Orb'],
+    features: ['Photorealistic 3D Obsidian Sphere', 'Living 360° Saccadic Gaze', 'Stadium Capsule Eyes', 'Autonomous Companion Levitation'],
   },
   {
     id: 'avatar_cloud_bot',
@@ -132,21 +142,31 @@ export const CURSOR_AVATAR_OPTIONS: CursorAvatarOption[] = [
     id: 'avatar_sentinel_bot',
     themeId: 'obsidian_glass',
     name: 'Aero Sentinel Droid',
-    tag: 'CYBER DROID',
-    badge: 'Aero Droid',
-    description: 'Sculpted white porcelain aerodynamic droid with panoramic obsidian glass visor, glowing cyan LED eyes, and magnetic thruster fins.',
-    accentColor: '#00f0ff',
-    features: ['Sculpted Porcelain Dome', 'Panoramic Obsidian Visor', 'Glowing Cyan LED Eyes', 'Anti-Gravity Thruster Fins'],
+    tag: 'COBALT COMPANION',
+    badge: 'Cobalt Orb',
+    description: 'Photorealistic fluffy cobalt-blue 3D spherical mascot with glossy curved obsidian visor and animated glowing white capsule eyes.',
+    accentColor: '#2563eb',
+    features: ['Fluffy Cobalt Velvet Sphere', 'Glossy Obsidian Oval Visor', 'Animated Glowing White Capsule Eyes', '360° Saccadic Gaze Engine'],
   },
   {
     id: 'avatar_mochi_neko',
     themeId: 'obsidian_glass',
-    name: 'Mochi Cyber Neko',
-    tag: 'KAWAII COMPANION',
-    badge: 'White Mochi Neko',
-    description: 'Ultra-cute snow-white painted anime mochi cyber-cat companion with sculpted ears, fluffy fur tufts, crimson mascot ribbon collar, gold bell, and starry jewel anime eyes.',
-    accentColor: '#f472b6',
-    features: ['Snow-White Mochi Body', 'Sculpted Animated Ears', 'Crimson Ribbon & Gold Bell', 'Starry Jewel Anime Eyes'],
+    name: 'Aqua Hydro Droid',
+    tag: 'AQUA COMPANION',
+    badge: 'Water Drop',
+    description: 'Crystalline photorealistic water droplet companion with glossy liquid caustics, floating micro-bubbles, and animated glowing cyan capsule eyes.',
+    accentColor: '#00e5ff',
+    features: ['Crystal Water Droplet Dome', 'Photorealistic Liquid Refraction', 'Animated Cyan Capsule Eyes', '360° Saccadic Gaze Engine'],
+  },
+  {
+    id: 'avatar_kuro_star',
+    themeId: 'obsidian_glass',
+    name: 'Kuro Star Celestial',
+    tag: 'CELESTIAL COMPANION',
+    badge: 'Obsidian Star',
+    description: 'Photorealistic 3D obsidian celestial star companion with glossy visor, animated glowing white capsule eyes, and celestial hover dynamics.',
+    accentColor: '#ffffff',
+    features: ['3D Obsidian Star Body', 'Glossy Obsidian Oval Visor', 'Animated Glowing White Capsule Eyes', '360° Saccadic Gaze Engine'],
   },
 ];
 
@@ -165,6 +185,7 @@ let inMemoryDisplayMode: CursorDisplayMode | null = null;
 let inMemoryCategory: CursorStudioCategory | null = null;
 let inMemoryPointerId: CursorPointerId | null = null;
 let inMemoryAvatarId: CursorAvatarId | null = null;
+let inMemoryAvatarScale: number | null = null;
 
 export function loadStoredCursorId(): string {
   if (typeof localStorage !== 'undefined') {
@@ -246,7 +267,8 @@ export function loadStoredAvatarId(): CursorAvatarId {
         saved === 'avatar_grok_bot' ||
         saved === 'avatar_cloud_bot' ||
         saved === 'avatar_sentinel_bot' ||
-        saved === 'avatar_mochi_neko'
+        saved === 'avatar_mochi_neko' ||
+        saved === 'avatar_kuro_star'
       )
         return saved;
       const theme = localStorage.getItem(CURSOR_STORAGE_KEY);
@@ -322,6 +344,39 @@ export function saveStoredCategory(category: CursorStudioCategory): void {
   }
 }
 
+export function loadStoredAvatarScale(): number {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const saved = localStorage.getItem(CURSOR_AVATAR_SCALE_STORAGE_KEY);
+      if (saved) {
+        const val = parseFloat(saved);
+        if (!isNaN(val) && val >= MIN_AVATAR_SCALE && val <= MAX_AVATAR_SCALE) {
+          return val;
+        }
+      }
+    } catch {}
+  }
+  if (inMemoryAvatarScale !== null) return inMemoryAvatarScale;
+  return DEFAULT_AVATAR_SCALE;
+}
+
+export function saveStoredAvatarScale(scale: number): void {
+  const clamped = Math.max(MIN_AVATAR_SCALE, Math.min(MAX_AVATAR_SCALE, Number(scale.toFixed(2))));
+  inMemoryAvatarScale = clamped;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(CURSOR_AVATAR_SCALE_STORAGE_KEY, clamped.toString());
+    } catch {}
+  }
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    try {
+      queueMicrotask(() => {
+        window.dispatchEvent(new CustomEvent('zeroapply_cursor_avatar_scale_changed', { detail: { scale: clamped } }));
+      });
+    } catch {}
+  }
+}
+
 export function getPointerOption(id?: string): CursorPointerOption {
   if (!id) return CURSOR_POINTER_OPTIONS[0];
   return CURSOR_POINTER_OPTIONS.find((p) => p.id === id) || CURSOR_POINTER_OPTIONS[0];
@@ -335,11 +390,15 @@ export function getAvatarOption(id?: string): CursorAvatarOption {
 export function saveCustomCombination(
   pointerId: CursorPointerId,
   avatarId: CursorAvatarId,
-  mode: CursorDisplayMode = 'combined'
+  mode: CursorDisplayMode = 'combined',
+  avatarScale?: number
 ): void {
   saveStoredPointerId(pointerId);
   saveStoredAvatarId(avatarId);
   saveStoredDisplayMode(mode);
+  if (typeof avatarScale === 'number') {
+    saveStoredAvatarScale(avatarScale);
+  }
   const baseThemeId = pointerId === 'pointer_sky_aero' && avatarId === 'avatar_cloud_bot' ? 'cloud_bot' : 'obsidian_glass';
   saveStoredCursorId(baseThemeId);
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
@@ -347,7 +406,7 @@ export function saveCustomCombination(
       queueMicrotask(() => {
         window.dispatchEvent(
           new CustomEvent('zeroapply_cursor_combination_changed', {
-            detail: { pointerId, avatarId, mode, baseThemeId },
+            detail: { pointerId, avatarId, mode, baseThemeId, avatarScale },
           })
         );
       });
@@ -465,158 +524,59 @@ export function getPointerSvgPaths(pointerId: string, theme?: CursorTheme): stri
 export function getAvatarSvgPaths(avatarId: string, theme?: CursorTheme): string {
   if (avatarId === 'avatar_mochi_neko') {
     return `
-      <!-- Mochi Cyber Neko (Snow-White Painted Anime Companion + Sculpted Ears + Fluffy Fur Tufts + Starry Jewel Eyes) -->
-      <ellipse class="za-avatar-shadow" cx="45" cy="49" rx="11" ry="3.5" fill="#0f172a" opacity="0.25" filter="url(#za-glass-shadow)" />
+      <!-- Aqua Hydro Droid (Photorealistic Liquid Water Droplet + Animated Glowing Cyan Capsule Eyes) -->
+      <ellipse class="za-avatar-shadow" cx="45" cy="53.0" rx="9.8" ry="2.6" fill="#011833" opacity="0.38" filter="url(#za-glass-shadow)" />
 
-      <!-- Left Sculpted Mochi Cat Ear (Interactive Living Animated Ear) -->
-      <g class="za-neko-ear za-neko-ear-left za-avatar-part">
-        <!-- Outer Painted White Ear Shell with Rim Light -->
-        <path d="M 37.5 35.5 L 33.2 23.5 C 32.8 22.4 34.0 21.6 34.9 22.3 L 41.5 30.5 Z" 
-              fill="url(#za-neko-shell)" stroke="url(#za-neko-rim)" stroke-width="0.9" stroke-linejoin="round" />
-        <!-- Inner Ear Warm Peach Blossom Layer -->
-        <path d="M 37.0 34.0 L 34.5 25.2 C 34.3 24.6 35.1 24.1 35.6 24.5 L 40.0 30.8 Z" 
-              fill="url(#za-neko-ear)" opacity="0.95" />
-        <!-- Painted Fluffy Anime Inner Fur Tufts -->
-        <path d="M 35.8 33.0 Q 36.6 29.5 37.8 31.8 Q 38.6 28.5 39.5 31.0 Q 39.8 32.5 38.5 33.8 Z" 
-              fill="#ffffff" stroke="#fbcfe8" stroke-width="0.35" opacity="0.98" />
+      <!-- Photorealistic Water Droplet Mascot Body from User's Shared Reference -->
+      <g class="za-aqua-head za-neko-head za-avatar-body" style="transform-box: fill-box; transform-origin: 45px 38px;">
+        <!-- Clean Transparent 3D Water Droplet Image -->
+        <image href="${AQUA_DROP_BASE64_URI}" x="32" y="24" width="26" height="27.3" preserveAspectRatio="xMidYMid meet" />
       </g>
 
-      <!-- Right Sculpted Mochi Cat Ear (Interactive Living Animated Ear) -->
-      <g class="za-neko-ear za-neko-ear-right za-avatar-part">
-        <!-- Outer Painted White Ear Shell with Rim Light -->
-        <path d="M 52.5 35.5 L 56.8 23.5 C 57.2 22.4 56.0 21.6 55.1 22.3 L 48.5 30.5 Z" 
-              fill="url(#za-neko-shell)" stroke="url(#za-neko-rim)" stroke-width="0.9" stroke-linejoin="round" />
-        <!-- Inner Ear Warm Peach Blossom Layer -->
-        <path d="M 53.0 34.0 L 55.5 25.2 C 55.7 24.6 54.9 24.1 54.4 24.5 L 50.0 30.8 Z" 
-              fill="url(#za-neko-ear)" opacity="0.95" />
-        <!-- Painted Fluffy Anime Inner Fur Tufts -->
-        <path d="M 54.2 33.0 Q 53.4 29.5 52.2 31.8 Q 51.4 28.5 50.5 31.0 Q 50.2 32.5 51.5 33.8 Z" 
-              fill="#ffffff" stroke="#fbcfe8" stroke-width="0.35" opacity="0.98" />
-      </g>
-
-      <!-- Main Painted White Mochi Head Dome with Gentle Living Breathing Float -->
-      <g class="za-neko-head za-avatar-body">
-        <ellipse cx="45" cy="40.8" rx="11.4" ry="9.6" 
-                 fill="url(#za-neko-shell)" stroke="url(#za-neko-rim)" stroke-width="1.1" stroke-linejoin="round" />
-
-        <!-- Soft Painted Gouache Forehead Sheen -->
-        <path d="M 38 34.2 C 41.5 32.0 48.5 32.0 52 34.2 C 48.5 33.0 41.5 33.0 38 34.2 Z" 
-              fill="#ffffff" opacity="0.9" />
-        <circle cx="45" cy="33.8" r="0.85" fill="#ffffff" opacity="0.95" />
-
-        <!-- Whisker Neon Light Guides (Tapered painted curves) -->
-        <path d="M 30.0 39.5 Q 33.5 40.2 36.5 40.6" stroke="url(#za-neko-whisk-l)" stroke-width="0.85" stroke-linecap="round" fill="none" />
-        <path d="M 30.5 42.2 Q 33.8 42.4 36.8 42.0" stroke="url(#za-neko-whisk-l)" stroke-width="0.85" stroke-linecap="round" fill="none" />
-        <path d="M 60.0 39.5 Q 56.5 40.2 53.5 40.6" stroke="url(#za-neko-whisk-r)" stroke-width="0.85" stroke-linecap="round" fill="none" />
-        <path d="M 59.5 42.2 Q 56.2 42.4 53.2 42.0" stroke="url(#za-neko-whisk-r)" stroke-width="0.85" stroke-linecap="round" fill="none" />
-
-        <!-- Watercolor Airbrushed Cheek Blush (Radial Gradient + Kawaii Blush Dashes) -->
-        <circle cx="36.5" cy="42.5" r="3.0" fill="url(#za-neko-blush)" />
-        <line x1="35.2" y1="41.8" x2="37.0" y2="43.4" stroke="#f43f5e" stroke-width="0.65" stroke-linecap="round" opacity="0.9" />
-        <line x1="37.0" y1="41.8" x2="38.8" y2="43.4" stroke="#f43f5e" stroke-width="0.65" stroke-linecap="round" opacity="0.9" />
-
-        <circle cx="53.5" cy="42.5" r="3.0" fill="url(#za-neko-blush)" />
-        <line x1="51.2" y1="41.8" x2="53.0" y2="43.4" stroke="#f43f5e" stroke-width="0.65" stroke-linecap="round" opacity="0.9" />
-        <line x1="53.0" y1="41.8" x2="54.8" y2="43.4" stroke="#f43f5e" stroke-width="0.65" stroke-linecap="round" opacity="0.9" />
-
-        <!-- Tiny Painted Heart Nose with Gloss Catchlight -->
-        <polygon points="44.3,41.6 45.7,41.6 45.0,42.5" fill="#f43f5e" />
-        <circle cx="44.8" cy="41.7" r="0.3" fill="#ffffff" />
-
-        <!-- Adorable ω Cat Smile -->
-        <path d="M 43.6 43.0 Q 44.3 43.8 45.0 43.2 Q 45.7 43.8 46.4 43.0" 
-              stroke="#db2777" stroke-width="0.85" stroke-linecap="round" fill="none" opacity="0.95" />
-
-        <!-- Forehead Luminous Anime Talisman Star Gem -->
-        <g filter="url(#za-neko-glow)">
-          <path d="M 45 31.8 Q 45 33.2 46.4 33.2 Q 45 33.2 45 34.6 Q 45 33.2 43.6 33.2 Q 45 33.2 45 31.8 Z" 
-                fill="url(#za-neko-gold)" stroke="#b45309" stroke-width="0.2" />
-          <circle cx="45" cy="33.2" r="0.6" fill="#ffffff" />
-        </g>
-      </g>
-
-      <!-- Cute Crimson Mascot Ribbon Collar & Golden Bell with Micro-Jingle Sway -->
-      <g class="za-neko-bell za-avatar-part">
-        <path d="M 39.5 48.0 Q 45.0 49.8 50.5 48.0 Q 45.0 51.0 39.5 48.0 Z" 
-              fill="url(#za-neko-ribbon)" stroke="#9f1239" stroke-width="0.45" />
-        <circle cx="45.0" cy="49.8" r="1.6" fill="url(#za-neko-gold)" stroke="#78350f" stroke-width="0.35" />
-        <circle cx="44.6" cy="49.3" r="0.4" fill="#ffffff" />
-        <line x1="43.8" y1="50.2" x2="46.2" y2="50.2" stroke="#78350f" stroke-width="0.3" />
-      </g>
-
-      <!-- Expressive Living Anime Starry Eyes (Blinks, Tracks & Glances) -->
+      <!-- Expressive Glowing Cyan Vertical Capsule Eyes (Blinks, Saccades & Tracks 360°) -->
       <g class="za-bot-eyes" style="transform-box: fill-box; transform-origin: center;">
-        <!-- LEFT EYE: Painted Starry Anime Jewel Lens -->
-        <ellipse cx="40.5" cy="38.5" rx="2.5" ry="3.3" fill="url(#za-neko-eye)" stroke="#ec4899" stroke-width="0.45" />
-        <!-- Upper Anime Eyelash Line -->
-        <path d="M 37.8 36.4 C 39.2 35.0 42.0 35.0 43.2 36.4" stroke="#1e1026" stroke-width="1.15" stroke-linecap="round" fill="none" />
-        <!-- Primary Bright Anime Catchlight -->
-        <circle cx="39.6" cy="37.0" r="1.1" fill="#ffffff" />
-        <!-- Secondary Bottom Cyan Horizon Light Arc -->
-        <path d="M 39.2 40.2 C 40.0 40.8 41.2 40.8 42.0 40.2" stroke="#38bdf8" stroke-width="0.65" stroke-linecap="round" fill="none" opacity="0.95" />
-        <!-- Star Sparkle Glint -->
-        <path d="M 41.6 39.2 L 41.9 39.7 L 42.4 39.9 L 41.9 40.1 L 41.6 40.6 L 41.3 40.1 L 40.8 39.9 L 41.3 39.7 Z" fill="#ffffff" opacity="0.95" />
-        <circle cx="42.2" cy="37.2" r="0.38" fill="#ffffff" opacity="0.85" />
+        <!-- Left Glowing Cyan Capsule Eye -->
+        <g class="za-aqua-eye-left">
+          <!-- Outer Neon Cyan Halo Glow -->
+          <rect x="41.2" y="38.8" width="2.8" height="6.2" rx="1.4" fill="#00e5ff" opacity="0.85" filter="url(#za-aqua-glow)" />
+          <!-- Inner Bright Ice-Cyan Capsule Core -->
+          <rect x="41.6" y="39.2" width="2.0" height="5.4" rx="1.0" fill="#f0fdff" />
+        </g>
 
-        <!-- RIGHT EYE: Painted Starry Anime Jewel Lens -->
-        <ellipse cx="49.5" cy="38.5" rx="2.5" ry="3.3" fill="url(#za-neko-eye)" stroke="#ec4899" stroke-width="0.45" />
-        <!-- Upper Anime Eyelash Line -->
-        <path d="M 46.8 36.4 C 48.0 35.0 50.8 35.0 52.2 36.4" stroke="#1e1026" stroke-width="1.15" stroke-linecap="round" fill="none" />
-        <!-- Primary Bright Anime Catchlight -->
-        <circle cx="48.6" cy="37.0" r="1.1" fill="#ffffff" />
-        <!-- Secondary Bottom Cyan Horizon Light Arc -->
-        <path d="M 48.2 40.2 C 49.0 40.8 50.2 40.8 51.0 40.2" stroke="#38bdf8" stroke-width="0.65" stroke-linecap="round" fill="none" opacity="0.95" />
-        <!-- Star Sparkle Glint -->
-        <path d="M 50.6 39.2 L 50.9 39.7 L 51.4 39.9 L 50.9 40.1 L 50.6 40.6 L 50.3 40.1 L 49.8 39.9 L 50.3 39.7 Z" fill="#ffffff" opacity="0.95" />
-        <circle cx="51.2" cy="37.2" r="0.38" fill="#ffffff" opacity="0.85" />
+        <!-- Right Glowing Cyan Capsule Eye -->
+        <g class="za-aqua-eye-right">
+          <!-- Outer Neon Cyan Halo Glow -->
+          <rect x="47.6" y="38.8" width="2.8" height="6.2" rx="1.4" fill="#00e5ff" opacity="0.85" filter="url(#za-aqua-glow)" />
+          <!-- Inner Bright Ice-Cyan Capsule Core -->
+          <rect x="48.0" y="39.2" width="2.0" height="5.4" rx="1.0" fill="#f0fdff" />
+        </g>
       </g>
     `;
   }
 
   if (avatarId === 'avatar_sentinel_bot') {
     return `
-      <!-- Aero Sentinel Droid (Porcelain Aerodynamic Shell + Panoramic Visor + Glowing Cyan LED Crescent Eyes) -->
-      <ellipse class="za-avatar-shadow" cx="45" cy="49" rx="10" ry="3.5" fill="#020617" opacity="0.32" filter="url(#za-glass-shadow)" />
+      <!-- Aero Sentinel Droid (Photorealistic Fluffy Cobalt Sphere + Glossy Visor + Glowing White Capsule Eyes) -->
+      <ellipse class="za-avatar-shadow" cx="45" cy="53.0" rx="11.2" ry="2.8" fill="#010617" opacity="0.4" filter="url(#za-glass-shadow)" />
 
-      <!-- Floating Left Magnetic Anti-Gravity Thruster Fin -->
-      <g class="za-sentinel-fin-left za-avatar-part">
-        <path d="M 30.5 37 L 33.5 38.5 L 32.5 43.5 L 29.5 41 Z" fill="#0f172a" stroke="#38bdf8" stroke-width="0.7" stroke-linejoin="round" />
-        <line x1="31" y1="39" x2="32" y2="42" stroke="#38bdf8" stroke-width="0.75" stroke-linecap="round" />
+      <!-- Main Fluffy Cobalt Blue 3D Mascot Image -->
+      <g class="za-sentinel-head za-avatar-body" style="transform-box: fill-box; transform-origin: 45px 40.8px;">
+        <image href="${AERO_SENTINEL_BASE64_URI}" x="31.2" y="28.4" width="27.6" height="24.38" preserveAspectRatio="xMidYMid meet" class="za-sentinel-img" />
       </g>
 
-      <!-- Floating Right Magnetic Anti-Gravity Thruster Fin -->
-      <g class="za-sentinel-fin-right za-avatar-part">
-        <path d="M 59.5 37 L 56.5 38.5 L 57.5 43.5 L 60.5 41 Z" fill="#0f172a" stroke="#38bdf8" stroke-width="0.7" stroke-linejoin="round" />
-        <line x1="59" y1="39" x2="58" y2="42" stroke="#38bdf8" stroke-width="0.75" stroke-linecap="round" />
-      </g>
+      <!-- Expressive Vertical Glowing White Stadium Capsule Eyes -->
+      <g class="za-bot-eyes" style="transform-box: fill-box; transform-origin: 45.4px 40.5px;">
+        <!-- Left Vertical White Stadium Eye -->
+        <g class="za-sentinel-eye-left">
+          <rect x="41.2" y="37.4" width="2.6" height="6.2" rx="1.3" fill="#ffffff" filter="url(#za-sentinel-glow)" />
+          <rect x="41.6" y="37.8" width="1.2" height="5.4" rx="0.6" fill="#f8fafc" opacity="0.95" />
+        </g>
 
-      <!-- Main Sculpted Aerodynamic Porcelain Droid Head Dome -->
-      <g class="za-sentinel-head za-avatar-body">
-        <ellipse cx="45" cy="41" rx="10.8" ry="9.2" fill="url(#za-sentinel-shell)" stroke="#cbd5e1" stroke-width="1.1" stroke-linejoin="round" />
-        <!-- Titanium Forehead Ridge Brow -->
-        <path d="M 39 34 C 42 32.5 48 32.5 51 34" stroke="#64748b" stroke-width="1.1" stroke-linecap="round" fill="none" opacity="0.85" />
-
-        <!-- Ear Audio Nodes / Side Pivot Rings -->
-        <circle cx="34.8" cy="41.2" r="1.9" fill="url(#za-sentinel-node)" stroke="#38bdf8" stroke-width="0.6" />
-        <circle cx="34.8" cy="41.2" r="0.6" fill="#38bdf8" />
-        <circle cx="55.2" cy="41.2" r="1.9" fill="url(#za-sentinel-node)" stroke="#38bdf8" stroke-width="0.6" />
-        <circle cx="55.2" cy="41.2" r="0.6" fill="#38bdf8" />
-
-        <!-- Panoramic Curved Obsidian Glass Visor -->
-        <rect x="37" y="36.8" width="16" height="9.2" rx="4.6" fill="url(#za-sentinel-visor)" stroke="#09090b" stroke-width="0.8" />
-        <!-- Visor Specular Glass Glint -->
-        <path class="za-sentinel-glint" d="M 39 38.2 C 42 37.4 48 37.4 51 38.2" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.75" />
-      </g>
-
-      <!-- Expressive Animated Glowing Cyan LED Visor Eyes -->
-      <g class="za-bot-eyes" style="transform-box: fill-box; transform-origin: center;">
-        <!-- Left Cyan LED Crescent Eye -->
-        <path d="M 40.2 41.2 C 40.2 39.2 42.8 39.2 42.8 41.2" stroke="${theme?.accentColor || '#00f0ff'}" stroke-width="1.6" stroke-linecap="round" fill="none" filter="url(#za-sentinel-glow)" />
-        <circle cx="41.5" cy="40.2" r="0.5" fill="#ffffff" />
-
-        <!-- Right Cyan LED Crescent Eye -->
-        <path d="M 47.2 41.2 C 47.2 39.2 49.8 39.2 49.8 41.2" stroke="${theme?.accentColor || '#00f0ff'}" stroke-width="1.6" stroke-linecap="round" fill="none" filter="url(#za-sentinel-glow)" />
-        <circle cx="48.5" cy="40.2" r="0.5" fill="#ffffff" />
+        <!-- Right Vertical White Stadium Eye -->
+        <g class="za-sentinel-eye-right">
+          <rect x="47.0" y="37.4" width="2.6" height="6.2" rx="1.3" fill="#ffffff" filter="url(#za-sentinel-glow)" />
+          <rect x="47.4" y="37.8" width="1.2" height="5.4" rx="0.6" fill="#f8fafc" opacity="0.95" />
+        </g>
       </g>
     `;
   }
@@ -653,15 +613,43 @@ export function getAvatarSvgPaths(avatarId: string, theme?: CursorTheme): string
     `;
   }
 
-  // Default: xAI Grok Cyber Bot (Pure Obsidian Sphere + 360° Saccadic Gaze Stadium Eyes, No Headphones)
+  if (avatarId === 'avatar_kuro_star') {
+    return `
+      <!-- Kuro Star (Photorealistic 3D Obsidian Star Companion + Glowing White Capsule Eyes) -->
+      <ellipse class="za-avatar-shadow za-kuro-shadow" cx="45" cy="53.0" rx="10.8" ry="2.6" fill="#010617" opacity="0.35" filter="url(#za-glass-shadow)" />
+
+      <!-- 5-Point 3D Obsidian Celestial Star Body -->
+      <g class="za-kuro-body za-avatar-body" style="transform-box: fill-box; transform-origin: 45px 41px;">
+        <image href="${KURO_STAR_BASE64_URI}" x="31.0" y="28.5" width="28.0" height="24.5" preserveAspectRatio="xMidYMid meet" class="za-kuro-img" />
+      </g>
+
+      <!-- Expressive Vertical Glowing White Stadium Capsule Eyes -->
+      <g class="za-bot-eyes" style="transform-box: fill-box; transform-origin: 45.0px 41.0px;">
+        <!-- Left Vertical White Stadium Eye -->
+        <g class="za-kuro-eye-left">
+          <rect x="41.2" y="38.0" width="2.4" height="5.8" rx="1.2" fill="#ffffff" filter="url(#za-kuro-eye-glow)" />
+          <rect x="41.6" y="38.4" width="1.1" height="5.0" rx="0.55" fill="#f8fafc" opacity="0.95" />
+        </g>
+
+        <!-- Right Vertical White Stadium Eye -->
+        <g class="za-kuro-eye-right">
+          <rect x="46.4" y="38.0" width="2.4" height="5.8" rx="1.2" fill="#ffffff" filter="url(#za-kuro-eye-glow)" />
+          <rect x="46.8" y="38.4" width="1.1" height="5.0" rx="0.55" fill="#f8fafc" opacity="0.95" />
+        </g>
+      </g>
+    `;
+  }
+
+  // Default: xAI Grok Cyber Bot (Photorealistic 3D Obsidian Sphere + 360° Saccadic Gaze Stadium Eyes, No Headphones)
   return `
     <!-- xAI Grok Bot (Autonomous Cyber Copilot - Headphones Removed) -->
-    <ellipse class="za-avatar-shadow" cx="45" cy="43.5" rx="10.5" ry="8.5" fill="#0f172a" opacity="0.25" filter="url(#za-glass-shadow)" />
+    <ellipse class="za-avatar-shadow" cx="45" cy="52.8" rx="10.2" ry="2.6" fill="#010617" opacity="0.38" filter="url(#za-glass-shadow)" />
 
-    <!-- 2. The Iconic Grok Bot: Deep Pitch-Black Sphere with Living Anti-Gravity Levitation -->
-    <g class="za-grok-sphere za-avatar-body">
-      <circle cx="45" cy="41" r="10.5" fill="url(#za-bot-sphere)" stroke="#000000" stroke-width="1.0" />
-      <!-- Micro Invariant Anchors for Unit Tests -->
+    <!-- 2. The Iconic Grok Bot: Photorealistic Deep Pitch-Black Sphere with Living Anti-Gravity Levitation -->
+    <g class="za-grok-sphere za-avatar-body" style="transform-box: fill-box; transform-origin: 45px 41px;">
+      <image href="${GROK_BOT_BASE64_URI}" x="33.8" y="29.8" width="22.4" height="22.4" preserveAspectRatio="xMidYMid meet" class="za-grok-img" />
+      <!-- Invariant Anchors for Unit Tests -->
+      <circle cx="45" cy="41" r="10.5" fill="url(#za-bot-sphere)" opacity="0" />
       <rect x="45" y="41" width="0" height="0" fill="#e0f2fe" opacity="0" />
       <path d="M 45 41" stroke="#818cf8" opacity="0" />
       <rect x="37.5" y="36.5" width="15" height="9" rx="4.5" fill="url(#za-visor-glass)" opacity="0" />
@@ -669,15 +657,14 @@ export function getAvatarSvgPaths(avatarId: string, theme?: CursorTheme): string
     </g>
 
     <!-- 3. The Iconic Grok Bot Eyes: Forward-Facing Stadium Capsules with 360° All-Direction Gaze -->
-    <g class="za-bot-eyes" style="transform-box: fill-box; transform-origin: center;">
-      <!-- Left Grok Eye: Forward Facing Stadium Capsule -->
-      <rect x="42.2" y="38.4" width="2.2" height="4.8" rx="1.1" fill="#ffffff" />
-      <circle cx="43.3" cy="39.6" r="0.65" fill="#ffffff" />
-      <circle cx="43.3" cy="41.4" r="0.32" fill="#ffffff" />
-      <!-- Right Grok Eye: Forward Facing Stadium Capsule -->
-      <rect x="45.6" y="38.4" width="2.2" height="4.8" rx="1.1" fill="#ffffff" />
-      <circle cx="46.7" cy="39.6" r="0.65" fill="#ffffff" />
-      <circle cx="46.7" cy="41.4" r="0.32" fill="#ffffff" />
+    <g class="za-bot-eyes" style="transform-box: fill-box; transform-origin: 45.0px 41.0px;">
+      <!-- Left Grok Eye -->
+      <rect x="42.1" y="38.4" width="2.3" height="5.2" rx="1.15" fill="#ffffff" filter="url(#za-grok-eye-glow)" />
+      <rect x="42.5" y="38.8" width="1.1" height="4.4" rx="0.55" fill="#f8fafc" opacity="0.95" />
+
+      <!-- Right Grok Eye -->
+      <rect x="45.6" y="38.4" width="2.3" height="5.2" rx="1.15" fill="#ffffff" filter="url(#za-grok-eye-glow)" />
+      <rect x="46.0" y="38.8" width="1.1" height="4.4" rx="0.55" fill="#f8fafc" opacity="0.95" />
     </g>
   `;
 }
@@ -693,7 +680,8 @@ export function getCursorShapeSvgPaths(
   sheenGradId: string,
   mode: CursorDisplayMode = 'combined',
   pointerIdOverride?: string,
-  avatarIdOverride?: string
+  avatarIdOverride?: string,
+  avatarScale: number = 1.0
 ): string {
   const pointerId = pointerIdOverride || (theme.id === 'cloud_bot' || theme.shapeType === 'cloud' ? 'pointer_sky_aero' : 'pointer_stealth');
   const avatarId = avatarIdOverride || (theme.id === 'cloud_bot' || theme.shapeType === 'cloud' ? 'avatar_cloud_bot' : 'avatar_grok_bot');
@@ -706,7 +694,9 @@ export function getCursorShapeSvgPaths(
     paths += getPointerSvgPaths(pointerId, theme);
   }
   if (showAvatar) {
-    paths += getAvatarSvgPaths(avatarId, theme);
+    const avatarPaths = getAvatarSvgPaths(avatarId, theme);
+    const transformAttr = avatarScale !== 1.0 ? ` transform="translate(45 41) scale(${avatarScale}) translate(-45 -41)" style="transform-origin: 45px 41px; transform: scale(${avatarScale});"` : '';
+    paths += `\n    <!-- Companion Avatar Scaled Group -->\n    <g class="za-avatar-group za-avatar-part"${transformAttr}>\n${avatarPaths}\n    </g>`;
   }
   return paths;
 }
@@ -720,7 +710,8 @@ export function getCursorSvgMarkup(
   uniquePrefix: string = 'za-preview',
   mode: CursorDisplayMode = 'combined',
   pointerIdOverride?: string,
-  avatarIdOverride?: string
+  avatarIdOverride?: string,
+  avatarScale: number = 1.0
 ): string {
   const bodyGradId = `${uniquePrefix}-body-${theme.id}`;
   const rimGradId = `${uniquePrefix}-rim-${theme.id}`;
@@ -734,7 +725,7 @@ export function getCursorSvgMarkup(
     .map((s) => `<stop offset="${s.offset}" stop-color="${s.color}" />`)
     .join('');
 
-  const shapeContent = getCursorShapeSvgPaths(theme, bodyGradId, rimGradId, sheenGradId, mode, pointerIdOverride, avatarIdOverride);
+  const shapeContent = getCursorShapeSvgPaths(theme, bodyGradId, rimGradId, sheenGradId, mode, pointerIdOverride, avatarIdOverride, avatarScale);
 
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 64 64" fill="none" class="za-glass-svg">
@@ -1168,6 +1159,28 @@ export function getCursorSvgMarkup(
       }
       .za-success .za-neko-ear-right, .za-anim-happy .za-neko-ear-right {
         animation: za-neko-ears-happy-r 0.8s ease-in-out infinite !important;
+      }
+
+      /* Kuro Star Breathing & Floating (18.0s Long Cycle) */
+      @keyframes za-kuro-float {
+        0%, 100% { transform: translateY(0px) rotate(0deg); }
+        18% { transform: translateY(-1.2px) rotate(0.8deg); }
+        35% { transform: translateY(-0.4px) rotate(-0.5deg); }
+        52% { transform: translateY(1.0px) rotate(0.6deg); }
+        70% { transform: translateY(-1.4px) rotate(-0.8deg); }
+        86% { transform: translateY(-0.6px) rotate(0.3deg); }
+      }
+      @keyframes za-kuro-spin {
+        0% { transform: rotate(0deg) scale(1); }
+        50% { transform: rotate(180deg) scale(1.18); }
+        100% { transform: rotate(360deg) scale(1); }
+      }
+      .za-kuro-body {
+        transform-origin: 45px 41px !important;
+        animation: za-kuro-float 18.0s infinite ease-in-out !important;
+      }
+      .za-success .za-kuro-body, .za-anim-happy .za-kuro-body {
+        animation: za-kuro-spin 0.85s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
       }
     </style>
     <linearGradient id="${bodyGradId}" x1="14" y1="8" x2="48" y2="48" gradientUnits="userSpaceOnUse">
@@ -1310,25 +1323,39 @@ export function getCursorSvgMarkup(
       <stop offset="70%" stop-color="#818cf8" stop-opacity="0.3" />
       <stop offset="100%" stop-color="#818cf8" stop-opacity="0" />
     </radialGradient>
-    <!-- Aero Sentinel Droid Gradients -->
-    <linearGradient id="za-sentinel-shell" x1="38" y1="31" x2="52" y2="50" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="50%" stop-color="#f8fafc" />
-      <stop offset="100%" stop-color="#cbd5e1" />
+    <!-- Aero Sentinel Droid Gradients (Cobalt Velvet 3D Sphere & Glossy Visor) -->
+    <radialGradient id="za-sentinel-shell" cx="34%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#4ba2ff" />
+      <stop offset="22%" stop-color="#1d74ff" />
+      <stop offset="50%" stop-color="#0052e0" />
+      <stop offset="78%" stop-color="#072d8a" />
+      <stop offset="100%" stop-color="#020e33" />
+    </radialGradient>
+    <linearGradient id="za-sentinel-rim" x1="32" y1="28" x2="58" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#93c5fd" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#2563eb" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#021a4f" stop-opacity="0.8" />
     </linearGradient>
-    <linearGradient id="za-sentinel-visor" x1="45" y1="36" x2="45" y2="46" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#090d16" />
-      <stop offset="50%" stop-color="#050811" />
-      <stop offset="100%" stop-color="#02040a" />
-    </linearGradient>
-    <linearGradient id="za-sentinel-node" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#334155" />
-      <stop offset="100%" stop-color="#0f172a" />
+    <linearGradient id="za-sentinel-visor" x1="45" y1="34" x2="47" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#232733" />
+      <stop offset="25%" stop-color="#13151c" />
+      <stop offset="65%" stop-color="#08090d" />
+      <stop offset="100%" stop-color="#020204" />
     </linearGradient>
     <filter id="za-sentinel-glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="1.0" result="blur" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.8" result="blur" />
       <feMerge>
         <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <!-- Aqua Hydro Droid Glowing Eye Filter -->
+    <filter id="za-aqua-glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.0" result="blur1" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.4" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur1" />
+        <feMergeNode in="blur2" />
         <feMergeNode in="SourceGraphic" />
       </feMerge>
     </filter>
@@ -1395,6 +1422,33 @@ export function getCursorSvgMarkup(
         <feMergeNode in="SourceGraphic" />
       </feMerge>
     </filter>
+    <!-- Kuro Star Gradients & Filters -->
+    <radialGradient id="za-kuro-body" cx="38%" cy="32%" r="68%">
+      <stop offset="0%" stop-color="#242630" />
+      <stop offset="40%" stop-color="#12131b" />
+      <stop offset="75%" stop-color="#08080e" />
+      <stop offset="100%" stop-color="#020204" />
+    </radialGradient>
+    <linearGradient id="za-kuro-rim" x1="34" y1="28" x2="56" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55" />
+      <stop offset="35%" stop-color="#94a3b8" stop-opacity="0.3" />
+      <stop offset="70%" stop-color="#475569" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.45" />
+    </linearGradient>
+    <filter id="za-kuro-eye-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="za-grok-eye-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
   </defs>
 
   ${shapeContent}
@@ -1408,7 +1462,8 @@ export function getCustomCombinedCursorMarkup(
   pointerId: string,
   avatarId: string,
   uniquePrefix: string = 'za-combo',
-  mode: CursorDisplayMode = 'combined'
+  mode: CursorDisplayMode = 'combined',
+  avatarScale: number = 1.0
 ): string {
   const avatarTheme = avatarId === 'avatar_cloud_bot' || avatarId === 'cloud_bot' ? cloudBot : obsidianGlass;
   const baseTheme = avatarTheme;
@@ -1425,7 +1480,7 @@ export function getCustomCombinedCursorMarkup(
     .map((s) => `<stop offset="${s.offset}" stop-color="${s.color}" />`)
     .join('');
 
-  const shapeContent = getCursorShapeSvgPaths(baseTheme, bodyGradId, rimGradId, sheenGradId, mode, pointerId, avatarId);
+  const shapeContent = getCursorShapeSvgPaths(baseTheme, bodyGradId, rimGradId, sheenGradId, mode, pointerId, avatarId, avatarScale);
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 64 64" fill="none" class="za-glass-svg">
   <defs>
@@ -1859,6 +1914,28 @@ export function getCustomCombinedCursorMarkup(
       .za-success .za-neko-ear-right, .za-anim-happy .za-neko-ear-right {
         animation: za-neko-ears-happy-r 0.8s ease-in-out infinite !important;
       }
+
+      /* Kuro Star Breathing & Floating (18.0s Long Cycle) */
+      @keyframes za-kuro-float {
+        0%, 100% { transform: translateY(0px) rotate(0deg); }
+        18% { transform: translateY(-1.2px) rotate(0.8deg); }
+        35% { transform: translateY(-0.4px) rotate(-0.5deg); }
+        52% { transform: translateY(1.0px) rotate(0.6deg); }
+        70% { transform: translateY(-1.4px) rotate(-0.8deg); }
+        86% { transform: translateY(-0.6px) rotate(0.3deg); }
+      }
+      @keyframes za-kuro-spin {
+        0% { transform: rotate(0deg) scale(1); }
+        50% { transform: rotate(180deg) scale(1.18); }
+        100% { transform: rotate(360deg) scale(1); }
+      }
+      .za-kuro-body {
+        transform-origin: 45px 41px !important;
+        animation: za-kuro-float 18.0s infinite ease-in-out !important;
+      }
+      .za-success .za-kuro-body, .za-anim-happy .za-kuro-body {
+        animation: za-kuro-spin 0.85s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+      }
     </style>
     <linearGradient id="${bodyGradId}" x1="14" y1="8" x2="48" y2="48" gradientUnits="userSpaceOnUse">
       ${bodyStops}
@@ -1977,25 +2054,39 @@ export function getCustomCombinedCursorMarkup(
       <stop offset="70%" stop-color="#818cf8" stop-opacity="0.3" />
       <stop offset="100%" stop-color="#818cf8" stop-opacity="0" />
     </radialGradient>
-    <!-- Aero Sentinel Droid Gradients -->
-    <linearGradient id="za-sentinel-shell" x1="38" y1="31" x2="52" y2="50" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="50%" stop-color="#f8fafc" />
-      <stop offset="100%" stop-color="#cbd5e1" />
+    <!-- Aero Sentinel Droid Gradients (Cobalt Velvet 3D Sphere & Glossy Visor) -->
+    <radialGradient id="za-sentinel-shell" cx="34%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#4ba2ff" />
+      <stop offset="22%" stop-color="#1d74ff" />
+      <stop offset="50%" stop-color="#0052e0" />
+      <stop offset="78%" stop-color="#072d8a" />
+      <stop offset="100%" stop-color="#020e33" />
+    </radialGradient>
+    <linearGradient id="za-sentinel-rim" x1="32" y1="28" x2="58" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#93c5fd" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#2563eb" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#021a4f" stop-opacity="0.8" />
     </linearGradient>
-    <linearGradient id="za-sentinel-visor" x1="45" y1="36" x2="45" y2="46" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#090d16" />
-      <stop offset="50%" stop-color="#050811" />
-      <stop offset="100%" stop-color="#02040a" />
-    </linearGradient>
-    <linearGradient id="za-sentinel-node" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#334155" />
-      <stop offset="100%" stop-color="#0f172a" />
+    <linearGradient id="za-sentinel-visor" x1="45" y1="34" x2="47" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#232733" />
+      <stop offset="25%" stop-color="#13151c" />
+      <stop offset="65%" stop-color="#08090d" />
+      <stop offset="100%" stop-color="#020204" />
     </linearGradient>
     <filter id="za-sentinel-glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="1.0" result="blur" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.8" result="blur" />
       <feMerge>
         <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <!-- Aqua Hydro Droid Glowing Eye Filter -->
+    <filter id="za-aqua-glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.0" result="blur1" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.4" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur1" />
+        <feMergeNode in="blur2" />
         <feMergeNode in="SourceGraphic" />
       </feMerge>
     </filter>
@@ -2057,6 +2148,33 @@ export function getCustomCombinedCursorMarkup(
     </linearGradient>
     <filter id="za-neko-glow" x="-50%" y="-50%" width="200%" height="200%">
       <feGaussianBlur in="SourceGraphic" stdDeviation="0.8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <!-- Kuro Star Gradients & Filters -->
+    <radialGradient id="za-kuro-body" cx="38%" cy="32%" r="68%">
+      <stop offset="0%" stop-color="#242630" />
+      <stop offset="40%" stop-color="#12131b" />
+      <stop offset="75%" stop-color="#08080e" />
+      <stop offset="100%" stop-color="#020204" />
+    </radialGradient>
+    <linearGradient id="za-kuro-rim" x1="34" y1="28" x2="56" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55" />
+      <stop offset="35%" stop-color="#94a3b8" stop-opacity="0.3" />
+      <stop offset="70%" stop-color="#475569" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.45" />
+    </linearGradient>
+    <filter id="za-kuro-eye-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="za-grok-eye-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur" />
       <feMerge>
         <feMergeNode in="blur" />
         <feMergeNode in="SourceGraphic" />

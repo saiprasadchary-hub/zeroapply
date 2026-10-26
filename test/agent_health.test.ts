@@ -4,7 +4,7 @@ import { getAgentHealth } from '../src/agent/telemetry/agentHealth';
 let requestImages: string[] | undefined;
 let fail = false;
 Object.defineProperty(globalThis, 'window', { configurable: true, value: { zeroApply: {
-  startEmbeddedLlm: async () => ({ isReady: true, isLoading: false, modelName: 'fixture-vision-model' }),
+  startEmbeddedLlm: async () => ({ isReady: true, isLoading: false, modelName: 'fixture-vision-model', supportsVision: true }),
   generateEmbeddedLlm: async (request: { images?: string[] }): Promise<string> => {
     requestImages = request.images;
     if (fail) throw new Error('Local AI request timed out.');
@@ -24,5 +24,12 @@ await assert.rejects(() => generateWebLlmResponse('Timeout fixture'), /timed out
 assert.equal(getAgentHealth().lastInference?.status, 'failed');
 assert.match(getAgentHealth().lastInference?.error || '', /timed out/);
 assert.equal(getAgentHealth().pendingRequests, 0);
+await stopEmbeddedModel();
+fail = false;
+window.zeroApply!.startEmbeddedLlm = async () => ({ isReady: true, isLoading: false, modelName: 'fixture-text-model', supportsVision: false });
+await initWebLlmEngine('review-start');
+await generateWebLlmResponse('Text-only model with optional screenshot', '', 0, 128, ['fixture-screen-image']);
+assert.equal(requestImages, undefined, 'A text-only backend must never silently receive ignored screenshots');
+assert.equal(getAgentHealth().lastInference?.screenshotSent, false);
 await stopEmbeddedModel();
 console.log('Agent health passed: image payload delivered to inference bridge, text-only requests identified and timeout failures exposed.');

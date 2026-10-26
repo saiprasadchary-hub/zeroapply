@@ -1,3 +1,5 @@
+import { refreshSalaryRate } from '../localLlm/salaryExchange';
+import { assertSecureStorageHealthy } from '../../services/secureStorage';
 import { beginInference, finishInference } from '../telemetry/agentHealth';
 export interface WebLlmEngineState {
   isReady: boolean;
@@ -6,6 +8,8 @@ export interface WebLlmEngineState {
   progressPercent?: number;
   modelName?: string;
   error?: string;
+  supportsVision?: boolean;
+  supportsStructuredOutput?: boolean;
 }
 
 let currentState: WebLlmEngineState = {
@@ -35,14 +39,15 @@ export function subscribeWebLlmState(callback: (state: WebLlmEngineState) => voi
 
 // Only explicit application start controls grant a session. Observation and generation cannot wake it.
 export function initWebLlmEngine(trigger: 'review-start' | 'browser-start'): Promise<void> {
+  assertSecureStorageHealthy();
   if (trigger !== 'review-start' && trigger !== 'browser-start') return Promise.reject(new Error('Click Review & start AutoApply to load built-in AI.'));
   if (startup) return startup;
-  if (currentState.isReady) return Promise.resolve();
+  if (currentState.isReady) return refreshSalaryRate().catch(() => undefined);
   const bridge = typeof window === 'undefined' ? undefined : window.zeroApply;
   if (!bridge?.startEmbeddedLlm) return Promise.reject(new Error('Built-in AI is available in the ZeroApply desktop app.'));
   const version = ++sessionVersion;
   updateState({ ...currentState, isLoading: true, error: undefined, progressText: 'Loading built-in AI…' });
-  const loading = bridge.startEmbeddedLlm().then((state) => {
+  const loading = Promise.all([bridge.startEmbeddedLlm(), refreshSalaryRate().catch(() => undefined)]).then(([state]) => {
     if (version !== sessionVersion) throw new Error('AutoApply startup cancelled.');
     updateState(state);
   }).catch((error: unknown) => {
@@ -54,6 +59,7 @@ export function initWebLlmEngine(trigger: 'review-start' | 'browser-start'): Pro
 }
 
 export async function ensureEmbeddedModelReady(): Promise<void> {
+  assertSecureStorageHealthy();
   if (startup) await startup;
   if (!currentState.isReady) throw new Error(currentState.error || 'Click Review & start AutoApply on your persona to load built-in AI.');
 }
@@ -65,15 +71,27 @@ export async function stopEmbeddedModel(): Promise<void> {
   if (typeof window !== 'undefined') await window.zeroApply?.stopEmbeddedLlm?.();
 }
 
-export async function generateWebLlmResponse(prompt: string, systemPrompt = '', temperature = 0, maxTokens = 256, images?: string[]): Promise<string> {
+export async function generateWebLlmResponse(prompt: string, systemPrompt = '', temperature = 0, maxTokens = 256, images?: string[], responseSchema?: Record<string, unknown>): Promise<string> {
   await ensureEmbeddedModelReady();
   const generate = typeof window === 'undefined' ? undefined : window.zeroApply?.generateEmbeddedLlm;
   if (!generate) throw new Error('Built-in AI requires the desktop app.');
-  const id = beginInference(currentState.modelName || 'Local AI', Boolean(images?.length));
+  const version = sessionVersion;
+  const acceptedImages = currentState.supportsVision === true ? images : undefined;
+  const id = beginInference(currentState.modelName || 'Local AI', Boolean(acceptedImages?.length));
   try {
-    const answer = await generate({ prompt, systemPrompt, temperature, maxTokens, images });
-    finishInference(id);
-    return answer;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (version !== sessionVersion || !currentState.isReady) throw new Error('Local AI session cancelled.');
+      try {
+        const answer = await generate({ prompt, systemPrompt, temperature, maxTokens, images: acceptedImages, responseSchema });
+        if (version !== sessionVersion || !currentState.isReady) throw new Error('Local AI session cancelled.');
+        finishInference(id);
+        return answer;
+      } catch (error: unknown) {
+        if (attempt === 3 || !(error instanceof Error) || !/answering another question/i.test(error.message)) throw error;
+        await new Promise<void>(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+      }
+    }
+    throw new Error('Local AI did not return an answer.');
   } catch (error: unknown) {
     finishInference(id, error instanceof Error ? error.message : 'Local AI request failed.');
     throw error;

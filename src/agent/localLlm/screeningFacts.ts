@@ -1,4 +1,5 @@
-import { resolveAvailabilityFact } from './availabilityFacts';
+import { convertAnnualInrToUsd } from './salaryExchange';
+import { joiningAvailabilityDays, resolveAvailabilityFact, validProfileDate } from './availabilityFacts';
 import type { PersonaData } from '../../types';
 
 /** Undefined means this guard does not handle the question; empty means unknown. */
@@ -7,11 +8,34 @@ export interface ScreeningContext {
 }
 
 export function resolveScreeningFact(label: string, persona: PersonaData, context: ScreeningContext = {}): string | undefined {
-  const q = label.toLowerCase();
-  const exactAnswer = Object.entries(persona.verifiedScreeningAnswers || {}).find(([question]) => question.toLowerCase().replace(/\s+/g, ' ').trim() === q.replace(/\s+/g, ' ').trim())?.[1];
+  const rawQuestion = label.toLowerCase();
+  const q = rawQuestion.replace(/\bexp\.?\b/g, 'experience');
+  const exactAnswer = Object.entries(persona.verifiedScreeningAnswers || {}).find(([question]) => question.toLowerCase().replace(/\s+/g, ' ').trim() === rawQuestion.replace(/\s+/g, ' ').trim())?.[1];
   if (exactAnswer?.trim()) return exactAnswer.trim();
   const availability = resolveAvailabilityFact(label, persona);
   if (availability !== undefined) return availability;
+  // Serving notice / being relieved describes employment status, not a duration.
+  if (/serving.*notice|notice.*serving|relieved|already.*resign|last working day/.test(q)) {
+    if (persona.employmentStatus === 'fresher') return 'Not applicable';
+    if (/last working day/.test(q)) return validProfileDate(persona.lastWorkingDate) || '';
+    if (/serving.*notice/.test(q) && /relieved/.test(q)) return persona.noticeStatus === 'serving' || persona.noticeStatus === 'relieved' ? 'Yes' : persona.noticeStatus === 'not_serving' ? 'No' : '';
+    if (/serving.*notice|notice.*serving/.test(q)) return persona.noticeStatus ? persona.noticeStatus === 'serving' ? 'Yes' : 'No' : '';
+    if (/relieved/.test(q)) return persona.noticeStatus ? persona.noticeStatus === 'relieved' ? 'Yes' : 'No' : '';
+    return '';
+  }
+  if (/joining date|earliest.*(?:joining|start).*date|when.*start.*date/.test(q)) return validProfileDate(persona.joiningDate) || '';
+  if (/^(?:can|are|will|would|do)\b/.test(q) && /join|start|available/.test(q) && /immediate(?:ly)?|within\s+(?:(?:\d+\s*(?:to|-)\s*)?\d+|few)\s*days?/.test(q)) {
+    const days = joiningAvailabilityDays(persona);
+    if (days === undefined || !Number.isFinite(days) || days < 0) return '';
+    const within = q.match(/within\s+(?:(\d+)\s*(?:to|-)\s*)?(\d+)\s*days?/);
+    const maxDays = within ? Number(within[2] || within[1]) : 0;
+    return days <= maxDays ? 'Yes' : 'No';
+  }
+  if (/(?:rate|rating|scale).*\b(?:skills?|yourself|proficien|1\s*[-–]\s*10)|\b(?:skills?|yourself).*\b(?:rate|rating|scale)/.test(q)) return '';
+  if (/how many days.*(?:join|start)|(?:join|start).*in.*days|notice.*(?:period|days)/.test(q)) {
+    const days = /notice/.test(q) ? (persona.employmentStatus === 'fresher' ? 0 : persona.noticePeriodDays) : joiningAvailabilityDays(persona);
+    return days !== undefined && Number.isFinite(days) && days >= 0 ? String(days) : '';
+  }
   // These facts cannot be inferred from a job requirement, location or a model's confidence.
   if (/authoriz|sponsor|visa|legal right|permit.*work|eligible.*work|criminal|felony|misdemeanor|convict|disciplin|terminated|fired|asked to resign|non.?compete|restrictive covenant|conflict of interest|18.*years|age.*18|at.*least.*18|legal.*age|driver|driving|licen[sc]e|security clearance|itar|export control|u\.?s\.? person|accommodation|disabilit|background.*check|drug.*test|drug.*screen|screening.*consent|medical exam|relocat|travel|agree|consent|acknowledge|declaration|whatsapp|joined.*(?:community|group)|follow.*(?:company|page)|contact.*employer|relative.*work|family.*employed/.test(q)) return '';
   if (/\bgpa\b|cgpa|grade\s*point|grades|academic.*percentage|percentage|marks/.test(q)) {
@@ -23,7 +47,9 @@ export function resolveScreeningFact(label: string, persona: PersonaData, contex
     return education.match(/graduat(?:ion|ing|ed)?(?:\s*(?:year|date|in|:))*\s*(20\d{2})/i)?.[1] || '';
   }
   if (/(?:completed|hold|possess|have).*\b(?:bachelor|master|degree|diploma)|level.*education/.test(q)) return '';
-  if (/experience/.test(q) && /months?/.test(q) && !/describe|summary|tell us|do you have|have you/.test(q)) {
+  const asksQuantity = /how many|number of|select.*(?:total|additional)|enter.*(?:total|additional)/.test(q);
+  const asksBinary = !asksQuantity && /do you have|have you|at least|minimum|more than|over\s+\d/.test(q);
+  if (/experience/.test(q) && /months?/.test(q) && !/describe|summary|tell us/.test(q) && !asksBinary) {
     if (persona.employmentStatus === 'fresher') return '0';
     if (/with|using|python|java|react|c\+\+/.test(q)) return '';
     const years = persona.experienceYears;
@@ -31,19 +57,21 @@ export function resolveScreeningFact(label: string, persona: PersonaData, contex
     const months = Math.round(years * 12);
     return String(/additional|remaining|remainder/.test(q) ? months % 12 : months);
   }
-  if (/experience/.test(q) && /years?|yrs?/.test(q) && !/describe|summary|tell us/.test(q) && !/do you have|have you|at least|minimum/.test(q)) {
+  if (/experience/.test(q) && /years?|yrs?/.test(q) && !/describe|summary|tell us/.test(q) && !asksBinary) {
     if (persona.employmentStatus === 'fresher') return '0';
     if (/with|using|python|java|react|c\+\+/.test(q)) return '';
     return persona.experienceYears === undefined ? '' : String(persona.experienceYears);
   }
 
-  if (/experience|proficien|ai agent|autonomous agent|tool.calling|llm pipeline/.test(q) && /do you have|have you|are you|can you/.test(q) && !/\d+\s*(?:[-–]\s*\d+)?\s*(?:years?|yrs?)/.test(q)) return '';
-  if (/experience/.test(q) && /do you have|have you|at least|minimum/.test(q)) {
+  if (/\b(?:llms?|large language models?|generative ai|gen\s*ai|ai agents?|autonomous agents?|tool[- ]calling|llm pipelines?)\b/i.test(q)) return undefined;
+  if (/experience|proficien/.test(q) && /do you have|have you|are you|can you/.test(q) && !/\d+\s*(?:[-–]\s*\d+)?\s*(?:years?|yrs?)/.test(q)) return '';
+  if (/experience/.test(q) && asksBinary) {
     const threshold = q.match(/(\d+(?:\.\d+)?)\s*(?:[-–]\s*\d+)?\s*(?:years?|yrs?)/);
     if (threshold) {
       const years = persona.employmentStatus === 'fresher' ? 0 : persona.experienceYears;
-      if (years === undefined) return '';
-      if (years < Number(threshold[1])) return 'No';
+      if (years === undefined || !Number.isFinite(years) || years < 0) return '';
+      const minimum = Number(threshold[1]);
+      if (/more than|over\s+\d/.test(q) ? years <= minimum : years < minimum) return 'No';
       // Total tenure alone does not establish tenure in a particular technology.
       return /c\+\+|python|java|react|industrial/.test(q) ? '' : 'Yes';
     }
@@ -57,15 +85,22 @@ export function resolveScreeningFact(label: string, persona: PersonaData, contex
   }
   if (/applied.*(?:company|before)|previously.*applied/.test(q)) return context.previouslyAppliedToCompany === undefined ? '' : context.previouslyAppliedToCompany ? 'Yes' : 'No';
   if (/previously.*employed|ever.*worked.*(?:company|us)/.test(q)) return '';
+  // A fresher's current employment fields are established by profile status.
+  if (/^(?:please\s+enter\s+your\s+)?current\s+(?:designation|organisation|organization|employer|company)\s*[:*]?$/i.test(q)) {
+    if (persona.employmentStatus === 'fresher') return 'Fresher';
+  }
   const isCurrent = /(?:current|present|existing)\s*(?:ctc|salary|compensation|pay|package)/.test(q);
-  const isExpected = /(?:desired|expected|minimum)\b.*(?:salary|ctc|pay|compensation|package)|(?:salary|compensation)\s*expectations?/.test(q);
+  const isExpected = /(?:desired|expected|minimum)\b.*(?:salary|ctc|pay|compensation|package)|(?:salary|compensation|income)\s*expectations?/.test(q);
   const isCompensation = isCurrent || isExpected || /salary|compensation|ctc|stipend|hourly|pay rate/.test(q);
-  if (isCompensation && /hourly|per\s*hour|usd|\$|percent|increase/.test(q)) return '';
+  if (isCurrent && persona.employmentStatus === 'fresher' && !/percent|increase/.test(q)) return '0';
+  if (isCompensation && /hourly|per\s*hour|percent|increase/.test(q)) return '';
   if (isCompensation) {
     const lpa = isCurrent
       ? (persona.employmentStatus === 'fresher' ? 0 : persona.currentCtcLpa)
       : persona.expectedSalaryLpa ?? persona.minSalary;
     if (lpa === undefined || !Number.isFinite(lpa) || lpa < 0 || (!isCurrent && lpa === 0 && persona.employmentStatus !== 'fresher')) return '';
+    if (/usd|us dollars?/.test(q)) return convertAnnualInrToUsd(lpa * 100000, /month/.test(q));
+    if (/\$/.test(q)) return ''; // An unqualified dollar sign does not identify a currency.
     if (/lpa|lakhs?|lacs?/.test(q)) return String(lpa);
     if (/month/.test(q)) return String(Math.round(lpa * 100000 / 12));
     return String(lpa * 100000);

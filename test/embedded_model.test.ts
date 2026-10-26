@@ -84,11 +84,23 @@ try {
   assert.equal(starts, 0, 'Passive health/status and generation must never start the model');
   const loading = initWebLlmEngine('review-start');
   assert.equal(initWebLlmEngine('review-start'), loading);
+  const healthDuringStartup = checkOllamaHealth();
   finishStart?.({ isReady: true, isLoading: false });
   await loading;
+  assert.equal(await healthDuringStartup, true, 'Health waits for authorized loading without starting another model');
   assert.equal(starts, 1);
   assert.equal(await generateWebLlmResponse('Question'), 'Real response');
   assert.equal(generates, 1);
+  let busyCalls = 0;
+  fakeWindow.zeroApply.generateEmbeddedLlm = async () => {
+    busyCalls++;
+    if (busyCalls === 1) throw new Error('Built-in AI is answering another question.');
+    return 'Recovered local answer';
+  };
+  assert.equal(await generateWebLlmResponse('Describe saved resume facts'), 'Recovered local answer');
+  assert.equal(busyCalls, 2, 'A temporary busy response must retry local inference');
+  fakeWindow.zeroApply.generateEmbeddedLlm = async () => { throw new Error('Invalid built-in AI request.'); };
+  await assert.rejects(generateWebLlmResponse('Invalid request'), /Invalid/);
   await stopEmbeddedModel();
   assert.equal(stopped, 1);
   const stale = initWebLlmEngine('review-start');

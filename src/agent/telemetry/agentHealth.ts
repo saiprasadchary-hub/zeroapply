@@ -1,3 +1,4 @@
+import { recordQuality } from './qualityMetrics';
 export interface AgentHealthSnapshot {
   pendingRequests: number;
   lastInference?: {
@@ -25,6 +26,7 @@ export function beginInference(model: string, screenshotSent: boolean): string {
   health.lastInference = { id, model, screenshotSent, status: 'running', startedAt: Date.now() }; publish(); return id;
 }
 export function finishInference(id: string, error?: string): void {
+  if (error) recordQuality('failedInferences');
   pending.delete(id);
   if (health.lastInference?.id === id) health.lastInference = { ...health.lastInference,
     status: error ? 'failed' : 'completed', elapsedMs: Date.now() - health.lastInference.startedAt, error };

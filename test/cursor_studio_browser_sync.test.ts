@@ -12,6 +12,7 @@ import {
 } from '../src/cursors/index';
 import {
   ensureVisualCursor,
+  cursorSyncAll,
   cursorSetTheme,
   cursorSetCombination,
   cursorSetDisplayMode,
@@ -35,6 +36,7 @@ const expectedAvatars = [
   'avatar_cloud_bot',
   'avatar_sentinel_bot',
   'avatar_mochi_neko',
+  'avatar_kuro_star',
 ];
 
 for (const ptrId of expectedPointers) {
@@ -50,7 +52,7 @@ for (const avtId of expectedAvatars) {
   assert.equal(opt.id, avtId);
   assert.ok(opt.name.length > 0, `Avatar ${avtId} must have a name`);
 }
-console.log('✅ All 5 cursor pointers and 4 companion avatars are valid.');
+console.log('✅ All 5 cursor pointers and 5 companion avatars are valid.');
 
 // --- TEST 2: Custom Selection Persistence ---
 console.log('--- TEST 2: Custom Selection Persistence via saveCustomCombination ---');
@@ -136,7 +138,7 @@ for (const ptr of expectedPointers) {
     );
   }
 }
-console.log('✅ All 20 combination pairs (5 pointers x 4 avatars) successfully validated.');
+console.log('✅ All 25 combination pairs (5 pointers x 5 avatars) successfully validated.');
 
 // --- TEST 7: Display Mode Switching (combined, cursor, avatar) ---
 console.log('--- TEST 7: Display Mode Switching ---');
@@ -160,5 +162,34 @@ await cursorSetDisplayMode(modeView, 'combined');
 assert.ok(modeLogs.some((c) => c.includes('setDisplayMode("combined")')), 'Must dispatch setDisplayMode with combined');
 
 console.log('✅ Display mode switches cleanly across all modes.');
+
+// --- TEST 8: Atomic cursorSyncAll Synchronization ---
+console.log('--- TEST 8: Atomic cursorSyncAll Synchronization ---');
+const syncAllLogs: string[] = [];
+const syncAllView: WebviewTarget = {
+  executeJavaScript: async <T>(code: string): Promise<T> => {
+    syncAllLogs.push(code);
+    return true as unknown as T;
+  },
+};
+
+const synced = await cursorSyncAll(syncAllView, {
+  pointerId: 'pointer_obsidian_starlight',
+  avatarId: 'avatar_kuro_star',
+  mode: 'combined',
+  scale: 1.35,
+});
+assert.equal(synced, true, 'cursorSyncAll must return true');
+assert.ok(
+  syncAllLogs.some((s) => s.includes('"pointer_obsidian_starlight"') && s.includes('"avatar_kuro_star"') && s.includes('1.35')),
+  'cursorSyncAll must execute sync with pointer, avatar, and scale'
+);
+console.log('✅ cursorSyncAll atomically propagates full configuration in real-time.');
+
+// --- TEST 9: Companion Avatar Scale Slider Persistence ---
+console.log('--- TEST 9: Companion Avatar Scale Persistence ---');
+saveCustomCombination('pointer_neon_delta', 'avatar_sentinel_bot', 'combined', 1.4);
+assert.equal(loadStoredPointerId(), 'pointer_neon_delta');
+assert.equal(loadStoredAvatarId(), 'avatar_sentinel_bot');
 
 console.log('\n🎉 ALL VISUAL AGENT CURSOR STUDIO BROWSER SYNC TESTS PASSED! 🎉\n');

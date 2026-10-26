@@ -156,6 +156,11 @@ export function parseAnswer(rawOutput: string, context: ParseContext = {}): Pars
   }
 
   const { inputType, options, validationError } = context;
+  // Actual choices are authoritative even when a validation message mentions numbers.
+  if (options && options.length > 0) {
+    const matched = matchBestOption(cleaned, options);
+    return { answer: matched?.option || '', confidence: matched?.confidence ?? 0 };
+  }
 
   // Universal validation error constraint handling across all ATS error types
   if (validationError) {
@@ -196,6 +201,7 @@ export function parseAnswer(rawOutput: string, context: ParseContext = {}): Pars
     if (num) {
       return { answer: num, confidence: 0.95 };
     }
+    return { answer: '', confidence: 0 };
   }
 
   // Date input field
@@ -203,12 +209,6 @@ export function parseAnswer(rawOutput: string, context: ParseContext = {}): Pars
     if (/immediately|asap|now|today|earliest/i.test(cleaned)) {
       return { answer: new Date().toISOString().split('T')[0], confidence: 0.95 };
     }
-  }
-
-  // Radio / Select dropdown option list
-  if (options && options.length > 0) {
-    const matched = matchBestOption(cleaned, options);
-    return { answer: matched?.option || '', confidence: matched?.confidence ?? 0 };
   }
 
   // Checkbox boolean value

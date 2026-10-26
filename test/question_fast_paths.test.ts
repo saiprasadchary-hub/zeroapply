@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { resolveAvailabilityFact } from '../src/agent/localLlm/availabilityFacts';
+import { resolveListedLlmTools } from '../src/agent/localLlm/listedLlmTools';
+import { resolveFieldScreeningFact } from '../src/agent/localLlm/fieldAnswer';
+import type { PersonaData } from '../src/types';
+const question = 'Are you comfortable with the required working-hour overlap for India?';
+const persona = { availability: { overlap: { india: true } }, techStack: ['LangChain', 'OpenAI API', 'Firebase', 'Scikit-learn'], skills: ['langchain'] } as PersonaData;
+assert.equal(resolveAvailabilityFact(question, persona), 'Yes');
+assert.equal(resolveAvailabilityFact(question, { ...persona, availability: { overlap: { india: false } } }), 'No');
+assert.equal(resolveAvailabilityFact(question, { ...persona, availability: {} }), '');
+assert.equal(resolveFieldScreeningFact({ label: question, inputType: 'radio', options: ['Yes', 'No'] }, persona), 'Yes');
+assert.equal(resolveListedLlmTools('Which LLM APIs and frameworks have you used?', persona), 'LangChain, OpenAI API');
+assert.equal(resolveListedLlmTools('Which LLM APIs and frameworks have you used?', { techStack: ['Firebase', 'Scikit-learn'] } as PersonaData), undefined);
+assert.equal(resolveListedLlmTools('Which LLM APIs and frameworks have you used?', { techStack: ['No experience with LangChain'] } as PersonaData), undefined);
+assert.equal(resolveListedLlmTools('How many years have you used LLM frameworks?', persona), undefined);
+console.log('Availability radio mapping and evidence-based tool fast paths passed.');

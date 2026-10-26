@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { MODEL_BYTES, MODEL_NAME } from './model-config.mjs';
+import { validateInferenceExtras } from './inference-policy.mjs';
 
 // The process is created only by start(), never by construction or status reads.
 export class EmbeddedModelService {
@@ -12,7 +13,7 @@ export class EmbeddedModelService {
     this.nextId = 0;
     this.loading = null;
     this.busy = false;
-    this.state = { isReady: false, isLoading: false, progressPercent: 0, progressText: 'AI standby', modelName: MODEL_NAME };
+    this.state = { isReady: false, isLoading: false, progressPercent: 0, progressText: 'AI standby', modelName: MODEL_NAME, supportsVision: false, supportsStructuredOutput: true };
   }
 
   status() { return { ...this.state }; }
@@ -83,7 +84,7 @@ export class EmbeddedModelService {
     });
   }
 
-  async generate({ prompt, systemPrompt = '', temperature = 0, maxTokens = 256 }) {
+  async generate({ prompt, systemPrompt = '', temperature = 0, maxTokens = 256, images, responseSchema }) {
     if (!this.state.isReady) throw new Error('Click Review & start AutoApply to load the built-in AI.');
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 32_000
       || typeof systemPrompt !== 'string' || systemPrompt.length > 16_000
@@ -91,11 +92,12 @@ export class EmbeddedModelService {
       throw new Error('Invalid built-in AI request.');
     }
     if (this.busy) throw new Error('Built-in AI is answering another question.');
+    validateInferenceExtras({ images, responseSchema }, false);
     this.busy = true;
     const child = this.child;
     try {
       return await this.request('generate', {
-        prompt, systemPrompt, temperature: Math.max(0, Math.min(1, temperature)),
+        prompt, systemPrompt, responseSchema, temperature: Math.max(0, Math.min(1, temperature)),
         maxTokens: Math.max(16, Math.min(512, Math.floor(maxTokens))),
       }, 120_000);
     } finally { if (this.child === child) this.busy = false; }

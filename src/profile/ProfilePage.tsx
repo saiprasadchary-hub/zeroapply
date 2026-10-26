@@ -560,6 +560,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               onToast(`Cursor display mode set to ${mode.toUpperCase()}`);
             }
           }}
+          onAvatarScaleChange={(scale) => {
+            if (onToast) {
+              onToast(`Companion avatar scale set to ${scale.toFixed(1)}x`);
+            }
+          }}
         />
 
         {/* 5. NOTIFICATIONS & SOUND SETTINGS CARD */}

@@ -1,3 +1,4 @@
+import { hasSecureStorageFailure } from '../secureStorage';
 import { collection, deleteDoc, doc, getDoc, onSnapshot, serverTimestamp, setDoc, type Unsubscribe } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
 import type { PersonaData } from '../../types';
@@ -77,6 +78,7 @@ function isCloudResumeVersion(value: unknown): value is CloudResumeVersion {
 
 export class FirebaseCloudSync {
   public static async savePersona(persona: PersonaData, uid?: string): Promise<boolean> {
+    if (hasSecureStorageFailure()) return false;
     try {
       const userKey = getEffectiveUid(uid);
       if (!userKey) return false;
@@ -109,6 +111,7 @@ export class FirebaseCloudSync {
   }
 
   public static async savePersonaProfiles(profiles: CloudPersonaProfile[], activeProfileId: string, uid?: string): Promise<boolean> {
+    if (hasSecureStorageFailure()) return false;
     try {
       const userKey = getEffectiveUid(uid);
       if (!userKey) return false;

@@ -64,6 +64,7 @@ import { useAuth } from '../auth/AuthContext';
 const STORAGE_KEY = 'zeroapply_ats_resume_studio_document';
 
 interface ResumeStudioProps {
+  active?: boolean;
   persona: PersonaData;
   onSaveToast: (msg: string) => void;
   onUpdatePersona?: (p: PersonaData) => void;
@@ -88,6 +89,7 @@ const isDocumentMeaningfullyPopulated = (doc: ResumeDocument | null | undefined)
 
 export const ResumeStudio: React.FC<ResumeStudioProps> = ({
   persona,
+  active = true,
   onSaveToast,
   onUpdatePersona: _onUpdatePersona,
 }) => {
@@ -334,6 +336,7 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
   };
 
   useEffect(() => {
+    if (!active) return;
     let isMounted = true;
     const timer = setTimeout(async () => {
       setIsAnalyzingLlm(true);
@@ -349,7 +352,7 @@ export const ResumeStudio: React.FC<ResumeStudioProps> = ({
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [document]);
+  }, [document, active]);
 
   // Compute live ATS score on every change
   const liveAtsScore: AtsScoreResult = useMemo(() => {

@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { interpretAvailability } from '../src/agent/localLlm/interpretAvailability';
+import type { PersonaData } from '../src/types';
+const field = { label: 'Are you comfortable with the required working-hour overlap for India?', inputType: 'radio', options: ['Yes', 'No'] };
+const persona = { availability: { overlap: { india: true } } } as PersonaData;
+let calls = 0;
+const result = await interpretAvailability(field, persona, async (prompt, _system, _temperature, tokens) => {
+  calls++;
+  assert.equal(JSON.parse(prompt).preferences.overlap.india, true);
+  assert.equal(tokens, 96);
+  return '{"answer":"Yes"}';
+});
+assert.equal(calls, 1);
+assert.equal(result.source, 'llm');
+assert.equal(result.answer, 'Yes');
+assert.equal((await interpretAvailability(field, persona, async () => '{"answer":"No"}')).answer, '');
+assert.equal((await interpretAvailability(field, { ...persona, availability: { overlap: { india: false } } }, async () => '{"answer":"Yes"}')).answer, '');
+assert.equal((await interpretAvailability(field, persona, async () => { throw new Error('timed out'); })).answer, '');
+assert.equal((await interpretAvailability(field, persona, async () => 'invalid')).answer, '');
+console.log('Local AI invocation, bounded output, preference validation, and failure handling passed.');

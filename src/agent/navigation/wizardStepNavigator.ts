@@ -1,3 +1,4 @@
+import { assertSecureStorageHealthy } from '../../services/secureStorage';
 /**
  * ZeroApply Navigation - Advanced Wizard Step Navigator
  * Detects, evaluates, and advances multi-step wizard buttons across all major ATS platforms
@@ -8,6 +9,7 @@
 import type { WebviewTarget } from '../domScanner/injectedScanner';
 import { STEP_TRANSITION_SCRIPT } from './stepTransition';
 import { ensureVisualCursor } from '../stealth/agentCursor';
+import { waitForControlReady } from '../formFiller/controlReadiness';
 
 export interface ForwardButtonResult {
   exists: boolean;
@@ -376,6 +378,7 @@ export class WizardStepNavigator {
   }
 
   public async advance(webview: WebviewTarget, timeoutMs = 2000): Promise<AdvanceResult> {
+  assertSecureStorageHealthy();
     let btn = await this.detectForwardButton(webview);
     if (!btn.exists) {
       return { success: false, action: 'none', stepChanged: false, hasErrors: false };
@@ -400,6 +403,8 @@ export class WizardStepNavigator {
         : 'ZeroApply AI: Advancing Step';
 
       await ensureVisualCursor(webview);
+      await webview.executeJavaScript(`(() => { const roots = [document]; for (let i = 0; i < roots.length; i++) { for (const element of roots[i].querySelectorAll('*')) if (element.shadowRoot) roots.push(element.shadowRoot); try { const button = roots[i].querySelector(${JSON.stringify(btn.selector)}); if (button) { button.scrollIntoView({ block: 'nearest', behavior: 'instant' }); return; } } catch {} } })()`).catch(() => {});
+      if (!await waitForControlReady(webview, [btn.selector])) return { success: false, action: btn.action, stepChanged: false, hasErrors: false };
 
       const transition = await webview.executeJavaScript<{ clicked: boolean; stepChanged: boolean }>(
         `(${STEP_TRANSITION_SCRIPT})(${JSON.stringify(btn.selector)}, ${JSON.stringify(actionLabel)}, ${Math.max(100, Math.min(timeoutMs, 10000))})`

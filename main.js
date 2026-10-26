@@ -1,8 +1,8 @@
 import { app, BrowserWindow, webContents, session, ipcMain, dialog, safeStorage, shell, Menu, clipboard, Notification, utilityProcess } from 'electron';
-import { shouldOpenGoogleSignInInChrome } from './AgentBrowser/google-signin.js';
 import { BrowserAuthHandoff } from './desktop/browser-auth.mjs';
 import { EmbeddedModelService } from './desktop/model-service.mjs';
 import { OllamaModelService } from './desktop/ollama-model-service.mjs';
+import { readStoreFile, assertReadableStoredValue } from './desktop/secure-store-policy.mjs';
 import updaterPackage from 'electron-updater';
 import { DesktopUpdateService } from './desktop/update-service.mjs';
 import { MODEL_FILENAME } from './desktop/model-config.mjs';
@@ -1023,18 +1023,13 @@ function secureStorePath() {
 }
 
 function readSecureStore() {
-  try {
-    const value = JSON.parse(fs.readFileSync(secureStorePath(), 'utf8'));
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  } catch (error) {
-    if (error?.code !== 'ENOENT') console.warn('Secure store could not be read:', error);
-    return {};
-  }
+  return readStoreFile(secureStorePath());
 }
 
 function writeSecureStore(store) {
   const target = secureStorePath();
   const temporary = `${target}.tmp`;
+  if (fs.existsSync(target)) fs.copyFileSync(target, `${target}.previous`);
   fs.writeFileSync(temporary, JSON.stringify(store), { encoding: 'utf8', mode: 0o600 });
   fs.renameSync(temporary, target);
 }
@@ -1061,7 +1056,6 @@ const handleWindowOpen = ({ url }, sourceContents) => {
     }
     const isWebview = sourceContents?.getType?.() === 'webview';
     const gesture = isWebview ? consumePopupGesture(sourceContents) : null;
-    if (isWebview && openGoogleWebsiteSignIn(url, sourceContents.getURL())) return { action: 'deny' };
     if (isExternalProtocol(url)) {
       if (gesture) void confirmOpenExternal(url).catch((error) => console.warn('External application open failed:', error));
       return { action: 'deny' };
@@ -1437,10 +1431,6 @@ app.on('web-contents-created', (_event, contents) => {
     contents.on('context-menu', (_contextEvent, params) => showWebviewContextMenu(contents, params));
 
     contents.on('will-navigate', (event, navigationUrl) => {
-      if (openGoogleWebsiteSignIn(navigationUrl, contents.getURL())) {
-        event.preventDefault();
-        return;
-      }
       if (isExternalProtocol(navigationUrl)) {
         event.preventDefault();
         const gesture = consumePopupGesture(contents);
@@ -1595,14 +1585,6 @@ async function openAccountChrome(url) {
   });
 }
 
-function openGoogleWebsiteSignIn(destination, source) {
-  if (!shouldOpenGoogleSignInInChrome(destination, source)) return false;
-  void openAccountChrome(destination).then(() => {
-    sendBrowserEvent('Google sign-in opened in Chrome. Complete sign-in there, then return to ZeroApply.');
-  }).catch((error) => sendBrowserEvent(describeError(error)));
-  return true;
-}
-
 ipcMain.handle('desktop-google-login', async (event) => {
   requireTrustedIpcSender(event);
   try {
@@ -1734,10 +1716,11 @@ ipcMain.on('secure-storage-get', (event, key) => {
     requireTrustedIpcSender(event);
     validateSecureStorageKey(key);
     const encrypted = readSecureStore()[key];
+    if (encrypted !== undefined && typeof encrypted !== 'string') throw new Error('Saved storage value has an invalid format.');
     event.returnValue = typeof encrypted === 'string' ? decryptSecureValue(encrypted) : null;
   } catch (error) {
     console.warn('Secure storage read failed:', error);
-    event.returnValue = null;
+    event.returnValue = { error: 'Saved data could not be decrypted or read. Automation is disabled to protect it.' };
   }
 });
 
@@ -1748,6 +1731,7 @@ ipcMain.handle('secure-storage-set', async (event, key, value) => {
     throw new Error('Secure-storage value is invalid or too large.');
   }
   const store = readSecureStore();
+  assertReadableStoredValue(store, key, decryptSecureValue);
   store[key] = encryptSecureValue(value);
   writeSecureStore(store);
   return true;
@@ -1757,6 +1741,7 @@ ipcMain.handle('secure-storage-remove', async (event, key) => {
   requireTrustedIpcSender(event);
   validateSecureStorageKey(key);
   const store = readSecureStore();
+  assertReadableStoredValue(store, key, decryptSecureValue);
   delete store[key];
   writeSecureStore(store);
   return true;

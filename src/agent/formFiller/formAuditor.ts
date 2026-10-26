@@ -329,7 +329,8 @@ export const FORM_AUDITOR_SCRIPT = `
       // E. Text / Tel / Email / Textarea / Number
       const val = (el.value || '').trim();
       const container = safeClosest(el, '.fb-form-element, .jobs-easy-apply-form-element, .jobs-easy-apply-form-section__grouping, [data-test-form-element], fieldset, [class*="group"], [class*="section"]') || el.parentElement;
-      const label = (getAttr(el, 'aria-label') || el.placeholder || container?.querySelector('label, .fb-form-element-label, [class*="label"]')?.textContent || el.name || '').trim();
+      const nativeLabel = el.labels ? Array.from(el.labels).map(label => (label.textContent || '').trim()).filter(Boolean).join(' ') : '';
+      const label = (getAttr(el, 'aria-label') || nativeLabel || el.placeholder || container?.querySelector('label, .fb-form-element-label, [class*="label"]')?.textContent || el.name || '').trim();
 
       const isReq = el.required ||
         getAttr(el, 'aria-required') === 'true' ||

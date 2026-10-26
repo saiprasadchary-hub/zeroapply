@@ -47,6 +47,7 @@ export function isAllowedPlatformHost(hostname: string, expectedHost: string): b
 
 export class AutoApplyEngine {
   private isRunning = false;
+  private stopReason: string | null = null;
   private agentEngine: AgentEngine = new AgentEngine();
   private statusCallback: ((status: string) => void) | null = null;
   private logCallback: ((log: any) => void) | null = null;
@@ -102,6 +103,7 @@ export class AutoApplyEngine {
     options: { stepDelayMs?: number; singleJobOnly?: boolean; maxJobs?: number } = {}
   ): Promise<void> {
     this.isRunning = true;
+    this.stopReason = null;
     let appliedCount = 0;
     const effectiveSubmit = allowSubmit;
     const batchLimit = Math.max(1, options.maxJobs ?? persona.applicationLimit ?? 5);
@@ -155,7 +157,8 @@ export class AutoApplyEngine {
 
       // Universal modern job card selectors covering LinkedIn (modern & classic), Indeed, and testbeds
       const UNIVERSAL_JOB_CARD_SELECTORS = [
-        '[componentkey^="job-card-component-ref-"][role="button"]',
+        '[componentkey^="job-card-component-ref-"]',
+        'a[href*="/jobs/view/"]',
         'li.jobs-search-results-list__list-item',
         'li.jobs-search-results__list-item',
         'div.job-card-container',
@@ -185,17 +188,21 @@ export class AutoApplyEngine {
       const detectCardsScript = `
         (() => {
           const cardSelectors = ${JSON.stringify(UNIVERSAL_JOB_CARD_SELECTORS)};
-          const rawCards = Array.from(document.querySelectorAll(cardSelectors));
+          const roots = [document];
+          for (let r = 0; r < roots.length; r++) for (const element of roots[r].querySelectorAll('*')) if (element.shadowRoot) roots.push(element.shadowRoot);
+          const rawCards = roots.flatMap(root => Array.from(root.querySelectorAll(cardSelectors)));
           // Deduplicate nested card elements (keep outer-most card)
           const cards = rawCards.filter((el) => {
             return !rawCards.some((parent) => parent !== el && parent.contains(el));
           });
 
           return cards.map((c, i) => {
-            const title = c.querySelector('.job-card__title, .job-card-list__title, .base-search-card__title, h2, h3, a, p span[aria-hidden="true"]')?.textContent?.trim() || ('Job ' + (i + 1));
-            const company = c.querySelector('.job-card__company, .company-name, [class*="company"], .job-card-container__company-name, .job-card-container__primary-description')?.textContent?.trim() || '';
-            const isApplied = /applied/i.test(c.textContent || '');
-            const url = c.querySelector('a[href*="/jobs/view/"], a[href]')?.href || '';
+            const lines = (c.innerText || c.textContent || '').split('\\n').map(line => line.trim()).filter(Boolean);
+            const title = c.querySelector('.job-card__title, .job-card-list__title, .base-search-card__title, h2, h3, a[href*="/jobs/view/"], [role="heading"]')?.textContent?.trim() || lines[0]?.replace(/^Selected,? */i, '') || ('Job ' + (i + 1));
+            const company = c.querySelector('.job-card__company, .company-name, [class*="company"], .job-card-container__company-name, .job-card-container__primary-description')?.textContent?.trim() || lines[1] || '';
+            const isApplied = /(^|[^a-z])applied([^a-z]|$)/i.test(c.innerText || c.textContent || '');
+            const id = c.getAttribute('componentkey')?.match(/[0-9]+$/)?.[0] || c.getAttribute('data-occludable-job-id') || c.getAttribute('data-job-id');
+            const url = (c.matches('a[href*="/jobs/view/"]') ? c.href : '') || c.querySelector('a[href*="/jobs/view/"]')?.href || (id ? 'https://www.linkedin.com/jobs/view/' + id + '/' : c.querySelector('a[href]')?.href || '');
             return { index: i, title, company, isApplied, url };
           });
         })()
@@ -225,9 +232,17 @@ export class AutoApplyEngine {
         detectedCards = (await view.executeJavaScript<JobCardMetadata[]>(detectCardsScript).catch(() => [])) || [];
       }
 
+      // React may paint the results shell before hydrating job cards. Never
+      // interpret one empty scan as a single-job page.
+      for (let attempt = 0; detectedCards.length === 0 && this.isRunning && attempt < 10; attempt++) {
+        await new Promise<void>(resolve => setTimeout(resolve, 500));
+        detectedCards = await view.executeJavaScript<JobCardMetadata[]>(detectCardsScript);
+      }
+      if (!this.isRunning) return;
+
       const totalCards = detectedCards.length;
 
-      if (totalCards > 1) {
+      if (totalCards > 0) {
         this.notifyLog(`Detected ${totalCards} job postings in search results. Initiating multi-job queue...`, 'info');
 
         for (let cardIndex = 0; cardIndex < Math.min(totalCards, MAX_APPLICATIONS_PER_RUN) && this.isRunning; cardIndex++) {
@@ -264,7 +279,9 @@ export class AutoApplyEngine {
             (async () => {
               try {
                 const cardSelectors = ${JSON.stringify(UNIVERSAL_JOB_CARD_SELECTORS)};
-                const rawCards = Array.from(document.querySelectorAll(cardSelectors));
+                const roots = [document];
+          for (let r = 0; r < roots.length; r++) for (const element of roots[r].querySelectorAll('*')) if (element.shadowRoot) roots.push(element.shadowRoot);
+          const rawCards = roots.flatMap(root => Array.from(root.querySelectorAll(cardSelectors)));
                 const cards = rawCards.filter((el) => {
                   return !rawCards.some((parent) => parent !== el && parent.contains(el));
                 });
@@ -331,17 +348,25 @@ export class AutoApplyEngine {
           const openModalScript = `
             (async function() {
               try {
-                const detailPane = document.querySelector(
+                const roots = [document];
+                for (let r = 0; r < roots.length; r++) for (const element of roots[r].querySelectorAll('*')) if (element.shadowRoot) roots.push(element.shadowRoot);
+                const deepQuery = (selector) => roots.map(root => root.querySelector(selector)).find(Boolean);
+                const detailPane = deepQuery(
                   '.scaffold-layout__detail, .jobs-search__job-details, .job-view-layout, .jobs-details, .jobs-details__main-content, [data-job-details="true"], .jobs-description__container'
                 ) || document;
                 let btn = detailPane.querySelector(
                   'button.jobs-apply-button, .jobs-s-apply button, button[aria-label^="Easy Apply to " i], button#main-easy-apply-btn, a.jobs-apply-button, button[data-za-apply-btn], .jobs-apply-button--top-card button, [data-view-name="job-apply-button"] button'
                 );
                 if (!btn) {
-                  btn = document.querySelector(
+                  btn = deepQuery(
                     'button.jobs-apply-button, .jobs-s-apply button, button[aria-label^="Easy Apply to " i], button#main-easy-apply-btn, a.jobs-apply-button, button[data-za-apply-btn], [data-view-name="job-apply-button"] button'
                   );
                 }
+                if (!btn) btn = roots.flatMap(root => Array.from(root.querySelectorAll('button, [role="button"]'))).find(candidate => {
+                  const text = (candidate.textContent || '').trim();
+                  const label = candidate.getAttribute('aria-label') || '';
+                  return /^easy\\s*apply$/i.test(text) && !/filter/i.test(label) && !candidate.closest('[role="toolbar"], [role="radiogroup"], [componentkey^="job-card-component-ref-"]') && candidate.getClientRects().length > 0;
+                });
                 if (btn && !btn.disabled) {
                   const text = (btn.textContent || btn.getAttribute('aria-label') || '').trim();
                   if (/easy\\s*apply|in\\s*apply/i.test(text)) {
@@ -492,6 +517,7 @@ export class AutoApplyEngine {
             continue;
           }
 
+          this.notifyStatus(`Filling application for "${cardMeta?.title || 'Job'}"...`);
           this.notifyLog(`Easy Apply modal opened for ${cardMeta?.title}. Executing application with 3D Purple Visual Cursor & Local Qwen...`, 'success');
           await new Promise((r) => setTimeout(r, 150));
 
@@ -622,7 +648,7 @@ export class AutoApplyEngine {
               break;
             }
 
-            this.notifyStatus(`Submitted job ${cardIndex + 1}/${totalCards}. Moving to next job...`);
+            this.notifyStatus(`${appliedCount}/${batchLimit} applications confirmed. Moving to next job...`);
 
             // Safeguard: halt loop if daily cap reached
             if (!dailyQuotaManager.canApply()) {
@@ -638,7 +664,7 @@ export class AutoApplyEngine {
           } else {
             // Unsubmitted / in-progress modal: DO NOT close, DO NOT dismiss! Keep open for user review!
             this.notifyLog(`Easy Apply for "${cardMeta?.title}" is open on screen (${appResult.outcome}). Modal kept open for user review.`, 'warning');
-            this.notifyStatus(`Application paused for "${cardMeta?.title}": ${appResult.error || 'Review form on screen.'}`);
+            this.notifyStatus(`Application paused for "${cardMeta?.title}": ${this.stopReason || appResult.error || 'Review form on screen.'}`);
             break;
           }
         }
@@ -678,7 +704,10 @@ export class AutoApplyEngine {
         const singleApplyScript = `
           (async function() {
             try {
-              const btn = document.querySelector('button.jobs-apply-button, [aria-label*="Easy Apply"], button#main-easy-apply-btn, a.jobs-apply-button, .jobs-s-apply button, button[data-za-apply-btn]');
+              const roots = [document];
+              for (let r = 0; r < roots.length; r++) for (const element of roots[r].querySelectorAll('*')) if (element.shadowRoot) roots.push(element.shadowRoot);
+              let btn = roots.map(root => root.querySelector('button.jobs-apply-button, button[aria-label^="Easy Apply to " i], button#main-easy-apply-btn, a.jobs-apply-button, .jobs-s-apply button, button[data-za-apply-btn]')).find(Boolean);
+              if (!btn) btn = roots.flatMap(root => Array.from(root.querySelectorAll('button, [role="button"]'))).find(candidate => /^easy\\s*apply$/i.test((candidate.textContent || '').trim()) && !/filter/i.test(candidate.getAttribute('aria-label') || '') && !candidate.closest('[role="toolbar"], [role="radiogroup"], [componentkey^="job-card-component-ref-"]') && candidate.getClientRects().length > 0);
               if (btn && !btn.disabled) {
                 const text = (btn.textContent || btn.getAttribute('aria-label') || '').trim();
                 if (/easy\\s*apply|in\\s*apply/i.test(text)) {
@@ -751,6 +780,17 @@ export class AutoApplyEngine {
           this.notifyStatus('Waiting for Easy Apply application modal to fully load...');
           await waitForEasyApplyModalOpened(view, 8000);
           this.notifyLog('Easy Apply modal opened and fully settled', 'success');
+        }
+
+        // A missing Apply button is not an open application. In particular,
+        // already-applied result pages must never enter the form orchestrator.
+        if (applyResult?.status !== 'easy_apply') {
+          const hasDialog = await waitForEasyApplyModalOpened(view, 1500);
+          if (!hasDialog) {
+            this.notifyStatus('No open application or available Apply button was found. Refresh the job results and retry.');
+            this.notifyLog('Job discovery returned no cards and no application was open; form filling was not started.', 'warning');
+            return;
+          }
         }
 
         // Execute full orchestrated application with 3D Purple Visual Cursor & Local Qwen
@@ -863,7 +903,7 @@ export class AutoApplyEngine {
         } else {
           // Unsubmitted / in-progress modal: DO NOT close, DO NOT dismiss! Keep open for user review!
           this.notifyLog(`Easy Apply for "${singleJobTitle}" is open on screen (${appRes.outcome}). Modal kept open for user review.`, 'warning');
-          this.notifyStatus(`Application paused for "${singleJobTitle}": ${appRes.error || 'Review form on screen.'}`);
+          this.notifyStatus(`Application paused for "${singleJobTitle}": ${this.stopReason || appRes.error || 'Review form on screen.'}`);
         }
       }
     } catch (err: unknown) {
@@ -875,10 +915,12 @@ export class AutoApplyEngine {
     }
   }
 
-  public stop(): void {
+  public stop(reason = 'Stopped by user'): void {
+    if (!this.isRunning) return;
+    this.stopReason = reason;
     this.isRunning = false;
     this.agentEngine.stop();
-    this.notifyStatus('AutoApply stopped');
-    this.notifyLog('AutoApply stopped by user', 'warning');
+    this.notifyStatus(`AutoApply stopped: ${reason}`);
+    this.notifyLog(`AutoApply stopped: ${reason}`, 'warning');
   }
 }

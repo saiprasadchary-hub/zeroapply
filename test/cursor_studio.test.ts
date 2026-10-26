@@ -242,10 +242,14 @@ console.log('--- TEST 9: Selecting Wanted Cursor & Wanted Avatar and Combining T
 const {
   CURSOR_POINTER_OPTIONS,
   CURSOR_AVATAR_OPTIONS,
+  CURSOR_AVATAR_SCALE_STORAGE_KEY,
+  DEFAULT_AVATAR_SCALE,
   loadStoredPointerId,
   saveStoredPointerId,
   loadStoredAvatarId,
   saveStoredAvatarId,
+  loadStoredAvatarScale,
+  saveStoredAvatarScale,
   getPointerOption,
   getAvatarOption,
   saveCustomCombination,
@@ -254,12 +258,13 @@ const {
 const {
   cursorSetPointer,
   cursorSetAvatar,
+  cursorSetAvatarScale,
   cursorSetCombination,
 } = await import('../src/agent/stealth/agentCursor');
 
 // 1. Verify 2 categories options
 assert.equal(CURSOR_POINTER_OPTIONS.length, 5, 'Must have 5 cursor pointer options');
-assert.equal(CURSOR_AVATAR_OPTIONS.length, 4, 'Must have 4 companion avatar options');
+assert.equal(CURSOR_AVATAR_OPTIONS.length, 5, 'Must have 5 companion avatar options');
 
 const neonDeltaPointer = getPointerOption('pointer_neon_delta');
 const stealthPointer = getPointerOption('pointer_stealth');
@@ -276,10 +281,12 @@ const grokAvatar = getAvatarOption('avatar_grok_bot');
 const cloudAvatar = getAvatarOption('avatar_cloud_bot');
 const sentinelAvatar = getAvatarOption('avatar_sentinel_bot');
 const mochiNekoAvatar = getAvatarOption('avatar_mochi_neko');
+const kuroStarAvatar = getAvatarOption('avatar_kuro_star');
 assert.equal(grokAvatar.name, 'xAI Grok Cyber Bot');
 assert.equal(cloudAvatar.name, 'Cloud Companion Bot');
 assert.equal(sentinelAvatar.name, 'Aero Sentinel Droid');
-assert.equal(mochiNekoAvatar.name, 'Mochi Cyber Neko');
+assert.equal(mochiNekoAvatar.name, 'Aqua Hydro Droid');
+assert.equal(kuroStarAvatar.name, 'Kuro Star Celestial');
 
 // 2. Storage getters & setters for independent selection
 saveStoredPointerId('pointer_neon_delta');
@@ -299,6 +306,8 @@ saveStoredAvatarId('avatar_sentinel_bot');
 assert.equal(loadStoredAvatarId(), 'avatar_sentinel_bot', 'Sentinel avatar selection must persist');
 saveStoredAvatarId('avatar_mochi_neko');
 assert.equal(loadStoredAvatarId(), 'avatar_mochi_neko', 'Mochi Neko avatar selection must persist');
+saveStoredAvatarId('avatar_kuro_star');
+assert.equal(loadStoredAvatarId(), 'avatar_kuro_star', 'Kuro Star avatar selection must persist');
 saveStoredAvatarId('avatar_grok_bot');
 assert.equal(loadStoredAvatarId(), 'avatar_grok_bot', 'Avatar selection must update independently');
 
@@ -345,23 +354,32 @@ assert.ok(pairG.includes('fill="url(#za-nd-core)"'), 'Pair G must have obsidian 
 assert.ok(pairG.includes('fill="url(#za-nd-bevel)"'), 'Pair G must have 3D scooped inner dish bevel');
 assert.ok(pairG.includes('fill="url(#za-bot-sphere)"'), 'Pair G must have grok bot sphere');
 
-// Pair H: Cyber Neon Aurora Delta + Aero Sentinel Droid (Flagship Combination)
+// Pair H: Cyber Neon Aurora Delta + Aero Sentinel Droid (Photorealistic Fluffy Cobalt Mascot + Glowing Capsule Eyes)
 const pairH = getCustomCombinedCursorMarkup('pointer_neon_delta', 'avatar_sentinel_bot', 'pair-h', 'combined');
 assert.ok(pairH.includes('stroke="url(#za-nd-rim)"'), 'Pair H must have neon aurora glowing rim');
-assert.ok(pairH.includes('fill="url(#za-sentinel-shell)"'), 'Pair H must have porcelain head dome shell');
-assert.ok(pairH.includes('fill="url(#za-sentinel-visor)"'), 'Pair H must have panoramic curved visor');
-assert.ok(pairH.includes('filter="url(#za-sentinel-glow)"'), 'Pair H must have glowing cyan LED crescent eyes');
+assert.ok(pairH.includes('za-sentinel-head'), 'Pair H must have sentinel head group');
+assert.ok(pairH.includes('data:image/png;base64,'), 'Pair H must have high-res transparent mascot image');
+assert.ok(pairH.includes('za-sentinel-eye-left'), 'Pair H must have animated dynamic left white capsule eye');
+assert.ok(pairH.includes('za-sentinel-eye-right'), 'Pair H must have animated dynamic right white capsule eye');
+assert.ok(pairH.includes('filter="url(#za-sentinel-glow)"'), 'Pair H must have glowing white eye filter');
 
-// Pair I: Cyber Neon Aurora Delta + Mochi Cyber Neko (Kawaii Cute Flagship Combination)
+// Pair I: Cyber Neon Aurora Delta + Aqua Hydro Droid (Photorealistic Droplet + Animated Dynamic Cyan Eyes)
 const pairI = getCustomCombinedCursorMarkup('pointer_neon_delta', 'avatar_mochi_neko', 'pair-i', 'combined');
 assert.ok(pairI.includes('stroke="url(#za-nd-rim)"'), 'Pair I must have neon aurora glowing rim');
-assert.ok(pairI.includes('fill="url(#za-neko-shell)"'), 'Pair I must have mochi neko shell');
-assert.ok(pairI.includes('fill="url(#za-neko-ear)"'), 'Pair I must have mochi neko inner ears');
-assert.ok(pairI.includes('fill="url(#za-neko-eye)"'), 'Pair I must have anime galaxy eyes');
-assert.ok(pairI.includes('filter="url(#za-neko-glow)"'), 'Pair I must have glowing rosy cheeks blush');
-assert.ok(pairI.includes('za-neko-ear-left'), 'Pair I must have animated left ear group');
-assert.ok(pairI.includes('za-neko-ear-right'), 'Pair I must have animated right ear group');
-assert.ok(pairI.includes('za-neko-ear-left-idle'), 'Pair I must have smooth ear twitch/wiggle keyframes');
+assert.ok(pairI.includes('za-aqua-head'), 'Pair I must have aqua hydro drop mascot head');
+assert.ok(pairI.includes('data:image/png;base64,'), 'Pair I must have high-res transparent hydro drop image');
+assert.ok(pairI.includes('za-aqua-eye-left'), 'Pair I must have animated dynamic left cyan eye');
+assert.ok(pairI.includes('za-aqua-eye-right'), 'Pair I must have animated dynamic right cyan eye');
+assert.ok(pairI.includes('filter="url(#za-aqua-glow)"'), 'Pair I must have cyan neon glow filter');
+
+// Pair J: Stealth Pointer + Kuro Star (Photorealistic 3D Obsidian Star + Glowing Eyes)
+const pairJ = getCustomCombinedCursorMarkup('pointer_stealth', 'avatar_kuro_star', 'pair-j', 'combined');
+assert.ok(pairJ.includes('za-pointer-face'), 'Pair J must have stealth pointer face');
+assert.ok(pairJ.includes('za-kuro-body'), 'Pair J must have kuro star body');
+assert.ok(pairJ.includes('data:image/png;base64,'), 'Pair J must have high-res transparent star image');
+assert.ok(pairJ.includes('za-kuro-eye-left'), 'Pair J must have animated dynamic left white capsule eye');
+assert.ok(pairJ.includes('za-kuro-eye-right'), 'Pair J must have animated dynamic right white capsule eye');
+assert.ok(pairJ.includes('filter="url(#za-kuro-eye-glow)"'), 'Pair J must have glowing white eye filter');
 
 // 4. saveCustomCombination helper
 saveCustomCombination('pointer_sky_aero', 'avatar_grok_bot', 'combined');
@@ -395,10 +413,35 @@ assert.ok(combExecuted.some((s) => s.includes('setCombination("pointer_stealth",
 
 assert.ok(clientScript.includes('setPointer:'), 'Script must expose setPointer');
 assert.ok(clientScript.includes('setAvatar:'), 'Script must expose setAvatar');
+assert.ok(clientScript.includes('setAvatarScale:'), 'Script must expose setAvatarScale');
 assert.ok(clientScript.includes('setCombination:'), 'Script must expose setCombination');
 
-// 6. Test that ensureVisualCursor embeds and synchronizes selected pointer & avatar into Agent Browser webviews
-saveCustomCombination('pointer_neon_delta', 'avatar_sentinel_bot', 'combined');
+// 6. Avatar Scale Adjustment and Persistence Tests
+console.log('--- TEST 10: Companion Avatar Size Adjustment & Scaling ---');
+assert.equal(CURSOR_AVATAR_SCALE_STORAGE_KEY, 'zeroapply_selected_avatar_scale');
+assert.equal(DEFAULT_AVATAR_SCALE, 1.0);
+assert.equal(loadStoredAvatarScale(), 1.0);
+
+saveStoredAvatarScale(1.25);
+assert.equal(loadStoredAvatarScale(), 1.25, 'Stored avatar scale must be 1.25');
+
+saveStoredAvatarScale(0.75);
+assert.equal(loadStoredAvatarScale(), 0.75, 'Stored avatar scale must be 0.75');
+
+// SVG markup with scale
+const scaledSvg = getCustomCombinedCursorMarkup('pointer_stealth', 'avatar_kuro_star', 'scaled-test', 'combined', 1.25);
+assert.ok(scaledSvg.includes('scale(1.25)'), 'Scaled SVG must include scale(1.25) transform on avatar group');
+assert.ok(scaledSvg.includes('za-avatar-group'), 'Scaled SVG must wrap avatar in za-avatar-group');
+
+const compactSvg = getCustomCombinedCursorMarkup('pointer_stealth', 'avatar_kuro_star', 'compact-test', 'combined', 0.75);
+assert.ok(compactSvg.includes('scale(0.75)'), 'Compact SVG must include scale(0.75) transform on avatar group');
+
+// Webview scale bridge
+await cursorSetAvatarScale(combWebview, 1.5);
+assert.ok(combExecuted.some((s) => s.includes('setAvatarScale(1.5)')), 'Webview must execute setAvatarScale');
+
+// 7. Test that ensureVisualCursor embeds and synchronizes selected pointer, avatar & scale into Agent Browser webviews
+saveCustomCombination('pointer_neon_delta', 'avatar_kuro_star', 'combined', 1.25);
 const agentWebviewScripts: string[] = [];
 const agentWebview: WebviewTarget = {
   executeJavaScript: async <T>(code: string): Promise<T> => {
@@ -408,15 +451,23 @@ const agentWebview: WebviewTarget = {
 };
 await ensureVisualCursor(agentWebview);
 assert.ok(
-  agentWebviewScripts.some((s) => s.includes('"pointer_neon_delta"') && s.includes('"avatar_sentinel_bot"')),
+  agentWebviewScripts.some((s) => s.includes('"pointer_neon_delta"') && s.includes('"avatar_kuro_star"')),
   'Agent browser script injection must embed selected pointer and companion avatar'
 );
 assert.ok(
-  agentWebviewScripts.some((s) => s.includes('setCombination("pointer_neon_delta", "avatar_sentinel_bot")')),
+  agentWebviewScripts.some((s) => s.includes('setCombination("pointer_neon_delta", "avatar_kuro_star")')),
   'Agent browser must synchronize live combination directly into window.__zeroapplyCursor'
 );
+assert.ok(
+  agentWebviewScripts.some((s) => s.includes('setAvatarScale(1.25)')),
+  'Agent browser must synchronize avatar scale into window.__zeroapplyCursor'
+);
+
+// Reset scale back to default
+saveStoredAvatarScale(1.0);
 
 console.log('✅ Independent selection of wanted cursor and wanted avatar into custom combinations verified.');
+console.log('✅ Companion avatar size adjustment, scaling transforms, and webview synchronization verified.');
 console.log('✅ Agent Browser webview synchronization of selected cursor pointer and avatar verified.');
 
 console.log('\n🎉 ALL ZEROAPPLY CURSOR STUDIO TESTS PASSED! 🎉\n');

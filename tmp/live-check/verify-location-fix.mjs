@@ -1,0 +1,10 @@
+import { getVisualCursorScript } from '../../src/agent/stealth/agentCursor.ts';
+import { buildTypeaheadSelectionScript, buildTypeaheadVerificationScript } from '../../src/agent/formFiller/typeaheadSelection.ts';
+const targets=await(await fetch('http://127.0.0.1:61831/json/list')).json();const target=targets.find(t=>t.type==='webview'&&t.url.includes('linkedin.com'));const ws=new WebSocket(target.webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r,{once:true}));let id=0;const callbacks=new Map();ws.addEventListener('message',e=>{const d=JSON.parse(e.data);if(callbacks.has(d.id)){callbacks.get(d.id)(d);callbacks.delete(d.id);}});const evaluate=async expression=>{const n=++id;const answer=new Promise(r=>callbacks.set(n,r));ws.send(JSON.stringify({id:n,method:'Runtime.evaluate',params:{expression,awaitPromise:true,returnByValue:true}}));const d=await answer;if(d.result?.exceptionDetails)throw Error(d.result.exceptionDetails.text);return d.result?.result?.value;};
+await evaluate(getVisualCursorScript());
+const selectors=['input[placeholder="Enter city or location"]'];const value='Hyderabad, Telangana, India';
+console.log('selection',await evaluate(buildTypeaheadSelectionScript(selectors,value)));
+console.log('verification',await evaluate(buildTypeaheadVerificationScript(selectors,value)));
+console.log('debug',JSON.stringify(await evaluate('window.__zeroApplyTypeaheadDebug')));
+console.log('field',JSON.stringify(await evaluate(`(()=>{const el=document.querySelector('input[placeholder="Enter city or location"]');return {value:el?.value,invalid:el?.getAttribute('aria-invalid'),expanded:el?.closest('[data-expanded]')?.getAttribute('data-expanded'),cursorVersion:document.querySelector('#zeroapply-codex-cursor-root')?.dataset.layerVersion}})()`)));
+ws.close();

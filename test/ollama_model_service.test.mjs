@@ -5,6 +5,7 @@ import { OllamaModelService, OLLAMA_MODEL } from '../desktop/ollama-model-servic
 const json = data => ({ ok: true, json: async () => data });
 function makeService(generate = async () => json({ model: OLLAMA_MODEL, done: true, response: 'READY' })) {
   return new OllamaModelService({ fetchImpl: async (url, options) => {
+    if (url.endsWith('/show')) return json({ capabilities: ['completion', 'vision'] });
     if (url.endsWith('/tags') || url.endsWith('/ps')) return json({ models: [{ name: OLLAMA_MODEL }] });
     return generate(options);
   } });
@@ -157,11 +158,52 @@ test('vision screenshots reach local inference and malformed payloads are reject
   try {
     await service.start();
     const images = ['aGVsbG8='];
-    await service.generate({ prompt: 'Read the screenshot', images });
+    const responseSchema = { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'] };
+    await service.generate({ prompt: 'Read the screenshot', images, responseSchema });
     assert.deepEqual(requests[1].images, images);
+    assert.deepEqual(requests[1].format, responseSchema);
+    assert.equal(service.status().supportsVision, true);
     for (const invalid of [['https://example.com/image.png'], ['aGVsbG8=', 'aGVsbG8='], 'aGVsbG8=']) {
       await assert.rejects(service.generate({ prompt: 'Read', images: invalid }), /screenshot/);
     }
     assert.equal(service.status().isReady, true);
+    await assert.rejects(service.generate({ prompt: 'Read', responseSchema: { type: 'object', $ref: 'https://attacker.test' } }), /references/);
+  } finally { service.stop(); }
+});
+
+test('transient inference timeout retries once without dropping readiness or queued work', async () => {
+  let calls = 0;
+  const states = [];
+  const service = new OllamaModelService({ notify: state => states.push(state), fetchImpl: async (url) => {
+    if (url.endsWith('/tags')) return json({ models: [{ name: OLLAMA_MODEL }] });
+    if (url.endsWith('/show')) return json({ capabilities: ['completion'] });
+    if (url.endsWith('/version')) return json({ version: 'test' });
+    if (++calls === 2) throw new Error('Local AI request timed out.');
+    return json({ model: OLLAMA_MODEL, done: true, response: calls === 1 ? 'READY' : 'answer' });
+  } });
+  try {
+    await service.start();
+    const before = states.length;
+    const answers = await Promise.all([service.generate({ prompt: 'First' }), service.generate({ prompt: 'Second' })]);
+    assert.deepEqual(answers, ['answer', 'answer']);
+    assert.equal(calls, 4);
+    assert.ok(states.slice(before).every(state => state.isReady && !state.error));
+  } finally { service.stop(); }
+});
+
+test('persistent timeout has a bounded retry and becomes an explicit failure', async () => {
+  let calls = 0;
+  const service = new OllamaModelService({ fetchImpl: async url => {
+    if (url.endsWith('/tags')) return json({ models: [{ name: OLLAMA_MODEL }] });
+    if (url.endsWith('/show')) return json({ capabilities: [] });
+    if (url.endsWith('/version')) return json({ version: 'test' });
+    if (++calls === 1) return json({ model: OLLAMA_MODEL, done: true, response: 'READY' });
+    throw new Error('Local AI request timed out.');
+  } });
+  try {
+    await service.start();
+    await assert.rejects(service.generate({ prompt: 'Question' }), /timed out/);
+    assert.equal(calls, 3);
+    assert.equal(service.status().isReady, false);
   } finally { service.stop(); }
 });

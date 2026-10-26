@@ -1,4 +1,8 @@
+import { assertSecureStorageHealthy } from '../../services/secureStorage';
 import { selectTypeaheadOption } from './typeaheadSelection';
+import { waitForControlReady } from './controlReadiness';
+import { recordQuality } from '../telemetry/qualityMetrics';
+import { formatFieldAnswer } from '../localLlm/fieldAnswer';
 import { executeSyntheticInteraction } from '../domScanner/syntheticInteraction';
 import { matchSelectOption } from './optionMatching';
 import { OPTION_MATCHERS_SCRIPT } from './optionMatchingScript';
@@ -33,11 +37,27 @@ export async function fillField(
   webview: WebviewTarget,
   field: ClassifiedField,
   value: string,
+  persona?: PersonaData
+): Promise<FieldFillResult> {
+  assertSecureStorageHealthy();
+  recordQuality('writeAttempts');
+  const result = await fillFieldOnce(webview, field, value, persona);
+  if (result.success) recordQuality('verifiedWrites');
+  else if (/format|choices/.test(result.error || '')) recordQuality('formatRejections');
+  return result;
+}
+
+async function fillFieldOnce(
+  webview: WebviewTarget,
+  field: ClassifiedField,
+  value: string,
   _persona?: PersonaData
 ): Promise<FieldFillResult> {
   if (!webview || !field || value === undefined || value === null) {
     return { success: false, error: 'Invalid parameters' };
   }
+  value = formatFieldAnswer(value, field);
+  if (!value) return { success: false, error: 'Answer does not match the field format or available choices.' };
 
   const selector = field.selector || (field.id ? (field.id.startsWith('#') || field.id.startsWith('[') ? field.id : `[id="${field.id.replace(/"/g, '\\"')}"]`) : '');
   if (!selector) return { success: false, error: 'Missing selector' };
@@ -97,6 +117,7 @@ export async function fillField(
       })()
     `).catch(() => {});
     await new Promise((r) => setTimeout(r, 120));
+    if (inputType !== 'file' && !await waitForControlReady(webview, allSelectors)) return { success: false, selector, value, error: 'Control is missing, moving, disabled, read-only or covered by another element.' };
 
     const isTypeahead = await webview.executeJavaScript<boolean>(`(() => {
       for (const selector of ${JSON.stringify(allSelectors)}) {
@@ -191,15 +212,10 @@ export async function fillField(
             }
           }
 
-          // Fallback E: All radios on the page if still empty
-          if (candidates.length === 0) {
-            candidates = safeQueryAll('input[type="radio"], [role="radio"], [data-radix-radio-item]');
-          }
-
           // Exclude resume picker radios from generic questions
           candidates = candidates.filter(r => {
             const name = (r.name || r.id || '').toLowerCase();
-            const aria = (r.getAttribute ? r.getAttribute('aria-label') : '').toLowerCase();
+            const aria = (r.getAttribute?.('aria-label') || '').toLowerCase();
             if (name.includes('resume') || name.includes('jobs-resume-picker') || aria.includes('resume')) return false;
             if (typeof r.closest === 'function' && r.closest('.jobs-resume-picker, .jobs-document-upload, #resume-selector-list, .resume-list, [data-test-resume-item], [data-test-document-card]')) return false;
             return true;

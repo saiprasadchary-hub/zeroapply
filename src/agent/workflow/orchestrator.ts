@@ -1,7 +1,13 @@
+import { createQuestionSession } from '../localLlm/questionSession';
+import { needsAvailabilityInterpretation } from '../localLlm/availabilityFacts';
+import { refreshSalaryRate } from '../localLlm/salaryExchange';
+import { assertSecureStorageHealthy } from '../../services/secureStorage';
 import { dismissSubmissionReceipt } from '../recovery/postSubmissionDismissal';
 import { captureSubmissionEvidence, saveSubmissionEvidence, type SubmissionAnswer } from '../tracker/submissionEvidenceStore';
 import { ApplicationLogger } from '../tracker/applicationLogger';
-import { resolveScreeningFact } from '../localLlm/screeningFacts';
+import { resolveFieldScreeningFact } from '../localLlm/fieldAnswer';
+import { checkpointFor, newCheckpoint, profileRevision, saveCheckpoint, type WorkflowCheckpoint } from './automationStore';
+import { recordQuality } from '../telemetry/qualityMetrics';
 import { SUBMISSION_EVIDENCE_SCRIPT } from '../normalApply/submissionEvidence';
 /**
  * ZeroApply Workflow - Advanced Orchestrator
@@ -19,7 +25,7 @@ import { detectAtsArchitecture } from '../domScanner/atsDetector';
 import { resolveQuestion } from '../localLlm/questionResolver';
 import { getActiveModelName } from '../localLlm/ollamaClient';
 import { analyzeErrorConstraint } from '../localLlm/errorConstraintAnalyzer';
-import { fillField } from '../formFiller/formFiller';
+import { fillFieldWithRecovery as fillField } from '../formFiller/fillRecovery';
 import { auditFormFields, isFieldAlreadySatisfied } from '../formFiller/formAuditor';
 import { stepNavigator } from '../navigation/wizardStepNavigator';
 import { WorkflowStateMachine } from './stateMachine';
@@ -29,6 +35,7 @@ import { attachResumeFile } from '../fileUpload/fileUploadBridge';
 import { getStoredResume } from '../fileUpload/resumeFileAdapter';
 import { omniVision } from '../vision';
 import { captureWebsiteScreenshot } from '../vision/websiteScreenshot';
+import { clarifyVisualFields } from '../vision/visualFieldFallback';
 import { ensureVisualCursor, cursorMoveAndClick } from '../stealth/agentCursor';
 import { getLiveAgentLightHudScript } from '../ui/liveAgentLightHUD';
 import { isLiveAgentActivityEnabled } from '../../settings/settingsManager';
@@ -64,6 +71,8 @@ export class AutoApplyOrchestrator {
     persona: PersonaData,
     options: OrchestratorOptions = {}
   ): Promise<OrchestrationResult> {
+  assertSecureStorageHealthy();
+  await refreshSalaryRate().catch(() => undefined);
     const { maxSteps = 12, stepDelayMs = 650, openTab, closeTabAndReturn } = options;
     const sm = new WorkflowStateMachine();
 
@@ -71,11 +80,29 @@ export class AutoApplyOrchestrator {
     let stepsCount = 0;
     let detectedPlatform = 'Generic Portal';
 
+    const unresolvedReasons = new Map<string, string>();
+    const resolveForRun = createQuestionSession(async field => {
+      liveTelemetry.emit({ type: 'think', title: `Local AI answering: ${field.label}`, target: field.label, status: 'running' });
+      const result = await resolveQuestion(field, persona);
+      if (!result.answer) {
+        const reason = result.resumeContext || 'No supported answer was returned from the saved profile and resume.';
+        unresolvedReasons.set(field.label, reason);
+        liveTelemetry.emit({ type: 'status', title: `${field.label}: ${reason}`, target: field.label, status: 'paused' });
+      } else unresolvedReasons.delete(field.label);
+      return result;
+    });
     const savedAnswers = new Map<string, SubmissionAnswer>();
     let evidenceId: string | undefined;
     let evidenceError: string | undefined;
+    let checkpoint: WorkflowCheckpoint | undefined;
     const preserveReceipt = async (): Promise<void> => {
       if (evidenceId) return;
+      const alreadyConfirmed = checkpoint?.phase === 'confirmed';
+      if (checkpoint) {
+        checkpoint = { ...checkpoint, phase: 'confirmed', pending: [], answers: [...savedAnswers.values()], reason: undefined };
+        await saveCheckpoint(checkpoint).catch(() => {});
+      }
+      if (!alreadyConfirmed) recordQuality('confirmedApplications');
       try {
         const jobUrl = await webview.executeJavaScript<string>('location.href');
         const bundle = await captureSubmissionEvidence(webview, {
@@ -94,6 +121,31 @@ export class AutoApplyOrchestrator {
     };
 
     try {
+      const currentUrl = await webview.executeJavaScript<string>('location.href').catch(() => '');
+      const previous = typeof currentUrl === 'string' ? checkpointFor(persona, currentUrl) : undefined;
+      checkpoint = previous && previous.revision === profileRevision(persona) ? { ...previous } : newCheckpoint(persona, typeof currentUrl === 'string' ? currentUrl : '', options.companyName, options.jobTitle);
+      // A changed profile never erases an unresolved submission for this applicant/job.
+      if (previous && ['submitting', 'uncertain', 'confirmed'].includes(previous.phase)) {
+        checkpoint = { ...previous };
+        for (const answer of previous.answers) savedAnswers.set(answer.question, answer);
+        const receipt = await webview.executeJavaScript<boolean>(SUBMISSION_EVIDENCE_SCRIPT).catch(() => false);
+        if (receipt || ApplicationLogger.hasSubmitted({ jobUrl: currentUrl })) {
+          await preserveReceipt();
+          return { outcome: 'submitted', evidenceId, evidenceError, platform: detectedPlatform, fieldsFilled: previous.answers.length, stepsExecuted: 0 };
+        }
+        if (previous.phase === 'submitting') {
+          checkpoint = { ...checkpoint, phase: 'uncertain', reason: 'Interrupted while submitting; confirmation must be checked.' };
+          await saveCheckpoint(checkpoint);
+          recordQuality('uncertainApplications');
+        }
+        return { outcome: 'skipped', platform: detectedPlatform, fieldsFilled: 0, stepsExecuted: 0, error: 'A previous submission for this job needs confirmation. Check the receipt or application history; another Submit click was prevented.' };
+      }
+      if (previous?.revision === checkpoint.revision) {
+        for (const answer of previous.answers) savedAnswers.set(answer.question, answer);
+        liveTelemetry.emit({ type: 'status', title: 'Saved application found. Rechecking the live form before continuing.', status: 'running' });
+      }
+      checkpoint = { ...checkpoint, phase: 'draft', pending: [], reason: undefined };
+      await saveCheckpoint(checkpoint);
       sm.transition('analyzing');
 
       // Initialize 3D Purple Visual Cursor & Live Light HUD on target webview
@@ -363,7 +415,7 @@ export class AutoApplyOrchestrator {
         // Enforce LinkedIn stealth mask, disarm tracker iframe errors, uncheck follow company, and bypass top-choice traps
         await ensureLinkedInSafeSession(webview).catch(() => {});
 
-        let fields = await scanFormFields(webview);
+        let fields = await clarifyVisualFields(webview, await scanFormFields(webview));
         let classified = classifyFields(fields, persona);
 
         // Scan retry: If 0 fields found on a non-review step, allow React / modal DOM to settle
@@ -395,19 +447,20 @@ export class AutoApplyOrchestrator {
             }
             // Determine answer (Persona mapped value or Local Qwen 2.5 LLM resolution)
             if (!field.required && (field.inputType === 'checkbox' || !field.mappedValue)) continue;
-            const screenedFact = resolveScreeningFact(field.label || '', persona, screeningContext);
-            if (screenedFact === '' && field.required) {
+            const screenedFact = resolveFieldScreeningFact({ ...field, jobUrl: checkpoint?.jobUrl }, persona, screeningContext);
+            if (screenedFact === '' && field.required && !needsAvailabilityInterpretation(field.label)) {
               const error = `Needs a verified profile answer: ${field.label}`;
               liveTelemetry.emit({ type: 'status', title: error, target: field.label, status: 'paused' });
               await webview.executeJavaScript(`window.__zeroapplyHUD?.setQuestion(${JSON.stringify(error)}, 'Needs your answer')`).catch(() => {});
-              return { outcome: 'skipped', platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount, error };
+              // Finish other grounded answers; the final audit still blocks advancement.
+              continue;
             }
-            let answerVal = screenedFact ?? field.mappedValue;
+            let answerVal = needsAvailabilityInterpretation(field.label) ? undefined : screenedFact ?? field.mappedValue;
             let source: 'persona' | 'ollama' | 'rule' = 'persona';
             let resumeContextUsed: string | undefined;
 
             if (!answerVal) {
-              const res = await resolveQuestion({ ...field, captureScreenshot: () => captureWebsiteScreenshot(webview), jobContext: activeJobContext }, persona);
+              const res = await resolveForRun({ ...field, jobUrl: checkpoint?.jobUrl, captureScreenshot: () => captureWebsiteScreenshot(webview), jobContext: activeJobContext });
               answerVal = res.answer;
               source = res.source === 'persona' ? 'persona' : 'ollama';
               resumeContextUsed = res.resumeContext;
@@ -459,13 +512,16 @@ export class AutoApplyOrchestrator {
                 field.inputType
               );
 
-              const fillRes = await fillField(webview, field, answerVal, persona);
+              if (!field.hasError && field.currentValue === answerVal && savedAnswers.get(field.label)?.answer === answerVal) continue;
+              const fillRes = await fillField(webview, field, answerVal, persona, options.isCancelled);
               if (!fillRes.success) {
                 const error = `Answer did not persist for "${field.label}": ${fillRes.error || 'field verification failed'}`;
                 liveTelemetry.emit({ type: 'status', title: error, target: field.label, status: 'paused' });
                 return { outcome: 'skipped', platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount, error };
               }
               totalFieldsFilled++;
+              savedAnswers.set(field.label, { question: field.label, answer: fillRes.value || answerVal, source });
+              if (checkpoint) { checkpoint = { ...checkpoint, step: stepsCount, answers: [...savedAnswers.values()] }; await saveCheckpoint(checkpoint); }
 
               // Record filled field in Live Agent Light HUD
               await webview.executeJavaScript(`
@@ -735,7 +791,7 @@ export class AutoApplyOrchestrator {
                    (ff.inputType === 'radio' && !ff.currentValue));
 
             if (isUnanswered) {
-              let answerVal = resolveScreeningFact(ff.label || '', persona, screeningContext) ?? ff.mappedValue;
+              let answerVal = needsAvailabilityInterpretation(ff.label) ? undefined : resolveFieldScreeningFact({ ...ff, jobUrl: checkpoint?.jobUrl }, persona, screeningContext) ?? ff.mappedValue;
               let source: 'persona' | 'ollama' | 'rule' = 'persona';
 
               const matchingUnanswered = (audit.unansweredQuestions || []).find(
@@ -747,14 +803,15 @@ export class AutoApplyOrchestrator {
               // If the field has an active error, previous mappedValue cannot be trusted (e.g. '8' when >100 required).
               // Always resolve afresh with the error and helper text!
               if (ff.hasError || Boolean(activeError) || !answerVal) {
-                const res = await resolveQuestion({
+                const res = await resolveForRun({
                   ...ff,
+                  jobUrl: checkpoint?.jobUrl,
                   validationError: activeError,
                   errorMessage: activeError,
                   helperText: activeHelper,
                   contextHint: activeHelper ? `${ff.contextHint || ''} ${activeHelper}`.trim() : ff.contextHint,
                   captureScreenshot: () => captureWebsiteScreenshot(webview), jobContext: activeJobContext,
-                }, persona);
+                });
                 answerVal = res.answer;
                 source = res.source === 'persona' ? 'persona' : 'ollama';
 
@@ -788,7 +845,7 @@ export class AutoApplyOrchestrator {
                   ff.inputType
                 );
 
-                const fillRes = await fillField(webview, ff, answerVal, persona);
+                const fillRes = await fillField(webview, ff, answerVal, persona, options.isCancelled);
                 if (fillRes.success) totalFieldsFilled++;
                 await new Promise((r) => setTimeout(r, 250));
               }
@@ -801,6 +858,13 @@ export class AutoApplyOrchestrator {
 
         if (!audit.ready || audit.missingRequired.length || audit.errors.length || (audit.unansweredQuestions || []).some(question => question.isRequired || question.hasError)) {
           const error = `Required answers did not pass verification: ${[...audit.missingRequired, ...audit.errors].join('; ') || 'unresolved questions'}`;
+          const unresolved = (audit.unansweredQuestions || []).filter(question => question.isRequired || question.hasError);
+          const liveFields = await scanFormFields(webview).catch(() => []);
+          if (checkpoint) {
+            checkpoint = { ...checkpoint, phase: 'blocked', step: stepsCount, reason: error, answers: [...savedAnswers.values()], pending: liveFields.filter(field => unresolved.some(question => (question.id && question.id === field.id) || question.label === field.label)).map(field => ({ label: field.label, inputType: field.inputType, options: field.options, error: unresolvedReasons.get(field.label) || field.errorMessage })) };
+            await saveCheckpoint(checkpoint);
+          }
+          recordQuality('blockedForms');
           liveTelemetry.emit({ type: 'status', title: error, status: 'paused' });
           return { outcome: 'skipped', platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount, error };
         }
@@ -953,6 +1017,8 @@ export class AutoApplyOrchestrator {
         });
 
         if (forwardBtn.action === 'submit') {
+          if (options.isCancelled?.()) return { outcome: 'skipped', platform: detectedPlatform, fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount, error: 'Application cancelled by user' };
+          if (checkpoint) { checkpoint = { ...checkpoint, phase: 'submitting', step: stepsCount, answers: [...savedAnswers.values()] }; await saveCheckpoint(checkpoint); }
           sm.transition('submitting');
           const adv = await stepNavigator.advance(webview);
           if (stepDelayMs > 0) await new Promise((r) => setTimeout(r, stepDelayMs));
@@ -1059,6 +1125,8 @@ export class AutoApplyOrchestrator {
               stepsExecuted: stepsCount,
             };
           } else {
+            if (checkpoint) { checkpoint = { ...checkpoint, phase: adv.hasErrors ? 'blocked' : 'uncertain', reason: 'Submission receipt has not been confirmed.' }; await saveCheckpoint(checkpoint); }
+            recordQuality('uncertainApplications');
             // Submission still processing or required fields blocked it; DO NOT DISMISS MODAL!
             liveTelemetry.emit({
               type: 'check',
@@ -1135,7 +1203,7 @@ export class AutoApplyOrchestrator {
 
             if (shouldRefill) {
               // Resolve question with explicit validationError constraint
-              let answerVal = resolveScreeningFact(rf.label || '', persona, screeningContext) ?? rf.mappedValue;
+              let answerVal = needsAvailabilityInterpretation(rf.label) ? undefined : resolveFieldScreeningFact({ ...rf, jobUrl: checkpoint?.jobUrl }, persona, screeningContext) ?? rf.mappedValue;
               const numericAns = answerVal ? Number(answerVal) : NaN;
               const violatesConstraint = Boolean(
                 analysis?.isNumericConstraint && (
@@ -1149,14 +1217,15 @@ export class AutoApplyOrchestrator {
 
               // If mappedValue is missing, or field has an active error, or violates constraint, resolve via questionResolver
               if (!answerVal || isMarkedError || violatesConstraint) {
-                const res = await resolveQuestion({
+                const res = await resolveForRun({
                   ...rf,
+                  jobUrl: checkpoint?.jobUrl,
                   validationError: fieldErrorMsg,
                   errorMessage: fieldErrorMsg,
                   helperText: rf.helperText,
                   contextHint: rf.helperText ? `${rf.contextHint || ''} ${rf.helperText}`.trim() : rf.contextHint,
                   captureScreenshot: () => captureWebsiteScreenshot(webview), jobContext: activeJobContext,
-                }, persona);
+                });
                 answerVal = res.answer;
               }
 
@@ -1182,7 +1251,7 @@ export class AutoApplyOrchestrator {
                   }
                 `).catch(() => {});
 
-                const fillRes = await fillField(webview, rf, answerVal, persona);
+                const fillRes = await fillField(webview, rf, answerVal, persona, options.isCancelled);
                 if (fillRes.success) {
                   totalFieldsFilled++;
                 }
@@ -1235,4 +1304,3 @@ export class AutoApplyOrchestrator {
 }
 
 export const orchestrator = new AutoApplyOrchestrator();
-

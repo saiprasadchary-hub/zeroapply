@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { shouldOpenGoogleSignInInChrome } from '../AgentBrowser/google-signin.js';
 import {
   isAuthenticationUrl, shouldKeepAuthenticationPopup, isDeferredPopupUrl,
   resolvePopupDestination, resolveGestureDestination,
@@ -26,7 +25,6 @@ let hasGesture = true;
 const context = vm.createContext({
   isAuthenticationUrl, shouldKeepAuthenticationPopup, isDeferredPopupUrl,
   resolvePopupDestination, resolveGestureDestination,
-  openGoogleWebsiteSignIn: (url: string, sourceUrl: string): boolean => shouldOpenGoogleSignInInChrome(url, sourceUrl),
   isWhatsAppUrl: (): boolean => false,
   isExternalProtocol: (): boolean => false,
   consumePopupGesture: (): { candidates: string[] } | null => hasGesture ? { candidates: [] } : null,
@@ -40,7 +38,7 @@ vm.runInContext(`${handlerSource}\nthis.handler = handleWindowOpen;`, context);
 const source = { getType: (): string => 'webview', getURL: (): string => 'https://www.linkedin.com/login/' };
 assert.equal(context.handler({ url: 'https://accounts.google.com/ServiceLogin' }, {
   ...source, getURL: (): string => 'https://www.google.com/',
-}).action, 'deny');
+}).action, 'allow');
 const auth = context.handler({ url: 'https://company.example/oauth/authorize' }, source);
 assert.equal(auth.action, 'allow');
 assert.equal(auth.overrideBrowserWindowOptions.webPreferences.partition, 'persist:zeroapply_auth');

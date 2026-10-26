@@ -1,10 +1,14 @@
+import { assertSecureStorageHealthy } from '../../services/secureStorage';
 import type { SubmissionAnswer } from '../tracker/submissionEvidenceStore';
 import { isGenderQuestion, resolveGenderAnswer } from '../autofill/genderAnswer';
 import type { PersonaData } from '../../types';
 import { scanFormFields } from '../domScanner/injectedScanner';
 import { classifyFields } from '../domScanner/fieldClassifier';
 import { resolveQuestion } from '../localLlm/questionResolver';
-import { fillField } from '../formFiller/formFiller';
+import { fillFieldWithRecovery as fillField } from '../formFiller/fillRecovery';
+import { checkpointFor, newCheckpoint, saveCheckpoint } from '../workflow/automationStore';
+import { recordQuality } from '../telemetry/qualityMetrics';
+import { clarifyVisualFields } from '../vision/visualFieldFallback';
 import { auditFormFields } from '../formFiller/formAuditor';
 import { attachResumeFile } from '../fileUpload/fileUploadBridge';
 import { stepNavigator } from '../navigation/wizardStepNavigator';
@@ -37,9 +41,20 @@ export class ExternalFormFiller {
     jobTitle: string,
     config: NormalApplyConfig = {}
   ): Promise<FormFillProgress> {
+  assertSecureStorageHealthy();
     const { maxSteps = 15, stepDelayMs = 600, allowSubmit = true, auditMaxPasses = 3 } = config;
 
     const verifiedAnswers = new Map<string, SubmissionAnswer>();
+    const jobUrl = await view.executeJavaScript('location.href').catch(() => '');
+    let checkpoint = newCheckpoint(persona, typeof jobUrl === 'string' ? jobUrl : '', config.companyName, jobTitle);
+    const previous = checkpointFor(persona, checkpoint.jobUrl);
+    if (previous && ['submitting', 'uncertain', 'confirmed'].includes(previous.phase)) {
+      const confirmation = await this.verifier.verifySubmission(view);
+      if (!confirmation.isConfirmed) return { totalFieldsFilled: 0, stepsCount: 0, submitted: false, isConfirmed: false, error: 'A previous submission needs confirmation. No repeat Submit click was sent.' };
+      await saveCheckpoint({ ...previous, phase: 'confirmed', pending: [] });
+      return { totalFieldsFilled: previous.answers.length, stepsCount: previous.step, submitted: true, isConfirmed: true, answers: previous.answers };
+    }
+    await saveCheckpoint(checkpoint);
     let totalFieldsFilled = 0;
     let stepsCount = 0;
     let submitted = false;
@@ -121,7 +136,7 @@ export class ExternalFormFiller {
       }
 
       // 2. Scan Form Fields on current step
-      const fields = await scanFormFields(view);
+      const fields = await clarifyVisualFields(view, await scanFormFields(view));
       const classified = classifyFields(fields, persona);
 
       processTracker.recordFormStep(stepsCount, `External Step ${stepsCount}`, classified.length);
@@ -135,7 +150,7 @@ export class ExternalFormFiller {
           let source: 'persona' | 'ollama' = 'persona';
 
           if (!answerVal) {
-            const res = await resolveQuestion({ ...field, jobContext: { jobTitle, companyName: config.companyName } }, persona);
+            const res = await resolveQuestion({ ...field, jobUrl: checkpoint.jobUrl, jobContext: { jobTitle, companyName: config.companyName } }, persona);
             answerVal = res.answer;
             source = res.source === 'persona' ? 'persona' : 'ollama';
 
@@ -163,6 +178,9 @@ export class ExternalFormFiller {
             const fillRes = await fillField(view, field, answerVal, persona);
             if (fillRes.success) {
               totalFieldsFilled++;
+              verifiedAnswers.set(field.label, { question: field.label, answer: fillRes.value || answerVal, source });
+              checkpoint = { ...checkpoint, step: stepsCount, answers: [...verifiedAnswers.values()] };
+              await saveCheckpoint(checkpoint);
             }
             if (stepDelayMs > 0) {
               await new Promise((r) => setTimeout(r, Math.min(stepDelayMs, 300)));
@@ -230,14 +248,14 @@ export class ExternalFormFiller {
             (ff.inputType === 'checkbox' || ff.inputType === 'switch')
               ? (ff.currentValue !== 'true' && (ff.required || ff.fieldType === 'terms' || /agree|verify|accurate|terms|consent|joined|whatsapp|community/i.test(ff.label || '')))
               : (!ff.currentValue ||
-                 /^(select|choose|select an option|please select|--|0|option auswählen|auswählen|bitte auswählen|seleccionar|seleccione|sélectionner|choisir|selecionar|selezionare|selecteer|kies)$/i.test((ff.currentValue || '').trim()) ||
+                 /^(select|choose|select an option|please select|--|option auswählen|auswählen|bitte auswählen|seleccionar|seleccione|sélectionner|choisir|selecionar|selezionare|selecteer|kies)$/i.test((ff.currentValue || '').trim()) ||
                  ff.hasError ||
                  (ff.inputType === 'radio' && !ff.currentValue));
 
           if (isUnanswered) {
             let answerVal = ff.mappedValue;
             if (!answerVal) {
-              const res = await resolveQuestion({ ...ff, jobContext: { jobTitle, companyName: config.companyName } }, persona);
+              const res = await resolveQuestion({ ...ff, jobUrl: checkpoint.jobUrl, jobContext: { jobTitle, companyName: config.companyName } }, persona);
               answerVal = res.answer;
             }
 
@@ -255,6 +273,10 @@ export class ExternalFormFiller {
 
       if (!audit.ready) {
         const error = `Application needs your input: ${audit.missingRequired.join(', ') || audit.errors.join(', ') || 'required questions remain unanswered'}.`;
+        const pendingFields = await scanFormFields(view);
+        checkpoint = { ...checkpoint, phase: 'blocked', step: stepsCount, reason: error, answers: [...verifiedAnswers.values()], pending: pendingFields.filter(field => field.required && (!field.currentValue || field.hasError)).map(field => ({ label: field.label, inputType: field.inputType, options: field.options, error: field.errorMessage })) };
+        await saveCheckpoint(checkpoint);
+        recordQuality('blockedForms');
         liveTelemetry.emit({ type: 'status', title: error, status: 'failed' });
         return { totalFieldsFilled, stepsCount, submitted: false, isConfirmed: false, error };
       }
@@ -294,6 +316,8 @@ export class ExternalFormFiller {
 
       if (forwardBtn.action === 'submit') {
         if (allowSubmit) {
+          checkpoint = { ...checkpoint, phase: 'submitting', step: stepsCount, answers: [...verifiedAnswers.values()], pending: [] };
+          await saveCheckpoint(checkpoint);
           liveTelemetry.emit({
             type: 'submit',
             title: `Submitting external job application (${forwardText})`,
@@ -366,6 +390,10 @@ export class ExternalFormFiller {
       }
     }
 
+    checkpoint = { ...checkpoint, phase: isConfirmed ? 'confirmed' : submitted ? 'uncertain' : 'draft', step: stepsCount, answers: [...verifiedAnswers.values()] };
+    await saveCheckpoint(checkpoint);
+    if (isConfirmed) recordQuality('confirmedApplications');
+    else if (submitted) recordQuality('uncertainApplications');
     return {
       answers: [...verifiedAnswers.values()],
       totalFieldsFilled,

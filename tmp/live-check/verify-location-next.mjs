@@ -1,0 +1,14 @@
+import { stepNavigator } from '../../src/agent/workflow/stepNavigator.ts';
+import { auditFormFields } from '../../src/agent/formFiller/formAuditor.ts';
+import { chromium } from 'playwright-core';
+import fs from 'node:fs/promises';
+const targets=await(await fetch('http://127.0.0.1:61831/json/list')).json();const target=targets.find(t=>t.type==='webview'&&t.url.includes('linkedin.com'));const ws=new WebSocket(target.webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r,{once:true}));let id=0;const callbacks=new Map();ws.addEventListener('message',e=>{const d=JSON.parse(e.data);if(callbacks.has(d.id)){callbacks.get(d.id)(d);callbacks.delete(d.id);}});const evaluate=async expression=>{const n=++id;const answer=new Promise(r=>callbacks.set(n,r));ws.send(JSON.stringify({id:n,method:'Runtime.evaluate',params:{expression,awaitPromise:true,returnByValue:true}}));const d=await answer;if(d.result?.exceptionDetails)throw Error(d.result.exceptionDetails.text);return d.result?.result?.value;};
+const view={executeJavaScript:evaluate};
+const browser=await chromium.connectOverCDP('http://127.0.0.1:61831');const app=browser.contexts().flatMap(c=>c.pages()).find(p=>p.url().startsWith('http://localhost:5173'));
+await fs.mkdir('output/upgrades',{recursive:true});await app.screenshot({path:'output/upgrades/location-live-selected.png'});
+const audit=await auditFormFields(view);console.log('audit',JSON.stringify({ready:audit.ready,missing:audit.missingRequired,errors:audit.errors}));
+const button=await stepNavigator.detectForwardButton(view);console.log('forward',JSON.stringify(button));
+if(audit.ready&&button.action==='next')console.log('advanced',JSON.stringify(await stepNavigator.advance(view)));
+const state=await evaluate(`(()=>{const roots=[document];for(let i=0;i<roots.length;i++)for(const e of roots[i].querySelectorAll('*'))if(e.shadowRoot)roots.push(e.shadowRoot);return roots.flatMap(root=>Array.from(root.querySelectorAll('dialog[open],[role="dialog"],.artdeco-modal'))).filter(d=>d.getClientRects().length).map(d=>(d.innerText||d.textContent).slice(0,900))})()`);console.log('page',JSON.stringify(state));
+await app.screenshot({path:'output/upgrades/location-live-next.png'}); await fs.writeFile('output/upgrades/location-live-verification.json',JSON.stringify({audit:{ready:audit.ready,missing:audit.missingRequired,errors:audit.errors},button,state},null,2));
+ws.close();await browser.close();

@@ -1,4 +1,6 @@
 import { isValidTimeZone } from '../agent/localLlm/availabilityFacts';
+import { EmploymentDetails } from './EmploymentDetails';
+import { PersonaBackupControls } from './PersonaBackupControls';
 import { initWebLlmEngine } from '../agent/llm/webLlmEngine';
 import React, { useState, useRef } from 'react';
 import type { PersonaData, PersonaTone, WorkLocation } from '../types';
@@ -332,6 +334,7 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
 
   return (
     <div className="p-3 sm:p-5 md:p-6 space-y-5 sm:space-y-6 max-w-3xl mx-auto w-full text-on-surface pb-16 sm:pb-8">
+      <PersonaBackupControls persona={persona} setPersona={setPersona} onSaveToast={onSaveToast} />
       <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xs">
         <nav aria-label="Profile setup sections" className="grid grid-cols-2 gap-1 bg-zinc-50 p-1.5">
           <button
@@ -1087,7 +1090,7 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                         Current CTC (in LPA)
                       </label>
                       <span className="text-[10px] font-mono font-bold text-cyan-700 bg-cyan-50 px-1.5 py-0.5 rounded">
-                        ₹{persona.currentCtcLpa ?? 8} LPA
+                        {persona.currentCtcLpa === undefined ? 'Not provided' : `₹${persona.currentCtcLpa} LPA`}
                       </span>
                     </div>
                     <div className="relative">
@@ -1096,8 +1099,8 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                         min="0"
                         max="200"
                         step="0.5"
-                        value={persona.currentCtcLpa ?? 8}
-                        onChange={(e) => handleInputChange('currentCtcLpa', Math.max(0, Number(e.target.value)))}
+                        value={persona.currentCtcLpa ?? ''}
+                        onChange={(e) => handleInputChange('currentCtcLpa', e.target.value === '' ? undefined : Math.max(0, Number(e.target.value)))}
                         placeholder="8"
                         className="w-full px-3 py-2 text-xs border border-zinc-200 rounded-xl bg-zinc-50/50 outline-none focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 font-semibold text-zinc-900"
                       />
@@ -1106,7 +1109,7 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                       </span>
                     </div>
                     <p className="text-[10px] text-zinc-400">
-                      ₹{((persona.currentCtcLpa ?? 8) * 100000).toLocaleString('en-IN')} INR / year
+                      {persona.currentCtcLpa === undefined ? 'Enter your current annual compensation.' : `₹${(persona.currentCtcLpa * 100000).toLocaleString('en-IN')} INR / year`}
                     </p>
                   </div>
 
@@ -1134,7 +1137,7 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                         Notice Period (in Days)
                       </label>
                       <span className="text-[10px] font-mono font-bold text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded">
-                        {(persona.noticePeriodDays ?? 0) === 0 ? 'Immediate' : `${persona.noticePeriodDays} days`}
+                        {persona.noticePeriodDays === undefined ? 'Not provided' : persona.noticePeriodDays === 0 ? 'Immediate' : `${persona.noticePeriodDays} days`}
                       </span>
                     </div>
                     <input
@@ -1142,8 +1145,8 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                       min="0"
                       max="180"
                       step="5"
-                      value={persona.noticePeriodDays ?? 0}
-                      onChange={(e) => handleInputChange('noticePeriodDays', Math.max(0, Number(e.target.value)))}
+                      value={persona.noticePeriodDays ?? ''}
+                      onChange={(e) => handleInputChange('noticePeriodDays', e.target.value === '' ? undefined : Math.max(0, Number(e.target.value)))}
                       placeholder="0"
                       className="w-full px-3 py-2 text-xs border border-zinc-200 rounded-xl bg-zinc-50/50 outline-none focus:bg-white focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 font-semibold text-zinc-900"
                     />
@@ -1154,6 +1157,7 @@ export const PersonaForm: React.FC<PersonaFormProps> = ({
                 </div>
               </div>
             )}
+            <EmploymentDetails persona={persona} onChange={patch => setPersona(previous => ({ ...previous, ...patch }))} />
             <div className="space-y-1.5 pt-3 border-t border-zinc-100">
               <label htmlFor="expected-salary-lpa" className="text-[11px] font-bold text-zinc-700">
                 Desired/expected salary (in LPA)

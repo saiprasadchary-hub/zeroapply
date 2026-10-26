@@ -1,12 +1,15 @@
 /** Compatibility exports for existing form resolvers; inference uses the bundled desktop engine. */
-import { generateWebLlmResponse, getWebLlmState } from '../llm/webLlmEngine';
+import { ensureEmbeddedModelReady, generateWebLlmResponse, getWebLlmState } from '../llm/webLlmEngine';
 
 export const ONLY_LLM_MODEL = 'Qwen2.5 1.5B (built-in)';
 export const OLLAMA_BASE_URL = '';
 export function getActiveModelName(): string { return getWebLlmState().modelName || ONLY_LLM_MODEL; }
 export function setActiveModelName(_modelName: string): void { /* One bundled model. */ }
 export async function fetchInstalledModels(): Promise<string[]> { return [getActiveModelName()]; }
-export async function checkOllamaHealth(_timeoutMs = 3000): Promise<boolean> { return getWebLlmState().isReady; }
+export async function checkOllamaHealth(_timeoutMs = 3000): Promise<boolean> {
+  // Await an already-authorized startup instead of treating loading as an outage.
+  try { await ensureEmbeddedModelReady(); return true; } catch { return false; }
+}
 export interface OllamaStatus {
   online: boolean;
   modelAvailable: boolean;
@@ -21,8 +24,8 @@ export async function pullOllamaModelWithProgress(_modelName = ONLY_LLM_MODEL, _
   throw new Error('The model is included with ZeroApply. Click Review & start AutoApply to load it.');
 }
 export async function deleteOllamaModel(_modelName = ONLY_LLM_MODEL): Promise<boolean> { return false; }
-export async function generateOllamaAnswer(prompt: string, systemPrompt = '', temperature = 0, maxTokens = 512, images?: string[]): Promise<string> {
-  return generateWebLlmResponse(prompt, systemPrompt, temperature, maxTokens, images);
+export async function generateOllamaAnswer(prompt: string, systemPrompt = '', temperature = 0, maxTokens = 512, images?: string[], responseSchema?: Record<string, unknown>): Promise<string> {
+  return generateWebLlmResponse(prompt, systemPrompt, temperature, maxTokens, images, responseSchema);
 }
 export const queryOllama = generateOllamaAnswer;
 export const ollamaClient = { ONLY_LLM_MODEL, getActiveModelName, setActiveModelName, fetchInstalledModels, checkOllamaHealth, pullOllamaModelWithProgress, generateOllamaAnswer, queryOllama };

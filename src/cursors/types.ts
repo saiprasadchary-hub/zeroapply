@@ -54,7 +54,8 @@ export type CursorAvatarId =
   | 'avatar_grok_bot'
   | 'avatar_cloud_bot'
   | 'avatar_sentinel_bot'
-  | 'avatar_mochi_neko';
+  | 'avatar_mochi_neko'
+  | 'avatar_kuro_star';
 
 export interface CursorCategoryItem {
   id: string;

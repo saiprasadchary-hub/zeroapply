@@ -1,0 +1,11 @@
+import { stepNavigator } from '../../src/agent/workflow/stepNavigator.ts';
+import { auditFormFields } from '../../src/agent/formFiller/formAuditor.ts';
+import { chromium } from 'playwright-core';
+import fs from 'node:fs/promises';
+const targets=await(await fetch('http://127.0.0.1:61831/json/list')).json();const target=targets.find(t=>t.type==='webview'&&t.url.includes('linkedin.com'));const ws=new WebSocket(target.webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r,{once:true}));let id=0;const callbacks=new Map();ws.addEventListener('message',e=>{const d=JSON.parse(e.data);if(callbacks.has(d.id)){callbacks.get(d.id)(d);callbacks.delete(d.id);}});const evaluate=async expression=>{const n=++id;const answer=new Promise(r=>callbacks.set(n,r));ws.send(JSON.stringify({id:n,method:'Runtime.evaluate',params:{expression,awaitPromise:true,returnByValue:true}}));const d=await answer;if(d.result?.exceptionDetails)throw Error(d.result.exceptionDetails.text);return d.result?.result?.value;};
+const view={executeJavaScript:evaluate};
+const browser=await chromium.connectOverCDP('http://127.0.0.1:61831');const app=browser.contexts().flatMap(c=>c.pages()).find(p=>p.url().startsWith('http://localhost:5173'));
+await fs.mkdir('output/upgrades',{recursive:true});await app.screenshot({path:'output/upgrades/location-live-selected.png'});
+console.log('page',await evaluate(`(()=>{const roots=[document];for(let i=0;i<roots.length;i++)for(const e of roots[i].querySelectorAll('*'))if(e.shadowRoot)roots.push(e.shadowRoot);const d=roots.flatMap(root=>Array.from(root.querySelectorAll('dialog[open],[role="dialog"],.artdeco-modal'))).find(d=>d.getClientRects().length);if(!d)return ''; d.scrollTop=0;for(const e of d.querySelectorAll('*'))if(e.clientHeight>80&&e.scrollHeight>e.clientHeight)e.scrollTop=0;return (d.innerText||d.textContent).slice(0,160)})()`));
+await new Promise(resolve=>setTimeout(resolve,200));await app.screenshot({path:'output/upgrades/location-live-next.png'});
+ws.close();await browser.close();

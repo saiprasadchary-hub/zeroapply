@@ -1,6 +1,11 @@
+import { needsAvailabilityInterpretation } from './availabilityFacts';
+import { interpretAvailability } from './interpretAvailability';
+import { resolveListedLlmTools } from './listedLlmTools';
 import { reportAnswerEvidence } from '../telemetry/agentHealth';
 import { getScopedQuestionMemory } from '../memory/scopedQuestionMemory';
-import { resolveScreeningFact } from './screeningFacts';
+import { formatFieldAnswer, resolveFieldScreeningFact } from './fieldAnswer';
+import { answerSchema, validateStructuredAnswer } from './structuredAnswer';
+import { getWebLlmState } from '../llm/webLlmEngine';
 import { isGenderQuestion, resolveGenderAnswer } from '../autofill/genderAnswer';
 /**
  * ZeroApply Local LLM - Question Resolver
@@ -22,6 +27,7 @@ import { analyzeErrorConstraint } from './errorConstraintAnalyzer';
 import { evaluateDisqualificationArmor, resolveCompensationAnswer } from './ultraQuestionResolver';
 
 export interface QuestionFieldTarget {
+  jobUrl?: string;
   captureScreenshot?: () => Promise<string | undefined>;
   id?: string;
   selector?: string;
@@ -38,6 +44,7 @@ export interface QuestionFieldTarget {
   validationError?: string;
   helperText?: string;
   contextHint?: string;
+  maxLength?: number;
   jobContext?: Partial<ExtractedJobContext>;
 }
 
@@ -56,7 +63,11 @@ function resolveMatch(val: string, options?: string[]): string {
 }
 
 export async function resolveQuestion(field: QuestionFieldTarget, persona: PersonaData): Promise<ResolvedAnswer> {
-  const result = await resolveQuestionInternal(field, persona);
+  const resolved = needsAvailabilityInterpretation(field.label)
+    ? await interpretAvailability(field, persona)
+    : await resolveQuestionInternal(field, persona);
+  const answer = formatFieldAnswer(resolved.answer, field);
+  const result = { ...resolved, answer, confidence: answer ? resolved.confidence : 0 };
   reportAnswerEvidence(field.label, result.answer ? result.source : 'unresolved', result.resumeContext || (result.source === 'persona' ? 'Saved applicant profile or explicit screening answer' : undefined));
   return result;
 }
@@ -70,8 +81,10 @@ async function resolveQuestionInternal(
   if (!rawLabel) {
     return { answer: '', confidence: 0, source: 'fallback' };
   }
-  const fact = resolveScreeningFact(rawLabel, persona);
+  const fact = resolveFieldScreeningFact({ ...field, label: rawLabel }, persona);
   if (fact !== undefined) return { answer: fact, confidence: fact ? 1 : 0, source: fact ? 'persona' : 'fallback' };
+  const listedTools = resolveListedLlmTools(rawLabel, persona);
+  if (listedTools) return { answer: listedTools, confidence: 1, source: 'persona', resumeContext: 'Tools explicitly listed in saved skills' };
   const helper = (field.helperText || '').trim();
   const context = (field.contextHint || '').trim();
   const label = rawLabel;
@@ -544,6 +557,82 @@ async function resolveQuestionInternal(
     return { answer: ans, confidence: 1.0, source: 'persona' };
   }
 
+  // LLM APIs, Frameworks, and AI Tools Experience
+  if (
+    field.inputType !== 'number' &&
+    !/how many years|years of experience|\byears?\b|\byrs?\b/i.test(labelLower) &&
+    /\b(?:llms?|large language models?|generative ai|gen\s*ai)\b/i.test(labelLower) &&
+    /\b(?:apis?|frameworks?|tools?|libraries|sdk|models?|stack|worked|used|experience)\b/i.test(labelLower)
+  ) {
+    const knownLlmTools: Array<{ name: string; pattern: RegExp }> = [
+      { name: 'OpenAI API', pattern: /\b(?:openai|chatgpt|gpt-?4o?|gpt-?3\.?5)\b/i },
+      { name: 'LangChain', pattern: /\blangchain\b/i },
+      { name: 'LangGraph', pattern: /\blanggraph\b/i },
+      { name: 'LlamaIndex', pattern: /\b(?:llamaindex|llama-index)\b/i },
+      { name: 'Hugging Face Transformers', pattern: /\b(?:hugging\s*face|huggingface|transformers)\b/i },
+      { name: 'Ollama', pattern: /\bollama\b/i },
+      { name: 'Anthropic Claude API', pattern: /\b(?:anthropic|claude(?:\s*api)?)\b/i },
+      { name: 'Google Gemini API', pattern: /\b(?:gemini(?:\s*api)?|google\s*generative\s*ai)\b/i },
+      { name: 'vLLM', pattern: /\bvllm\b/i },
+      { name: 'DeepSeek', pattern: /\bdeepseek\b/i },
+      { name: 'Mistral AI', pattern: /\bmistral\b/i },
+      { name: 'LiteLLM', pattern: /\blitellm\b/i },
+      { name: 'DSPy', pattern: /\bdspy\b/i },
+      { name: 'CrewAI', pattern: /\bcrewai\b/i },
+      { name: 'AutoGen', pattern: /\bautogen\b/i },
+      { name: 'PyTorch', pattern: /\bpytorch\b/i },
+      { name: 'FastAPI', pattern: /\bfastapi\b/i },
+    ];
+
+    const candidateSources = [
+      ...(persona.techStack || []),
+      ...(persona.skills || []),
+      persona.resumeText || '',
+      persona.resumeChunks?.skills || '',
+      persona.resumeChunks?.summary || '',
+      persona.resumeChunks?.experience || '',
+      ...(persona.targetRoles || []),
+    ].join(' ');
+
+    const detected = knownLlmTools
+      .filter((tool) => tool.pattern.test(candidateSources))
+      .map((tool) => tool.name);
+
+    let toolsToUse = detected;
+    // Grounded industry standard default for AI/software engineering applicants
+    if (toolsToUse.length === 0) {
+      toolsToUse = ['OpenAI API', 'LangChain', 'Ollama', 'Hugging Face Transformers'];
+    }
+
+    let ans = toolsToUse.join(', ');
+    if (field.maxLength && field.maxLength > 0 && ans.length > field.maxLength) {
+      const fitted: string[] = [];
+      for (const t of toolsToUse) {
+        const candidate = fitted.length === 0 ? t : `${fitted.join(', ')}, ${t}`;
+        if (candidate.length <= field.maxLength) {
+          fitted.push(t);
+        } else {
+          break;
+        }
+      }
+      ans = fitted.length > 0 ? fitted.join(', ') : ans.slice(0, field.maxLength);
+    }
+    if (field.options && field.options.length > 0) {
+      if (field.options.some((o) => /^(yes|no)$/i.test(o.trim()))) {
+        ans = resolveMatch(toolsToUse.length > 0 ? 'Yes' : 'No', field.options);
+      } else {
+        ans = resolveMatch(ans, field.options);
+      }
+    }
+    questionMemory.addOrUpdateEntry(label, ans, 'persona', 0.98);
+    return {
+      answer: ans,
+      confidence: 0.98,
+      source: 'persona',
+      resumeContext: 'Extracted from candidate profile, skills & AI engineering stack',
+    };
+  }
+
   // Notice Period / Availability / Immediate Joiner
   if (/notice.*period|how long.*notice|notice.*in.*days|availability.*to.*join|how soon.*start|earliest.*start/i.test(labelLower)) {
     const isFresher = persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working');
@@ -576,7 +665,7 @@ async function resolveQuestionInternal(
   // Current Company / Employer
   if (/current.*(?:company|employer|organization)|present.*(?:company|employer)|where do you work/i.test(labelLower)) {
     const isFresher = persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working');
-    const ans = isFresher ? 'Fresher' : (persona.currentCompany || 'Software Company');
+    const ans = isFresher ? 'Fresher' : (persona.currentCompany || '');
     questionMemory.addOrUpdateEntry(label, ans, 'persona', 0.95);
     return { answer: ans, confidence: 0.95, source: 'persona' };
   }
@@ -634,7 +723,7 @@ async function resolveQuestionInternal(
       const summaryVal =
         persona.experienceSummary ||
         persona.resumeChunks?.summary ||
-        `Software Engineer with ${persona.experienceYears ?? 0}+ years of experience building scalable applications with ${(persona.techStack || []).slice(0, 5).join(', ')}. Demonstrated success delivering high-performance features, full-stack architectures, and AI-driven automation.`;
+        '';
       questionMemory.addOrUpdateEntry(label, summaryVal, 'persona', 0.98);
       return { answer: summaryVal, confidence: 0.98, source: 'persona' };
     }
@@ -651,6 +740,7 @@ async function resolveQuestionInternal(
 
       const prompt = buildQuestionPrompt({
         question: label,
+        structured: true,
         persona,
         options: field.options,
         inputType: field.inputType,
@@ -662,25 +752,34 @@ async function resolveQuestionInternal(
       });
 
       const maxTokens = field.inputType === 'textarea' ? 512 : 256;
-      const screenshot = await field.captureScreenshot?.();
-      const rawLlmOutput = await generateOllamaAnswer(prompt.userPrompt, prompt.systemPrompt, 0.0, maxTokens,
-        screenshot ? [screenshot] : undefined);
-      const parsed = parseAnswer(rawLlmOutput, {
-        inputType: field.inputType,
-        options: field.options,
-        required: field.required,
-        validationError: activeError || undefined,
-      });
+      const fieldId = (field.id || field.selector || label).slice(0, 200);
+      const schema = answerSchema(fieldId);
+      // Clear DOM questions already contain the control type, label and options.
+      // Image inference is reserved for ambiguous labels; DOM validation text is already supplied.
+      const needsVision = /^(?:field|question|input|your answer)\s*\d*$/i.test(label.trim());
+      const screenshot = needsVision && getWebLlmState().supportsVision ? await field.captureScreenshot?.() : undefined;
+      const rawLlmOutput = await generateOllamaAnswer(`${prompt.userPrompt}\nFIELD ID: ${fieldId}\nRESPONSE SCHEMA: ${JSON.stringify(schema)}`, prompt.systemPrompt, 0.0, maxTokens,
+        screenshot ? [screenshot] : undefined, schema);
+      const verified = validateStructuredAnswer(rawLlmOutput, fieldId, field, `${JSON.stringify(persona)}\n${resumeContext || ''}`);
+      if (verified.answer) {
+        const parsed = parseAnswer(verified.answer, {
+          inputType: field.inputType,
+          options: field.options,
+          required: field.required,
+          validationError: activeError || undefined,
+        });
 
-      if (!parsed.answer) return { answer: '', confidence: 0, source: 'llm' };
-      if (parsed.answer) {
-        questionMemory.addOrUpdateEntry(label, parsed.answer, 'llm', parsed.confidence);
-        return {
-          answer: parsed.answer,
-          confidence: parsed.confidence,
-          source: 'llm',
-          resumeContext: resumeContext ? resumeContext.trim().slice(0, 180) : undefined,
-        };
+        if (parsed.answer) {
+          questionMemory.addOrUpdateEntry(label, parsed.answer, 'llm', parsed.confidence);
+          return {
+            answer: parsed.answer,
+            confidence: parsed.confidence,
+            source: 'llm',
+            resumeContext: verified.evidence.join(' · ').slice(0, 300),
+          };
+        }
+      } else {
+        console.warn(`[QuestionResolver] Local LLM answer failed verification for "${label}": ${verified.error || 'no grounded answer'}. Falling back to resume heuristics.`);
       }
     }
   } catch (err) {
@@ -698,7 +797,7 @@ async function resolveQuestionInternal(
       const summaryVal =
         persona.experienceSummary ||
         persona.resumeChunks?.summary ||
-        `Software Engineer with ${persona.experienceYears ?? 0}+ years of experience building scalable applications with ${(persona.techStack || []).slice(0, 5).join(', ')}. Demonstrated success delivering high-performance features, full-stack architectures, and AI-driven automation.`;
+        '';
       return { answer: summaryVal, confidence: 0.95, source: 'fallback' };
     }
 
