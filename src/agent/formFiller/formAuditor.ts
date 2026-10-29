@@ -123,7 +123,7 @@ export const FORM_AUDITOR_SCRIPT = `
 
     // 1. Traverse all interactive form elements in scope
     const elements = Array.from(scope.querySelectorAll(
-      'input:not([type="hidden"]), select, textarea, [role="combobox"], [role="listbox"], [role="radiogroup"], [role="switch"], [role="checkbox"], label, fieldset'
+      'input:not([type="hidden"]), select, textarea, [role="combobox"], [role="listbox"], [role="radiogroup"], [role="radio"], [role="switch"], [role="checkbox"], label, fieldset'
     ));
 
     for (const el of elements) {
@@ -156,8 +156,8 @@ export const FORM_AUDITOR_SCRIPT = `
       }
 
       // A. Radio Groups
-      if (el.type === 'radio' || getAttr(el, 'role') === 'radiogroup' || (el.tagName === 'FIELDSET' && el.querySelector('input[type="radio"]'))) {
-        const name = (el.name || getAttr(el, 'data-test-form-element') || el.id || '').toLowerCase();
+      if (el.type === 'radio' || getAttr(el, 'role') === 'radio' || getAttr(el, 'role') === 'radiogroup' || (el.tagName === 'FIELDSET' && el.querySelector('input[type="radio"]'))) {
+        const name = el.name || getAttr(el, 'data-test-form-element') || el.id || '';
         const ariaLabel = getAttr(el, 'aria-label').toLowerCase();
         const text = (el.textContent || '').toLowerCase();
 
@@ -172,17 +172,39 @@ export const FORM_AUDITOR_SCRIPT = `
           continue;
         }
 
-        const fieldset = safeClosest(el, 'fieldset, [role="radiogroup"], .jobs-easy-apply-form-section, .jobs-easy-apply-form-element, .fb-form-element') || (typeof el.querySelector === 'function' ? el : el.parentElement) || el;
+        let fieldset = safeClosest(el, 'fieldset, [role="radiogroup"], .jobs-easy-apply-form-element, .fb-form-element');
+        // Some ATS forms use plain divs and a starred paragraph instead of a
+        // fieldset/required attribute. Find that question without escaping the modal.
+        if (!fieldset) {
+          let parent = el.parentElement;
+          while (parent && parent !== scope && parent !== document.body) {
+            const question = parent.querySelector('legend, [aria-required="true"], p, .fb-form-element-label');
+            if (question && /\\*|required/i.test(question.textContent || '') &&
+                parent.querySelectorAll('input[type="radio"], [role="radio"]').length > 0) {
+              fieldset = parent;
+              break;
+            }
+            parent = parent.parentElement;
+          }
+        }
+        fieldset = fieldset || safeClosest(el, '.jobs-easy-apply-form-section') || el.parentElement || el;
         const groupKey = name || (fieldset.textContent || '').slice(0, 50);
         if (groupKey && processedRadioGroups.has(groupKey)) continue;
         if (groupKey) processedRadioGroups.add(groupKey);
 
-        const label = ((typeof fieldset.querySelector === 'function' ? fieldset.querySelector('legend, label, .fb-form-element-label, [class*="label"]')?.textContent : null) || getAttr(el, 'aria-label') || name || 'Radio Question').trim();
-        let anyChecked = (typeof fieldset.querySelector === 'function' && fieldset.querySelector('input[type="radio"]:checked, [aria-checked="true"]') !== null);
-        if (!anyChecked && name) {
-          anyChecked = Boolean(scope.querySelector('input[type="radio"][name="' + name + '"]:checked'));
-        }
-        const isReq = el.required || getAttr(el, 'aria-required') === 'true' || getAttr(fieldset, 'aria-required') === 'true' || /required|\\*/i.test(fieldset.textContent || '');
+        const label = ((typeof fieldset.querySelector === 'function' ? fieldset.querySelector('legend, .fb-form-element-label, p, label, [class*="label"]')?.textContent : null) || getAttr(el, 'aria-label') || name || 'Radio Question').trim();
+        // A neighboring group's selection must never satisfy this question.
+        // Preserve case: native radio names are case-sensitive identifiers.
+        const nativeName = el.type === 'radio' ? el.name : '';
+        const groupOptions = nativeName
+          ? Array.from(scope.querySelectorAll('input[type="radio"]')).filter(option => option.name === nativeName)
+          : Array.from(fieldset.querySelectorAll('input[type="radio"], [role="radio"]'));
+        const anyChecked = groupOptions.some(option => option.type === 'radio'
+          ? option.checked === true : getAttr(option, 'aria-checked') === 'true');
+        const isReq = el.required || getAttr(el, 'aria-required') === 'true' ||
+          getAttr(fieldset, 'aria-required') === 'true' ||
+          groupOptions.some(option => option.required || getAttr(option, 'aria-required') === 'true') ||
+          /required|\\*/i.test(fieldset.textContent || '');
         const hasError = typeof fieldset.querySelector === 'function' && fieldset.querySelector('.artdeco-inline-feedback--error, [aria-invalid="true"], [class*="error"]') !== null;
         const errText = hasError ? getFieldErrorMsg(fieldset, el) : undefined;
         const helpText = getFieldHelperText(fieldset, el) || undefined;

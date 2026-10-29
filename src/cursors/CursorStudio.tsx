@@ -234,6 +234,8 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
     let svg = getCustomCombinedCursorMarkup(selectedPointerId, selectedAvatarId, 'stage-live', displayMode, avatarScale);
     if (previewAnimState === 'typing') {
       svg = svg.replace(/class="za-bot-eyes"/g, 'class="za-bot-eyes za-anim-typing"');
+      svg = svg.replace(/class="za-typing-hands za-avatar-part" style="display: none;"/g, 'class="za-typing-hands za-avatar-part za-anim-typing" style="display: block;"');
+      svg = svg.replace(/class="za-glass-svg"/g, 'class="za-glass-svg za-typing"');
     } else if (previewAnimState === 'thinking') {
       svg = svg.replace(/class="za-bot-eyes"/g, 'class="za-bot-eyes za-anim-thinking"');
     } else if (previewAnimState === 'success') {
@@ -666,7 +668,7 @@ export const CursorStudio: React.FC<CursorStudioProps> = ({
 
           {/* The Interactive Scaled Vector Graphic */}
           <div
-            className="relative transform scale-125 transition-transform duration-200 drop-shadow-md"
+            className={`relative transform scale-125 transition-transform duration-200 drop-shadow-md ${previewAnimState === 'typing' ? 'za-typing' : ''}`}
             dangerouslySetInnerHTML={{ __html: stageSvg }}
           />
 

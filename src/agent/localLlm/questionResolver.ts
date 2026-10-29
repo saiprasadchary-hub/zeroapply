@@ -54,6 +54,7 @@ export interface ResolvedAnswer {
   source: 'memory' | 'persona' | 'llm' | 'fallback';
   resumeContext?: string;
   isKnockout?: boolean;
+  retryable?: boolean;
 }
 
 function resolveMatch(val: string, options?: string[]): string {
@@ -633,16 +634,33 @@ async function resolveQuestionInternal(
     };
   }
 
-  // Notice Period / Availability / Immediate Joiner
-  if (/notice.*period|how long.*notice|notice.*in.*days|availability.*to.*join|how soon.*start|earliest.*start/i.test(labelLower)) {
+  // Notice Period / Availability / Immediate Joiner / Joining Range
+  if (
+    /notice.*period|how long.*notice|notice.*in.*days|availability.*to.*join|how soon.*start|earliest.*start|join.*(?:within|in)\s*(?:(?:\d+\s*(?:to|-)\s*)?\d+|few)\s*days?/i.test(
+      labelLower
+    )
+  ) {
     const isFresher = persona.employmentStatus === 'fresher' || (persona.currentCtcLpa === 0 && persona.employmentStatus !== 'currently_working');
     const noticeDays = isFresher ? 0 : (persona.noticePeriodDays !== undefined ? persona.noticePeriodDays : 0);
+    const rangeMatch = labelLower.match(/(?:within\s+)?(\d+)\s*(?:to|-)\s*(\d+)\s*days?/i);
     const isNumericReq = field.inputType === 'number' || /in.*days|\bdays?\b|number/i.test(labelLower);
     let ans = '';
     if (field.options && field.options.length > 0) {
-      ans = resolveMatch(noticeDays === 0 ? 'Immediate' : `${noticeDays} days`, field.options);
+      if (field.options.some((o) => /^(yes|no)$/i.test(o.trim()))) {
+        const maxDays = rangeMatch ? Number(rangeMatch[2]) : 30;
+        ans = resolveMatch(noticeDays <= maxDays ? 'Yes' : 'No', field.options);
+      } else {
+        ans = resolveMatch(noticeDays === 0 ? 'Immediate' : `${noticeDays} days`, field.options);
+      }
     } else {
-      ans = isNumericReq ? String(noticeDays) : (noticeDays === 0 ? 'Immediate' : `${noticeDays} days`);
+      if (rangeMatch) {
+        const minDays = Number(rangeMatch[1]);
+        const maxDays = Number(rangeMatch[2]);
+        const targetDays = noticeDays >= minDays && noticeDays <= maxDays ? noticeDays : minDays;
+        ans = String(targetDays);
+      } else {
+        ans = isNumericReq ? String(noticeDays) : (noticeDays === 0 ? 'Immediate' : `${noticeDays} days`);
+      }
     }
     questionMemory.addOrUpdateEntry(label, ans, 'persona', 0.98);
     return { answer: ans, confidence: 0.95, source: 'persona' };
@@ -779,11 +797,20 @@ async function resolveQuestionInternal(
           };
         }
       } else {
-        console.warn(`[QuestionResolver] Local LLM answer failed verification for "${label}": ${verified.error || 'no grounded answer'}. Falling back to resume heuristics.`);
+        return {
+          answer: '', confidence: 0, source: 'llm',
+          resumeContext: verified.error || 'No grounded answer was returned.',
+          retryable: verified.error !== 'Applicant information is missing.',
+        };
       }
+    } else {
+      return { answer: '', confidence: 0, source: 'llm', retryable: true, resumeContext: 'Local AI is unavailable.' };
     }
-  } catch (err) {
-    console.warn('[QuestionResolver] Local LLM query failed, falling back to resume heuristics:', err);
+  } catch (err: unknown) {
+    return {
+      answer: '', confidence: 0, source: 'llm', retryable: true,
+      resumeContext: err instanceof Error ? err.message : 'Local AI request failed.',
+    };
   }
 
   // ----------------------------------------------------

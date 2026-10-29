@@ -18,3 +18,23 @@ await assert.rejects(retry(field));
 await assert.rejects(retry(field));
 assert.equal(failures, 2, 'rejected transport requests do not poison the session');
 console.log('Per-run reuse, context invalidation and rejected-request cleanup passed.');
+
+let transientCalls = 0;
+const transient = createQuestionSession(async () => {
+  transientCalls++;
+  return transientCalls === 1
+    ? { answer: '', confidence: 0, source: 'llm', retryable: true, resumeContext: 'Local AI timed out.' }
+    : { answer: 'Python', confidence: 1, source: 'llm' };
+});
+assert.equal((await transient(field)).answer, 'Python', 'Transient failure recovers before returning to the field loop');
+await transient(field);
+assert.equal(transientCalls, 2, 'Audit reuses recovered answer');
+let repeatedFailures = 0;
+const bounded = createQuestionSession(async () => {
+  repeatedFailures++;
+  return { answer: '', confidence: 0, source: 'llm', retryable: true };
+});
+await bounded(field);
+await bounded(field);
+assert.equal(repeatedFailures, 2, 'Repeated failures cannot create an endless retry loop');
+console.log('Transient retry and retry limit passed.');

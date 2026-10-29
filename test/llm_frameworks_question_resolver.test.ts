@@ -48,6 +48,19 @@ async function runTests() {
     'Candidate with 60 days notice cannot join within 15 to 30 days'
   );
 
+  // Test 1b: Verify control formatting: Text inputs get numeric days (15), Radio gets 'Yes'
+  const textJoinRes = await resolveQuestion(
+    { label: joinQuestion, inputType: 'text' },
+    fresherPersona
+  );
+  assert.equal(textJoinRes.answer, '15', 'Text input for within 15 to 30 days must be numeric 15, not Yes');
+
+  const radioJoinRes = await resolveQuestion(
+    { label: joinQuestion, inputType: 'radio', options: ['Yes', 'No'] },
+    fresherPersona
+  );
+  assert.equal(radioJoinRes.answer, 'Yes', 'Radio button for within 15 to 30 days must be Yes');
+
   // Test 2: LLM APIs and frameworks resolution with detected tools from candidate resume & stack
   const personaWithAiTools = {
     ...fresherPersona,

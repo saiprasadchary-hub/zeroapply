@@ -12,7 +12,9 @@ export interface AnswerField {
 }
 
 const isNoticeStatus = (label: string): boolean => /serving.*notice|notice.*serving|relieved|already.*resign|last working day/i.test(label);
-const isNoticeTiming = (label: string): boolean => !isNoticeStatus(label) && /notice.*period|(?:join|start).*days|days.*(?:join|start)|when.*(?:join|start)|how soon.*start|earliest.*start|availability.*join/i.test(label);
+const isNoticeTiming = (label: string): boolean =>
+  !isNoticeStatus(label) &&
+  /notice.*period|(?:join|start).*days|days.*(?:join|start)|when.*(?:join|start)|how soon.*start|earliest.*start|availability.*join|join.*(?:within|in)\s*(?:(?:\d+\s*(?:to|-)\s*)?\d+|few)\s*days?/i.test(label);
 
 /** Convert an established answer to the control's format, never to an unrelated choice. */
 export function formatFieldAnswer(value: string, field: AnswerField): string {
@@ -43,6 +45,37 @@ export function formatFieldAnswer(value: string, field: AnswerField): string {
     }
     return matchBestOption(answer, options)?.option || '';
   }
+
+  // Notice timing / join days in text or number inputs:
+  // Text and number inputs MUST receive a numeric day count, NEVER 'Yes' or 'No' which causes 'Invalid input'!
+  if (isNoticeTiming(field.label)) {
+    const range = field.label.match(/(?:within\s+)?(\d+)\s*(?:to|-)\s*(\d+)\s*days?/i);
+    if (range) {
+      const minDays = Number(range[1]);
+      const maxDays = Number(range[2]);
+      const num = Number(answer.replace(/,/g, ''));
+      // If answer is affirmative ('Yes', 'Immediate') or numeric below minDays (e.g. 0),
+      // provide the minimum required days in that window (e.g. 15 for "15 to 30days")
+      if (/^(?:yes|true|immediate(?:ly)?|available now|asap)$/i.test(answer) || (!isNaN(num) && num < minDays)) {
+        return String(minDays);
+      }
+      if (/^(?:no|false)$/i.test(answer)) {
+        return String(maxDays + 15);
+      }
+      if (!isNaN(num) && num >= minDays && num <= maxDays) {
+        return String(num);
+      }
+    } else {
+      if (/^(?:yes|true)$/i.test(answer)) {
+        const singleWithin = field.label.match(/within\s+(\d+)\s*days?/i);
+        return singleWithin ? String(Math.min(15, Number(singleWithin[1]))) : '0';
+      }
+      if (/^(?:immediate(?:ly)?|available now|asap)$/i.test(answer)) {
+        return '0';
+      }
+    }
+  }
+
   if (type === 'number' || type === 'numeric') {
     if (isNoticeTiming(field.label) && /^(immediate(?:ly)?|available now|asap)$/i.test(answer)) return '0';
     return /^[+-]?\d+(?:\.\d+)?$/.test(answer.replace(/,/g, '')) ? answer.replace(/,/g, '') : '';

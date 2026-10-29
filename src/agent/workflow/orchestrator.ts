@@ -87,7 +87,7 @@ export class AutoApplyOrchestrator {
       if (!result.answer) {
         const reason = result.resumeContext || 'No supported answer was returned from the saved profile and resume.';
         unresolvedReasons.set(field.label, reason);
-        liveTelemetry.emit({ type: 'status', title: `${field.label}: ${reason}`, target: field.label, status: 'paused' });
+        liveTelemetry.emit({ type: 'status', title: `${field.label}: ${reason}${result.retryable ? ' Local AI recovery is limited to one retry.' : ' Required answer remains unresolved.'}`, target: field.label, status: 'running' });
       } else unresolvedReasons.delete(field.label);
       return result;
     });
@@ -857,7 +857,11 @@ export class AutoApplyOrchestrator {
         }
 
         if (!audit.ready || audit.missingRequired.length || audit.errors.length || (audit.unansweredQuestions || []).some(question => question.isRequired || question.hasError)) {
-          const error = `Required answers did not pass verification: ${[...audit.missingRequired, ...audit.errors].join('; ') || 'unresolved questions'}`;
+          const details = [...new Set([
+            ...audit.missingRequired,
+            ...audit.unansweredQuestions.filter(question => question.isRequired || question.hasError).map(question => question.label),
+          ])].map(label => unresolvedReasons.has(label) ? `${label}: ${unresolvedReasons.get(label)}` : label);
+          const error = `Required answers did not pass verification: ${[...details, ...audit.errors].join('; ') || 'unresolved questions'}`;
           const unresolved = (audit.unansweredQuestions || []).filter(question => question.isRequired || question.hasError);
           const liveFields = await scanFormFields(webview).catch(() => []);
           if (checkpoint) {
@@ -1262,6 +1266,19 @@ export class AutoApplyOrchestrator {
 
           // Small settling pause before re-attempting advance
           await new Promise((r) => setTimeout(r, 450));
+          const repairedAudit = await auditFormFields(webview);
+          if (!repairedAudit.ready) {
+            const unresolved = [...new Set([
+              ...repairedAudit.missingRequired,
+              ...repairedAudit.unansweredQuestions.map(question => question.label),
+              ...repairedAudit.errors,
+            ])].join('; ');
+            return {
+              outcome: 'skipped', platform: detectedPlatform,
+              fieldsFilled: totalFieldsFilled, stepsExecuted: stepsCount,
+              error: `Required answers still need attention after repair: ${unresolved || 'Form validation failed'}. No repeat navigation click sent.`,
+            };
+          }
           advResult = await stepNavigator.advance(webview);
           if (advResult.stepChanged && !advResult.hasErrors) {
             liveTelemetry.emit({

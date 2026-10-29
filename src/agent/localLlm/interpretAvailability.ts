@@ -24,6 +24,6 @@ export async function interpretAvailability(
     if (!answer || !expected || answer.toLowerCase() !== expected.toLowerCase()) return missing('Local AI answer could not be verified against saved availability.');
     return { answer, confidence: 1, source: 'llm', resumeContext: 'Local AI interpreted the question; answer verified against saved availability.' };
   } catch (error: unknown) {
-    return missing(error instanceof Error ? error.message : 'Local AI availability interpretation failed.');
+    return { ...missing(error instanceof Error ? error.message : 'Local AI availability interpretation failed.'), retryable: true };
   }
 }

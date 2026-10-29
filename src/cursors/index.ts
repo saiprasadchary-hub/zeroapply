@@ -661,10 +661,62 @@ export function getAvatarSvgPaths(avatarId: string, theme?: CursorTheme): string
       <!-- Left Grok Eye -->
       <rect x="42.1" y="38.4" width="2.3" height="5.2" rx="1.15" fill="#ffffff" filter="url(#za-grok-eye-glow)" />
       <rect x="42.5" y="38.8" width="1.1" height="4.4" rx="0.55" fill="#f8fafc" opacity="0.95" />
+      <circle cx="42.8" cy="39.6" r="0.65" fill="#ffffff" opacity="0.95" />
+      <circle cx="43.2" cy="42.2" r="0.32" fill="#ffffff" opacity="0.75" />
 
       <!-- Right Grok Eye -->
       <rect x="45.6" y="38.4" width="2.3" height="5.2" rx="1.15" fill="#ffffff" filter="url(#za-grok-eye-glow)" />
       <rect x="46.0" y="38.8" width="1.1" height="4.4" rx="0.55" fill="#f8fafc" opacity="0.95" />
+      <circle cx="46.3" cy="39.6" r="0.65" fill="#ffffff" opacity="0.95" />
+      <circle cx="46.7" cy="42.2" r="0.32" fill="#ffffff" opacity="0.75" />
+    </g>
+  `;
+}
+
+/**
+ * Generates modular SVG markup for the interactive robotic left & right typing hands
+ * and holographic cyber keys.
+ */
+export function getTypingHandsSvgPaths(theme?: CursorTheme): string {
+  const accent = theme?.accentColor || '#38bdf8';
+  const underlay = theme?.underlayColor || '#09090b';
+
+  return `
+    <!-- 4. Interactive Left & Right Robotic Typing Hands with Holographic Cyber Keys -->
+    <g class="za-typing-hands za-avatar-part" style="display: none;">
+      <!-- Subtle Holographic Cyber Keyboard Surface -->
+      <g class="za-typing-keyboard" opacity="0.95">
+        <rect x="34.5" y="53.4" width="21" height="2.4" rx="1.2" fill="rgba(15, 23, 42, 0.88)" stroke="${accent}" stroke-width="0.5" />
+        <line x1="38.7" y1="53.9" x2="38.7" y2="55.1" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
+        <line x1="42.9" y1="53.9" x2="42.9" y2="55.1" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
+        <line x1="47.1" y1="53.9" x2="47.1" y2="55.1" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
+        <line x1="51.3" y1="53.9" x2="51.3" y2="55.1" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
+        <!-- Key Impact Glow Under Left & Right Hands -->
+        <circle class="za-key-glow-left" cx="39.5" cy="54.6" r="2.2" fill="${accent}" opacity="0.65" />
+        <circle class="za-key-glow-right" cx="50.5" cy="54.6" r="2.2" fill="${accent}" opacity="0.65" />
+      </g>
+
+      <!-- Left Cyber Typing Hand (Taps Down on Key) -->
+      <g class="za-typing-hand-left" style="transform-box: fill-box; transform-origin: 39.5px 49.8px;">
+        <!-- Hand Palm / Capsule -->
+        <ellipse cx="39.5" cy="50.0" rx="2.6" ry="3.1" fill="${underlay}" stroke="#ffffff" stroke-width="0.7" />
+        <ellipse cx="39.5" cy="49.6" rx="1.8" ry="2.0" fill="#27272a" opacity="0.9" />
+        <!-- Tactile Fingertips / Claws -->
+        <circle cx="38.2" cy="52.3" r="0.65" fill="${accent}" />
+        <circle cx="39.5" cy="52.7" r="0.65" fill="#ffffff" />
+        <circle cx="40.8" cy="52.3" r="0.65" fill="${accent}" />
+      </g>
+
+      <!-- Right Cyber Typing Hand (Taps Down Alternately on Key) -->
+      <g class="za-typing-hand-right" style="transform-box: fill-box; transform-origin: 50.5px 49.8px;">
+        <!-- Hand Palm / Capsule -->
+        <ellipse cx="50.5" cy="50.0" rx="2.6" ry="3.1" fill="${underlay}" stroke="#ffffff" stroke-width="0.7" />
+        <ellipse cx="50.5" cy="49.6" rx="1.8" ry="2.0" fill="#27272a" opacity="0.9" />
+        <!-- Tactile Fingertips / Claws -->
+        <circle cx="49.2" cy="52.3" r="0.65" fill="${accent}" />
+        <circle cx="50.5" cy="52.7" r="0.65" fill="#ffffff" />
+        <circle cx="51.8" cy="52.3" r="0.65" fill="${accent}" />
+      </g>
     </g>
   `;
 }
@@ -695,8 +747,9 @@ export function getCursorShapeSvgPaths(
   }
   if (showAvatar) {
     const avatarPaths = getAvatarSvgPaths(avatarId, theme);
+    const typingHands = getTypingHandsSvgPaths(theme);
     const transformAttr = avatarScale !== 1.0 ? ` transform="translate(45 41) scale(${avatarScale}) translate(-45 -41)" style="transform-origin: 45px 41px; transform: scale(${avatarScale});"` : '';
-    paths += `\n    <!-- Companion Avatar Scaled Group -->\n    <g class="za-avatar-group za-avatar-part"${transformAttr}>\n${avatarPaths}\n    </g>`;
+    paths += `\n    <!-- Companion Avatar Scaled Group -->\n    <g class="za-avatar-group za-avatar-part"${transformAttr}>\n${avatarPaths}\n${typingHands}\n    </g>`;
   }
   return paths;
 }
@@ -738,144 +791,190 @@ export function getCursorSvgMarkup(
 
       /* 1. Dynamic 360° All-Direction Eye Gaze & Saccadic Blink Animation (18.0s Long Cycle) */
       @keyframes za-bot-blink {
-        /* Phase 1: Direct Front Contact & Natural Double Micro-Blink */
-        0%, 7% {
+        /* Phase 1: Direct Front Contact & Natural Organic Micro-Blink */
+        0% {
           transform: translate(0px, 0px) rotate(0deg) scale(1, 1);
           opacity: 1;
         }
-        7.8% {
-          transform: translate(0px, 0px) rotate(0deg) scale(1.05, 0.08);
-          opacity: 0.9;
-        }
-        8.6% {
-          transform: translate(0px, 0px) rotate(0deg) scale(0.98, 1.06);
+        2.5% {
+          transform: translate(0.2px, -0.2px) rotate(0.5deg) scale(1, 1);
           opacity: 1;
         }
-        9.4% {
-          transform: translate(0px, 0px) rotate(0deg) scale(1.04, 0.12);
+        4.2% {
+          transform: translate(0px, 0px) rotate(0deg) scale(1.02, 0.1);
           opacity: 0.92;
         }
-        10.2% {
+        5.0% {
           transform: translate(0px, 0px) rotate(0deg) scale(1, 1);
           opacity: 1;
         }
 
         /* Phase 2: Up-Right Inquisitive Grok Pose (Scanning top navigation/header) */
-        12%, 19% {
-          transform: translate(4.6px, -2.6px) rotate(24deg) scale(0.98, 0.96);
+        7.5% {
+          transform: translate(4.6px, -2.6px) rotate(24deg) scale(0.98, 0.98);
+          opacity: 1;
         }
-        19.8% {
-          transform: translate(4.6px, -2.6px) rotate(24deg) scale(1.04, 0.08);
-          opacity: 0.9;
+        12.0% {
+          transform: translate(4.8px, -2.4px) rotate(24deg) scale(1, 1);
+          opacity: 1;
         }
-        20.8% {
-          transform: translate(4.6px, -2.6px) rotate(24deg) scale(1, 1);
+        13.2% {
+          transform: translate(4.6px, -2.6px) rotate(24deg) scale(1.04, 0.15);
+          opacity: 0.92;
+        }
+        14.0% {
+          transform: translate(4.6px, -2.6px) rotate(24deg) scale(0.98, 0.98);
+          opacity: 1;
+        }
+        16.5% {
+          transform: translate(4.4px, -2.5px) rotate(22deg) scale(0.99, 0.99);
           opacity: 1;
         }
 
         /* Phase 3: Down-Left Scan Towards Pointer Arrow Tip */
-        23%, 30% {
+        19.5% {
           transform: translate(-4.2px, -0.4px) rotate(-14deg) scale(0.98, 1.0);
+          opacity: 1;
         }
-        30.8% {
-          transform: translate(-4.2px, -0.4px) rotate(-14deg) scale(1.04, 0.08);
-          opacity: 0.9;
+        23.5% {
+          transform: translate(-4.4px, -0.2px) rotate(-14deg) scale(1.0, 1.0);
+          opacity: 1;
         }
-        31.8% {
-          transform: translate(-4.2px, -0.4px) rotate(-14deg) scale(1, 1);
+        24.5% {
+          transform: translate(-4.2px, -0.4px) rotate(-14deg) scale(1.03, 0.12);
+          opacity: 0.92;
+        }
+        25.5% {
+          transform: translate(-4.2px, -0.4px) rotate(-14deg) scale(0.98, 1.0);
+          opacity: 1;
+        }
+        28.5% {
+          transform: translate(-3.8px, -0.2px) rotate(-12deg) scale(1.0, 1.0);
           opacity: 1;
         }
 
         /* Phase 4: Downward Reading & Form Input Inspection Scan */
-        34%, 37.5% {
-          transform: translate(-0.8px, 3.4px) rotate(0deg) scale(1.04, 0.92);
+        32.5% {
+          transform: translate(-0.8px, 3.4px) rotate(0deg) scale(1.02, 0.94);
+          opacity: 1;
         }
-        38.5%, 42% {
-          transform: translate(0.8px, 3.4px) rotate(0deg) scale(1.04, 0.92);
+        35.5% {
+          transform: translate(0px, 3.4px) rotate(0deg) scale(1.02, 0.94);
+          opacity: 1;
         }
-        43% {
-          transform: translate(0px, 3.4px) rotate(0deg) scale(1.05, 0.06);
+        38.5% {
+          transform: translate(0.8px, 3.4px) rotate(0deg) scale(1.02, 0.94);
+          opacity: 1;
         }
-        43.6% {
-          transform: translate(0px, 3.4px) rotate(0deg) scale(1, 1);
-        }
-        44.2% {
+        39.8% {
           transform: translate(0px, 3.4px) rotate(0deg) scale(1.04, 0.12);
+          opacity: 0.92;
         }
-        45.2% {
-          transform: translate(0px, 3.4px) rotate(0deg) scale(1, 1);
+        40.8% {
+          transform: translate(0px, 3.4px) rotate(0deg) scale(1.0, 1.0);
+          opacity: 1;
         }
 
         /* Phase 5: Up-Left Cognitive Synthesis & Problem Solving */
-        47%, 55% {
-          transform: translate(-2.6px, -3.2px) rotate(-10deg) scale(0.96, 0.98);
+        45.5% {
+          transform: translate(-2.6px, -3.2px) rotate(-10deg) scale(0.97, 0.98);
+          opacity: 1;
         }
-        55.8% {
-          transform: translate(-2.6px, -3.2px) rotate(-10deg) scale(1.02, 0.08);
-          opacity: 0.9;
+        49.5% {
+          transform: translate(-2.4px, -3.4px) rotate(-10deg) scale(0.98, 0.98);
+          opacity: 1;
         }
-        56.8% {
+        50.8% {
+          transform: translate(-2.6px, -3.2px) rotate(-10deg) scale(1.02, 0.12);
+          opacity: 0.92;
+        }
+        51.8% {
           transform: translate(-2.6px, -3.2px) rotate(-10deg) scale(1, 1);
           opacity: 1;
         }
 
         /* Phase 6: Horizon Scan Right (Outer Context Scan) */
-        59%, 66% {
+        58.0% {
           transform: translate(4.0px, 0.6px) rotate(12deg) scale(0.98, 1.0);
+          opacity: 1;
         }
-        66.8% {
-          transform: translate(4.0px, 0.6px) rotate(12deg) scale(1.04, 0.08);
-          opacity: 0.9;
+        61.5% {
+          transform: translate(4.2px, 0.4px) rotate(12deg) scale(1.0, 1.0);
+          opacity: 1;
         }
-        67.8% {
+        62.8% {
+          transform: translate(4.0px, 0.6px) rotate(12deg) scale(1.03, 0.12);
+          opacity: 0.92;
+        }
+        63.8% {
           transform: translate(4.0px, 0.6px) rotate(12deg) scale(1, 1);
           opacity: 1;
         }
 
         /* Phase 7: Curious Tilt Down-Right & Friendly Squint */
-        70%, 77% {
-          transform: translate(3.2px, 2.4px) rotate(8deg) scale(1.03, 0.95);
+        70.0% {
+          transform: translate(3.2px, 2.4px) rotate(8deg) scale(1.02, 0.96);
+          opacity: 1;
         }
-        77.8% {
-          transform: translate(3.2px, 2.4px) rotate(8deg) scale(1.06, 0.08);
+        73.5% {
+          transform: translate(3.0px, 2.6px) rotate(8deg) scale(1.03, 0.95);
+          opacity: 1;
+        }
+        74.8% {
+          transform: translate(3.2px, 2.4px) rotate(8deg) scale(1.05, 0.12);
           opacity: 0.92;
         }
-        78.8% {
+        75.8% {
           transform: translate(3.2px, 2.4px) rotate(8deg) scale(1, 1);
           opacity: 1;
         }
 
         /* Phase 8: High Alert Upward Scan & Attention Perk */
-        81%, 87% {
-          transform: translate(0px, -2.6px) rotate(0deg) scale(0.98, 1.04);
+        82.0% {
+          transform: translate(0px, -2.6px) rotate(0deg) scale(0.98, 1.03);
+          opacity: 1;
         }
-        87.8% {
-          transform: translate(0px, -2.6px) rotate(0deg) scale(1.03, 0.08);
-          opacity: 0.9;
+        84.5% {
+          transform: translate(0px, -2.8px) rotate(0deg) scale(0.98, 1.04);
+          opacity: 1;
         }
-        88.8% {
+        85.8% {
+          transform: translate(0px, -2.6px) rotate(0deg) scale(1.02, 0.12);
+          opacity: 0.92;
+        }
+        86.8% {
           transform: translate(0px, -2.6px) rotate(0deg) scale(1, 1);
           opacity: 1;
         }
 
         /* Phase 9: Gentle Lateral Micro-Scan Check */
-        90%, 93.5% {
+        91.0% {
           transform: translate(-1.8px, -0.6px) rotate(-6deg) scale(1.0, 1.0);
+          opacity: 1;
         }
-        94.2% {
-          transform: translate(-1.8px, -0.6px) rotate(-6deg) scale(1.04, 0.08);
-          opacity: 0.9;
+        92.5% {
+          transform: translate(-1.6px, -0.4px) rotate(-6deg) scale(1.0, 1.0);
+          opacity: 1;
         }
-        95.2% {
+        93.6% {
+          transform: translate(-1.8px, -0.6px) rotate(-6deg) scale(1.03, 0.12);
+          opacity: 0.92;
+        }
+        94.6% {
           transform: translate(-1.8px, -0.6px) rotate(-6deg) scale(1, 1);
           opacity: 1;
         }
 
-        /* Phase 10: Organic Return Glide to Front Look */
-        97% {
-          transform: translate(1.2px, 0.2px) rotate(3deg) scale(1.01, 0.99);
+        /* Phase 10: Organic Return Glide to Front Look - Perfectly Continuous Loop */
+        97.2% {
+          transform: translate(-0.6px, -0.2px) rotate(-2deg) scale(1.0, 1.0);
+          opacity: 1;
         }
-        98.5%, 100% {
+        98.8% {
+          transform: translate(-0.1px, -0.05px) rotate(-0.4deg) scale(1.0, 1.0);
+          opacity: 1;
+        }
+        100% {
           transform: translate(0px, 0px) rotate(0deg) scale(1, 1);
           opacity: 1;
         }
@@ -884,144 +983,125 @@ export function getCursorSvgMarkup(
       /* 2. Avatar 1: xAI Grok Cyber Bot Long Levitation & Anti-Gravity Float (18.0s) */
       @keyframes za-grok-float {
         0%, 100% { transform: translateY(0px) rotate(0deg); }
-        15% { transform: translateY(-1.2px) rotate(0.4deg); }
-        32% { transform: translateY(-0.4px) rotate(-0.5deg); }
-        48% { transform: translateY(0.8px) rotate(0deg); }
-        62% { transform: translateY(-1.5px) rotate(0.6deg); }
-        78% { transform: translateY(-0.8px) rotate(-0.3deg); }
-        89% { transform: translateY(-1.4px) rotate(0.3deg); }
+        12.5% { transform: translateY(-1.8px) rotate(0.4deg); }
+        25% { transform: translateY(0px) rotate(0deg); }
+        37.5% { transform: translateY(1.4px) rotate(-0.3deg); }
+        50% { transform: translateY(0px) rotate(0deg); }
+        62.5% { transform: translateY(-1.8px) rotate(0.4deg); }
+        75% { transform: translateY(0px) rotate(0deg); }
+        87.5% { transform: translateY(1.4px) rotate(-0.3deg); }
       }
 
       /* 3. Avatar 2: Cloud Companion Bot Long Buoyant Drift & Pillow Tuck Puff (18.0s) */
       @keyframes za-cloud-drift {
         0%, 100% { transform: translate(0px, 0px); }
-        16% { transform: translate(0.6px, -1.5px); }
-        34% { transform: translate(-0.8px, -0.6px); }
-        52% { transform: translate(0.2px, 0.8px); }
-        68% { transform: translate(0.8px, -1.6px); }
-        84% { transform: translate(-0.5px, -0.8px); }
+        12.5% { transform: translate(0.9px, -1.6px); }
+        25% { transform: translate(0px, -0.8px); }
+        37.5% { transform: translate(-0.9px, 0.6px); }
+        50% { transform: translate(0px, 1.2px); }
+        62.5% { transform: translate(0.9px, -0.4px); }
+        75% { transform: translate(0px, -1.4px); }
+        87.5% { transform: translate(-0.7px, -0.7px); }
       }
       @keyframes za-cloud-puff {
         0%, 100% { transform: scale(1, 1); }
-        25% { transform: scale(1.02, 0.98); }
-        50% { transform: scale(0.99, 1.02); }
-        75% { transform: scale(1.03, 0.99); }
+        25% { transform: scale(1.03, 0.97); }
+        50% { transform: scale(0.98, 1.02); }
+        75% { transform: scale(1.03, 0.97); }
       }
 
       /* 4. Avatar 3: Aero Sentinel Droid Long Magnetic Hover & Thruster Oscillation (18.0s) */
       @keyframes za-sentinel-hover {
         0%, 100% { transform: translateY(0px); }
-        18% { transform: translateY(-1.3px); }
-        35% { transform: translateY(-0.3px); }
-        52% { transform: translateY(0.6px); }
-        70% { transform: translateY(-1.5px); }
-        86% { transform: translateY(-0.7px); }
+        12.5% { transform: translateY(-1.8px); }
+        25% { transform: translateY(0px); }
+        37.5% { transform: translateY(1.2px); }
+        50% { transform: translateY(0px); }
+        62.5% { transform: translateY(-1.8px); }
+        75% { transform: translateY(0px); }
+        87.5% { transform: translateY(1.2px); }
       }
       @keyframes za-sentinel-fin-left {
         0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
-        18% { transform: translate(-0.6px, -1.2px) rotate(-3deg); }
-        35% { transform: translate(0.3px, -0.4px) rotate(1.5deg); }
-        52% { transform: translate(-0.2px, 0.5px) rotate(-1deg); }
-        70% { transform: translate(-0.7px, -1.4px) rotate(-3.5deg); }
-        86% { transform: translate(0.2px, -0.8px) rotate(1deg); }
+        12.5% { transform: translate(-0.8px, -1.2px) rotate(-3.5deg); }
+        25% { transform: translate(0px, 0px) rotate(0deg); }
+        37.5% { transform: translate(0.5px, 0.8px) rotate(2deg); }
+        50% { transform: translate(0px, 0px) rotate(0deg); }
+        62.5% { transform: translate(-0.8px, -1.2px) rotate(-3.5deg); }
+        75% { transform: translate(0px, 0px) rotate(0deg); }
+        87.5% { transform: translate(0.5px, 0.8px) rotate(2deg); }
       }
       @keyframes za-sentinel-fin-right {
         0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
-        18% { transform: translate(0.6px, -1.2px) rotate(3deg); }
-        35% { transform: translate(-0.3px, -0.4px) rotate(-1.5deg); }
-        52% { transform: translate(0.2px, 0.5px) rotate(1deg); }
-        70% { transform: translate(0.7px, -1.4px) rotate(3.5deg); }
-        86% { transform: translate(-0.2px, -0.8px) rotate(3.5deg); }
+        12.5% { transform: translate(0.8px, -1.2px) rotate(3.5deg); }
+        25% { transform: translate(0px, 0px) rotate(0deg); }
+        37.5% { transform: translate(-0.5px, 0.8px) rotate(-2deg); }
+        50% { transform: translate(0px, 0px) rotate(0deg); }
+        62.5% { transform: translate(0.8px, -1.2px) rotate(3.5deg); }
+        75% { transform: translate(0px, 0px) rotate(0deg); }
+        87.5% { transform: translate(-0.5px, 0.8px) rotate(-2deg); }
       }
       @keyframes za-sentinel-visor-sweep {
-        0%, 45%, 100% { opacity: 0.75; }
-        50%, 54% { opacity: 1; stroke-width: 0.9; }
+        0%, 100% { opacity: 0.75; }
+        25% { opacity: 0.95; stroke-width: 0.9; }
+        50% { opacity: 0.75; }
+        75% { opacity: 0.95; stroke-width: 0.9; }
       }
 
       /* 5. Avatar 4: Mochi Cyber Neko Long Ear Movements, Head Bob & Bell Jingle (18.0s) */
       @keyframes za-neko-ear-left-idle {
-        0%, 10% { transform: rotate(0deg) scale(1, 1); }
-        /* Phase 2: Up-right look, relaxed */
-        12%, 19% { transform: rotate(-2deg) scale(0.99, 1.01); }
-        /* Phase 3: Down-left look toward pointer arrow -> attentive perk! */
-        23%, 30% { transform: rotate(-7deg) scale(1.02, 1.03); }
-        /* Phase 4: Downward reading scan */
-        34%, 43% { transform: rotate(-3deg) scale(1.0, 1.0); }
-        /* Phase 5: Up-left deep thought glance -> attentive perk high! */
-        47%, 55% { transform: rotate(-9deg) translate(-0.5px, -0.8px) scale(1.03); }
-        56% { transform: rotate(-2deg) scale(1, 1); }
-        /* Phase 6: Horizon scan right */
-        59%, 66% { transform: rotate(2deg) scale(0.98, 1.0); }
-        /* Phase 7: Affectionate tilt down-right -> playful kawaii flick! */
-        70% { transform: rotate(-5deg); }
-        72% { transform: rotate(3deg); }
-        74% { transform: rotate(-3deg); }
-        77% { transform: rotate(0deg); }
-        /* Phase 8: High alert upward scan */
-        81%, 87% { transform: rotate(-4deg) scale(1.01, 1.02); }
-        /* Phase 9: Micro-check */
-        90%, 94% { transform: rotate(-6deg) scale(1.02, 1.02); }
-        98.5%, 100% { transform: rotate(0deg) scale(1, 1); }
+        0%, 100% { transform: rotate(0deg) scale(1, 1); }
+        12.5% { transform: rotate(-2deg) scale(0.99, 1.01); }
+        25% { transform: rotate(-6deg) scale(1.02, 1.03); }
+        37.5% { transform: rotate(-3deg) scale(1.0, 1.0); }
+        50% { transform: rotate(-7deg) scale(1.02, 1.02); }
+        62.5% { transform: rotate(2deg) scale(0.98, 1.0); }
+        75% { transform: rotate(-4deg) scale(1.01, 1.01); }
+        87.5% { transform: rotate(-2deg) scale(1.0, 1.0); }
       }
 
       @keyframes za-neko-ear-right-idle {
-        0%, 10% { transform: rotate(0deg) scale(1, 1); }
-        /* Phase 2: Up-right look -> playful ear perk & twitch! */
-        12% { transform: rotate(4deg) scale(1.01, 1.02); }
-        15% { transform: rotate(8deg) scale(0.96, 1.04); }
-        17% { transform: rotate(-2deg) scale(1.02, 0.98); }
-        19% { transform: rotate(6deg) scale(0.98, 1.02); }
-        21% { transform: rotate(2deg) scale(1, 1); }
-        /* Phase 3: Down-left look toward pointer arrow */
-        23%, 30% { transform: rotate(1deg) scale(0.98, 1.0); }
-        /* Phase 4: Downward reading scan */
-        34%, 43% { transform: rotate(3deg) scale(1.0, 1.0); }
-        /* Phase 5: Up-left deep thought glance */
-        47%, 55% { transform: rotate(-2deg) scale(0.97); }
-        /* Phase 6: Horizon scan right -> curious ear flick! */
-        59% { transform: rotate(8deg) scale(0.96, 1.04); }
-        61% { transform: rotate(-3deg) scale(1.02, 0.98); }
-        63% { transform: rotate(6deg) scale(0.98, 1.02); }
-        66% { transform: rotate(2deg) scale(1, 1); }
-        /* Phase 7: Affectionate tilt down-right -> playful kawaii flick! */
-        70% { transform: rotate(5deg); }
-        72% { transform: rotate(-2deg); }
-        74% { transform: rotate(3deg); }
-        77% { transform: rotate(0deg); }
-        /* Phase 8: High alert upward scan */
-        81%, 87% { transform: rotate(4deg) scale(1.01, 1.02); }
-        /* Phase 9: Micro-check */
-        90%, 94% { transform: rotate(2deg) scale(0.99, 1.0); }
-        98.5%, 100% { transform: rotate(0deg) scale(1, 1); }
+        0%, 100% { transform: rotate(0deg) scale(1, 1); }
+        12.5% { transform: rotate(4deg) scale(1.01, 1.02); }
+        25% { transform: rotate(2deg) scale(0.98, 1.0); }
+        37.5% { transform: rotate(3deg) scale(1.0, 1.0); }
+        50% { transform: rotate(-2deg) scale(0.98, 1.0); }
+        62.5% { transform: rotate(6deg) scale(0.98, 1.02); }
+        75% { transform: rotate(4deg) scale(1.01, 1.02); }
+        87.5% { transform: rotate(2deg) scale(0.99, 1.0); }
       }
 
       @keyframes za-neko-head-float {
         0%, 100% { transform: translateY(0px) rotate(0deg); }
-        18% { transform: translateY(-1.1px) rotate(0.4deg); }
-        36% { transform: translateY(-0.3px) rotate(-0.3deg); }
-        52% { transform: translateY(0.7px) rotate(0deg); }
-        70% { transform: translateY(-1.3px) rotate(0.5deg); }
-        86% { transform: translateY(-0.6px) rotate(-0.3deg); }
+        12.5% { transform: translateY(-1.6px) rotate(0.4deg); }
+        25% { transform: translateY(0px) rotate(0deg); }
+        37.5% { transform: translateY(1.2px) rotate(-0.3deg); }
+        50% { transform: translateY(0px) rotate(0deg); }
+        62.5% { transform: translateY(-1.6px) rotate(0.4deg); }
+        75% { transform: translateY(0px) rotate(0deg); }
+        87.5% { transform: translateY(1.2px) rotate(-0.3deg); }
       }
 
       @keyframes za-neko-bell-jingle {
-        0%, 14%, 22%, 58%, 67%, 100% { transform: rotate(0deg); }
-        16% { transform: rotate(-7deg); }
-        18% { transform: rotate(6deg); }
-        20% { transform: rotate(-3deg); }
-        60% { transform: rotate(7deg); }
-        62% { transform: rotate(-5deg); }
-        64% { transform: rotate(3deg); }
+        0%, 100% { transform: rotate(0deg); }
+        18% { transform: rotate(-6deg); }
+        22% { transform: rotate(5deg); }
+        26% { transform: rotate(0deg); }
+        68% { transform: rotate(6deg); }
+        72% { transform: rotate(-5deg); }
+        76% { transform: rotate(0deg); }
       }
 
       /* 6. Coordinated Shadow Breathing for all floating avatars (18.0s) */
       @keyframes za-avatar-shadow-breathe {
-        0%, 100% { transform: scale(1, 1); opacity: 0.25; }
-        18% { transform: scale(0.94, 0.94); opacity: 0.20; }
-        35% { transform: scale(0.98, 0.98); opacity: 0.24; }
-        52% { transform: scale(1.04, 1.04); opacity: 0.30; }
-        70% { transform: scale(0.93, 0.93); opacity: 0.19; }
-        86% { transform: scale(0.97, 0.97); opacity: 0.23; }
+        0%, 100% { transform: scale(1, 1); opacity: 0.24; }
+        12.5% { transform: scale(0.92, 0.92); opacity: 0.18; }
+        25% { transform: scale(1, 1); opacity: 0.24; }
+        37.5% { transform: scale(1.06, 1.06); opacity: 0.30; }
+        50% { transform: scale(1, 1); opacity: 0.24; }
+        62.5% { transform: scale(0.92, 0.92); opacity: 0.18; }
+        75% { transform: scale(1, 1); opacity: 0.24; }
+        87.5% { transform: scale(1.06, 1.06); opacity: 0.30; }
       }
 
       /* State animations for interactive modes */
@@ -1042,7 +1122,7 @@ export function getCursorSvgMarkup(
       .za-bot-eyes {
         transform-box: fill-box;
         transform-origin: center;
-        animation: za-bot-blink 18.0s infinite cubic-bezier(0.25, 1, 0.5, 1);
+        animation: za-bot-blink 18.0s ease-in-out infinite;
       }
       .za-avatar-shadow {
         transform-box: fill-box;
@@ -1097,11 +1177,11 @@ export function getCursorSvgMarkup(
       }
       .za-neko-ear-left {
         transform-origin: 80% 90%;
-        animation: za-neko-ear-left-idle 18.0s infinite cubic-bezier(0.25, 1, 0.5, 1);
+        animation: za-neko-ear-left-idle 18.0s ease-in-out infinite;
       }
       .za-neko-ear-right {
         transform-origin: 20% 90%;
-        animation: za-neko-ear-right-idle 18.0s infinite cubic-bezier(0.25, 1, 0.5, 1);
+        animation: za-neko-ear-right-idle 18.0s ease-in-out infinite;
       }
 
       /* Reaction mood state overrides */
@@ -1113,6 +1193,67 @@ export function getCursorSvgMarkup(
       }
       .za-success .za-bot-eyes, .za-bot-eyes.za-anim-happy {
         animation: za-eyes-happy 0.8s ease-in-out infinite !important;
+      }
+
+      /* Robotic Left & Right Typing Hands Animation */
+      @keyframes za-hand-type-left {
+        0%, 100% { transform: translateY(1.8px) rotate(-5deg) scale(1.02, 0.96); }
+        20% { transform: translateY(-0.4px) rotate(-1deg) scale(1, 1); }
+        50% { transform: translateY(-2.5px) rotate(3deg) scale(0.98, 1.02); }
+        75% { transform: translateY(-0.8px) rotate(0deg) scale(1, 1); }
+      }
+
+      @keyframes za-hand-type-right {
+        0%, 100% { transform: translateY(-2.5px) rotate(-3deg) scale(0.98, 1.02); }
+        25% { transform: translateY(-0.8px) rotate(0deg) scale(1, 1); }
+        50% { transform: translateY(1.8px) rotate(5deg) scale(1.02, 0.96); }
+        70% { transform: translateY(-0.4px) rotate(1deg) scale(1, 1); }
+      }
+
+      @keyframes za-key-hit-left {
+        0%, 100% { opacity: 0.9; transform: scale(1.2); }
+        50% { opacity: 0.15; transform: scale(0.65); }
+      }
+
+      @keyframes za-key-hit-right {
+        0%, 100% { opacity: 0.15; transform: scale(0.65); }
+        50% { opacity: 0.9; transform: scale(1.2); }
+      }
+
+      .za-typing .za-typing-hands,
+      .za-typing-hands.za-anim-typing,
+      .za-anim-typing .za-typing-hands {
+        display: block !important;
+      }
+
+      .za-typing .za-typing-hand-left,
+      .za-anim-typing .za-typing-hand-left,
+      .za-typing-hand-left.za-anim-typing {
+        transform-box: fill-box !important;
+        transform-origin: 39.5px 49.8px !important;
+        animation: za-hand-type-left 0.32s ease-in-out infinite !important;
+      }
+
+      .za-typing .za-typing-hand-right,
+      .za-anim-typing .za-typing-hand-right,
+      .za-typing-hand-right.za-anim-typing {
+        transform-box: fill-box !important;
+        transform-origin: 50.5px 49.8px !important;
+        animation: za-hand-type-right 0.32s ease-in-out infinite !important;
+      }
+
+      .za-typing .za-key-glow-left,
+      .za-anim-typing .za-key-glow-left {
+        transform-box: fill-box !important;
+        transform-origin: center !important;
+        animation: za-key-hit-left 0.32s ease-in-out infinite !important;
+      }
+
+      .za-typing .za-key-glow-right,
+      .za-anim-typing .za-key-glow-right {
+        transform-box: fill-box !important;
+        transform-origin: center !important;
+        animation: za-key-hit-right 0.32s ease-in-out infinite !important;
       }
 
       @keyframes za-neko-ears-typing-l {
@@ -1164,11 +1305,13 @@ export function getCursorSvgMarkup(
       /* Kuro Star Breathing & Floating (18.0s Long Cycle) */
       @keyframes za-kuro-float {
         0%, 100% { transform: translateY(0px) rotate(0deg); }
-        18% { transform: translateY(-1.2px) rotate(0.8deg); }
-        35% { transform: translateY(-0.4px) rotate(-0.5deg); }
-        52% { transform: translateY(1.0px) rotate(0.6deg); }
-        70% { transform: translateY(-1.4px) rotate(-0.8deg); }
-        86% { transform: translateY(-0.6px) rotate(0.3deg); }
+        12.5% { transform: translateY(-1.8px) rotate(0.6deg); }
+        25% { transform: translateY(0px) rotate(0deg); }
+        37.5% { transform: translateY(1.3px) rotate(-0.5deg); }
+        50% { transform: translateY(0px) rotate(0deg); }
+        62.5% { transform: translateY(-1.8px) rotate(0.6deg); }
+        75% { transform: translateY(0px) rotate(0deg); }
+        87.5% { transform: translateY(1.3px) rotate(-0.5deg); }
       }
       @keyframes za-kuro-spin {
         0% { transform: rotate(0deg) scale(1); }
@@ -1492,144 +1635,190 @@ export function getCustomCombinedCursorMarkup(
 
       /* 1. Dynamic 360° All-Direction Eye Gaze & Saccadic Blink Animation (18.0s Long Cycle) */
       @keyframes za-bot-blink {
-        /* Phase 1: Direct Front Contact & Natural Double Micro-Blink */
-        0%, 7% {
+        /* Phase 1: Direct Front Contact & Natural Organic Micro-Blink */
+        0% {
           transform: translate(0px, 0px) rotate(0deg) scale(1, 1);
           opacity: 1;
         }
-        7.8% {
-          transform: translate(0px, 0px) rotate(0deg) scale(1.05, 0.08);
-          opacity: 0.9;
-        }
-        8.6% {
-          transform: translate(0px, 0px) rotate(0deg) scale(0.98, 1.06);
+        2.5% {
+          transform: translate(0.2px, -0.2px) rotate(0.5deg) scale(1, 1);
           opacity: 1;
         }
-        9.4% {
-          transform: translate(0px, 0px) rotate(0deg) scale(1.04, 0.12);
+        4.2% {
+          transform: translate(0px, 0px) rotate(0deg) scale(1.02, 0.1);
           opacity: 0.92;
         }
-        10.2% {
+        5.0% {
           transform: translate(0px, 0px) rotate(0deg) scale(1, 1);
           opacity: 1;
         }
 
         /* Phase 2: Up-Right Inquisitive Grok Pose (Scanning top navigation/header) */
-        12%, 19% {
-          transform: translate(4.6px, -2.6px) rotate(24deg) scale(0.98, 0.96);
+        7.5% {
+          transform: translate(4.6px, -2.6px) rotate(24deg) scale(0.98, 0.98);
+          opacity: 1;
         }
-        19.8% {
-          transform: translate(4.6px, -2.6px) rotate(24deg) scale(1.04, 0.08);
-          opacity: 0.9;
+        12.0% {
+          transform: translate(4.8px, -2.4px) rotate(24deg) scale(1, 1);
+          opacity: 1;
         }
-        20.8% {
-          transform: translate(4.6px, -2.6px) rotate(24deg) scale(1, 1);
+        13.2% {
+          transform: translate(4.6px, -2.6px) rotate(24deg) scale(1.04, 0.15);
+          opacity: 0.92;
+        }
+        14.0% {
+          transform: translate(4.6px, -2.6px) rotate(24deg) scale(0.98, 0.98);
+          opacity: 1;
+        }
+        16.5% {
+          transform: translate(4.4px, -2.5px) rotate(22deg) scale(0.99, 0.99);
           opacity: 1;
         }
 
         /* Phase 3: Down-Left Scan Towards Pointer Arrow Tip */
-        23%, 30% {
+        19.5% {
           transform: translate(-4.2px, -0.4px) rotate(-14deg) scale(0.98, 1.0);
+          opacity: 1;
         }
-        30.8% {
-          transform: translate(-4.2px, -0.4px) rotate(-14deg) scale(1.04, 0.08);
-          opacity: 0.9;
+        23.5% {
+          transform: translate(-4.4px, -0.2px) rotate(-14deg) scale(1.0, 1.0);
+          opacity: 1;
         }
-        31.8% {
-          transform: translate(-4.2px, -0.4px) rotate(-14deg) scale(1, 1);
+        24.5% {
+          transform: translate(-4.2px, -0.4px) rotate(-14deg) scale(1.03, 0.12);
+          opacity: 0.92;
+        }
+        25.5% {
+          transform: translate(-4.2px, -0.4px) rotate(-14deg) scale(0.98, 1.0);
+          opacity: 1;
+        }
+        28.5% {
+          transform: translate(-3.8px, -0.2px) rotate(-12deg) scale(1.0, 1.0);
           opacity: 1;
         }
 
         /* Phase 4: Downward Reading & Form Input Inspection Scan */
-        34%, 37.5% {
-          transform: translate(-0.8px, 3.4px) rotate(0deg) scale(1.04, 0.92);
+        32.5% {
+          transform: translate(-0.8px, 3.4px) rotate(0deg) scale(1.02, 0.94);
+          opacity: 1;
         }
-        38.5%, 42% {
-          transform: translate(0.8px, 3.4px) rotate(0deg) scale(1.04, 0.92);
+        35.5% {
+          transform: translate(0px, 3.4px) rotate(0deg) scale(1.02, 0.94);
+          opacity: 1;
         }
-        43% {
-          transform: translate(0px, 3.4px) rotate(0deg) scale(1.05, 0.06);
+        38.5% {
+          transform: translate(0.8px, 3.4px) rotate(0deg) scale(1.02, 0.94);
+          opacity: 1;
         }
-        43.6% {
-          transform: translate(0px, 3.4px) rotate(0deg) scale(1, 1);
-        }
-        44.2% {
+        39.8% {
           transform: translate(0px, 3.4px) rotate(0deg) scale(1.04, 0.12);
+          opacity: 0.92;
         }
-        45.2% {
-          transform: translate(0px, 3.4px) rotate(0deg) scale(1, 1);
+        40.8% {
+          transform: translate(0px, 3.4px) rotate(0deg) scale(1.0, 1.0);
+          opacity: 1;
         }
 
         /* Phase 5: Up-Left Cognitive Synthesis & Problem Solving */
-        47%, 55% {
-          transform: translate(-2.6px, -3.2px) rotate(-10deg) scale(0.96, 0.98);
+        45.5% {
+          transform: translate(-2.6px, -3.2px) rotate(-10deg) scale(0.97, 0.98);
+          opacity: 1;
         }
-        55.8% {
-          transform: translate(-2.6px, -3.2px) rotate(-10deg) scale(1.02, 0.08);
-          opacity: 0.9;
+        49.5% {
+          transform: translate(-2.4px, -3.4px) rotate(-10deg) scale(0.98, 0.98);
+          opacity: 1;
         }
-        56.8% {
+        50.8% {
+          transform: translate(-2.6px, -3.2px) rotate(-10deg) scale(1.02, 0.12);
+          opacity: 0.92;
+        }
+        51.8% {
           transform: translate(-2.6px, -3.2px) rotate(-10deg) scale(1, 1);
           opacity: 1;
         }
 
         /* Phase 6: Horizon Scan Right (Outer Context Scan) */
-        59%, 66% {
+        58.0% {
           transform: translate(4.0px, 0.6px) rotate(12deg) scale(0.98, 1.0);
+          opacity: 1;
         }
-        66.8% {
-          transform: translate(4.0px, 0.6px) rotate(12deg) scale(1.04, 0.08);
-          opacity: 0.9;
+        61.5% {
+          transform: translate(4.2px, 0.4px) rotate(12deg) scale(1.0, 1.0);
+          opacity: 1;
         }
-        67.8% {
+        62.8% {
+          transform: translate(4.0px, 0.6px) rotate(12deg) scale(1.03, 0.12);
+          opacity: 0.92;
+        }
+        63.8% {
           transform: translate(4.0px, 0.6px) rotate(12deg) scale(1, 1);
           opacity: 1;
         }
 
         /* Phase 7: Curious Tilt Down-Right & Friendly Squint */
-        70%, 77% {
-          transform: translate(3.2px, 2.4px) rotate(8deg) scale(1.03, 0.95);
+        70.0% {
+          transform: translate(3.2px, 2.4px) rotate(8deg) scale(1.02, 0.96);
+          opacity: 1;
         }
-        77.8% {
-          transform: translate(3.2px, 2.4px) rotate(8deg) scale(1.06, 0.08);
+        73.5% {
+          transform: translate(3.0px, 2.6px) rotate(8deg) scale(1.03, 0.95);
+          opacity: 1;
+        }
+        74.8% {
+          transform: translate(3.2px, 2.4px) rotate(8deg) scale(1.05, 0.12);
           opacity: 0.92;
         }
-        78.8% {
+        75.8% {
           transform: translate(3.2px, 2.4px) rotate(8deg) scale(1, 1);
           opacity: 1;
         }
 
         /* Phase 8: High Alert Upward Scan & Attention Perk */
-        81%, 87% {
-          transform: translate(0px, -2.6px) rotate(0deg) scale(0.98, 1.04);
+        82.0% {
+          transform: translate(0px, -2.6px) rotate(0deg) scale(0.98, 1.03);
+          opacity: 1;
         }
-        87.8% {
-          transform: translate(0px, -2.6px) rotate(0deg) scale(1.03, 0.08);
-          opacity: 0.9;
+        84.5% {
+          transform: translate(0px, -2.8px) rotate(0deg) scale(0.98, 1.04);
+          opacity: 1;
         }
-        88.8% {
+        85.8% {
+          transform: translate(0px, -2.6px) rotate(0deg) scale(1.02, 0.12);
+          opacity: 0.92;
+        }
+        86.8% {
           transform: translate(0px, -2.6px) rotate(0deg) scale(1, 1);
           opacity: 1;
         }
 
         /* Phase 9: Gentle Lateral Micro-Scan Check */
-        90%, 93.5% {
+        91.0% {
           transform: translate(-1.8px, -0.6px) rotate(-6deg) scale(1.0, 1.0);
+          opacity: 1;
         }
-        94.2% {
-          transform: translate(-1.8px, -0.6px) rotate(-6deg) scale(1.04, 0.08);
-          opacity: 0.9;
+        92.5% {
+          transform: translate(-1.6px, -0.4px) rotate(-6deg) scale(1.0, 1.0);
+          opacity: 1;
         }
-        95.2% {
+        93.6% {
+          transform: translate(-1.8px, -0.6px) rotate(-6deg) scale(1.03, 0.12);
+          opacity: 0.92;
+        }
+        94.6% {
           transform: translate(-1.8px, -0.6px) rotate(-6deg) scale(1, 1);
           opacity: 1;
         }
 
-        /* Phase 10: Organic Return Glide to Front Look */
-        97% {
-          transform: translate(1.2px, 0.2px) rotate(3deg) scale(1.01, 0.99);
+        /* Phase 10: Organic Return Glide to Front Look - Perfectly Continuous Loop */
+        97.2% {
+          transform: translate(-0.6px, -0.2px) rotate(-2deg) scale(1.0, 1.0);
+          opacity: 1;
         }
-        98.5%, 100% {
+        98.8% {
+          transform: translate(-0.1px, -0.05px) rotate(-0.4deg) scale(1.0, 1.0);
+          opacity: 1;
+        }
+        100% {
           transform: translate(0px, 0px) rotate(0deg) scale(1, 1);
           opacity: 1;
         }
@@ -1638,144 +1827,125 @@ export function getCustomCombinedCursorMarkup(
       /* 2. Avatar 1: xAI Grok Cyber Bot Long Levitation & Anti-Gravity Float (18.0s) */
       @keyframes za-grok-float {
         0%, 100% { transform: translateY(0px) rotate(0deg); }
-        15% { transform: translateY(-1.2px) rotate(0.4deg); }
-        32% { transform: translateY(-0.4px) rotate(-0.5deg); }
-        48% { transform: translateY(0.8px) rotate(0deg); }
-        62% { transform: translateY(-1.5px) rotate(0.6deg); }
-        78% { transform: translateY(-0.8px) rotate(-0.3deg); }
-        89% { transform: translateY(-1.4px) rotate(0.3deg); }
+        12.5% { transform: translateY(-1.8px) rotate(0.4deg); }
+        25% { transform: translateY(0px) rotate(0deg); }
+        37.5% { transform: translateY(1.4px) rotate(-0.3deg); }
+        50% { transform: translateY(0px) rotate(0deg); }
+        62.5% { transform: translateY(-1.8px) rotate(0.4deg); }
+        75% { transform: translateY(0px) rotate(0deg); }
+        87.5% { transform: translateY(1.4px) rotate(-0.3deg); }
       }
 
       /* 3. Avatar 2: Cloud Companion Bot Long Buoyant Drift & Pillow Tuck Puff (18.0s) */
       @keyframes za-cloud-drift {
         0%, 100% { transform: translate(0px, 0px); }
-        16% { transform: translate(0.6px, -1.5px); }
-        34% { transform: translate(-0.8px, -0.6px); }
-        52% { transform: translate(0.2px, 0.8px); }
-        68% { transform: translate(0.8px, -1.6px); }
-        84% { transform: translate(-0.5px, -0.8px); }
+        12.5% { transform: translate(0.9px, -1.6px); }
+        25% { transform: translate(0px, -0.8px); }
+        37.5% { transform: translate(-0.9px, 0.6px); }
+        50% { transform: translate(0px, 1.2px); }
+        62.5% { transform: translate(0.9px, -0.4px); }
+        75% { transform: translate(0px, -1.4px); }
+        87.5% { transform: translate(-0.7px, -0.7px); }
       }
       @keyframes za-cloud-puff {
         0%, 100% { transform: scale(1, 1); }
-        25% { transform: scale(1.02, 0.98); }
-        50% { transform: scale(0.99, 1.02); }
-        75% { transform: scale(1.03, 0.99); }
+        25% { transform: scale(1.03, 0.97); }
+        50% { transform: scale(0.98, 1.02); }
+        75% { transform: scale(1.03, 0.97); }
       }
 
       /* 4. Avatar 3: Aero Sentinel Droid Long Magnetic Hover & Thruster Oscillation (18.0s) */
       @keyframes za-sentinel-hover {
         0%, 100% { transform: translateY(0px); }
-        18% { transform: translateY(-1.3px); }
-        35% { transform: translateY(-0.3px); }
-        52% { transform: translateY(0.6px); }
-        70% { transform: translateY(-1.5px); }
-        86% { transform: translateY(-0.7px); }
+        12.5% { transform: translateY(-1.8px); }
+        25% { transform: translateY(0px); }
+        37.5% { transform: translateY(1.2px); }
+        50% { transform: translateY(0px); }
+        62.5% { transform: translateY(-1.8px); }
+        75% { transform: translateY(0px); }
+        87.5% { transform: translateY(1.2px); }
       }
       @keyframes za-sentinel-fin-left {
         0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
-        18% { transform: translate(-0.6px, -1.2px) rotate(-3deg); }
-        35% { transform: translate(0.3px, -0.4px) rotate(1.5deg); }
-        52% { transform: translate(-0.2px, 0.5px) rotate(-1deg); }
-        70% { transform: translate(-0.7px, -1.4px) rotate(-3.5deg); }
-        86% { transform: translate(0.2px, -0.8px) rotate(1deg); }
+        12.5% { transform: translate(-0.8px, -1.2px) rotate(-3.5deg); }
+        25% { transform: translate(0px, 0px) rotate(0deg); }
+        37.5% { transform: translate(0.5px, 0.8px) rotate(2deg); }
+        50% { transform: translate(0px, 0px) rotate(0deg); }
+        62.5% { transform: translate(-0.8px, -1.2px) rotate(-3.5deg); }
+        75% { transform: translate(0px, 0px) rotate(0deg); }
+        87.5% { transform: translate(0.5px, 0.8px) rotate(2deg); }
       }
       @keyframes za-sentinel-fin-right {
         0%, 100% { transform: translate(0px, 0px) rotate(0deg); }
-        18% { transform: translate(0.6px, -1.2px) rotate(3deg); }
-        35% { transform: translate(-0.3px, -0.4px) rotate(-1.5deg); }
-        52% { transform: translate(0.2px, 0.5px) rotate(1deg); }
-        70% { transform: translate(0.7px, -1.4px) rotate(3.5deg); }
-        86% { transform: translate(-0.2px, -0.8px) rotate(3.5deg); }
+        12.5% { transform: translate(0.8px, -1.2px) rotate(3.5deg); }
+        25% { transform: translate(0px, 0px) rotate(0deg); }
+        37.5% { transform: translate(-0.5px, 0.8px) rotate(-2deg); }
+        50% { transform: translate(0px, 0px) rotate(0deg); }
+        62.5% { transform: translate(0.8px, -1.2px) rotate(3.5deg); }
+        75% { transform: translate(0px, 0px) rotate(0deg); }
+        87.5% { transform: translate(-0.5px, 0.8px) rotate(-2deg); }
       }
       @keyframes za-sentinel-visor-sweep {
-        0%, 45%, 100% { opacity: 0.75; }
-        50%, 54% { opacity: 1; stroke-width: 0.9; }
+        0%, 100% { opacity: 0.75; }
+        25% { opacity: 0.95; stroke-width: 0.9; }
+        50% { opacity: 0.75; }
+        75% { opacity: 0.95; stroke-width: 0.9; }
       }
 
       /* 5. Avatar 4: Mochi Cyber Neko Long Ear Movements, Head Bob & Bell Jingle (18.0s) */
       @keyframes za-neko-ear-left-idle {
-        0%, 10% { transform: rotate(0deg) scale(1, 1); }
-        /* Phase 2: Up-right look, relaxed */
-        12%, 19% { transform: rotate(-2deg) scale(0.99, 1.01); }
-        /* Phase 3: Down-left look toward pointer arrow -> attentive perk! */
-        23%, 30% { transform: rotate(-7deg) scale(1.02, 1.03); }
-        /* Phase 4: Downward reading scan */
-        34%, 43% { transform: rotate(-3deg) scale(1.0, 1.0); }
-        /* Phase 5: Up-left deep thought glance -> attentive perk high! */
-        47%, 55% { transform: rotate(-9deg) translate(-0.5px, -0.8px) scale(1.03); }
-        56% { transform: rotate(-2deg) scale(1, 1); }
-        /* Phase 6: Horizon scan right */
-        59%, 66% { transform: rotate(2deg) scale(0.98, 1.0); }
-        /* Phase 7: Affectionate tilt down-right -> playful kawaii flick! */
-        70% { transform: rotate(-5deg); }
-        72% { transform: rotate(3deg); }
-        74% { transform: rotate(-3deg); }
-        77% { transform: rotate(0deg); }
-        /* Phase 8: High alert upward scan */
-        81%, 87% { transform: rotate(-4deg) scale(1.01, 1.02); }
-        /* Phase 9: Micro-check */
-        90%, 94% { transform: rotate(-6deg) scale(1.02, 1.02); }
-        98.5%, 100% { transform: rotate(0deg) scale(1, 1); }
+        0%, 100% { transform: rotate(0deg) scale(1, 1); }
+        12.5% { transform: rotate(-2deg) scale(0.99, 1.01); }
+        25% { transform: rotate(-6deg) scale(1.02, 1.03); }
+        37.5% { transform: rotate(-3deg) scale(1.0, 1.0); }
+        50% { transform: rotate(-7deg) scale(1.02, 1.02); }
+        62.5% { transform: rotate(2deg) scale(0.98, 1.0); }
+        75% { transform: rotate(-4deg) scale(1.01, 1.01); }
+        87.5% { transform: rotate(-2deg) scale(1.0, 1.0); }
       }
 
       @keyframes za-neko-ear-right-idle {
-        0%, 10% { transform: rotate(0deg) scale(1, 1); }
-        /* Phase 2: Up-right look -> playful ear perk & twitch! */
-        12% { transform: rotate(4deg) scale(1.01, 1.02); }
-        15% { transform: rotate(8deg) scale(0.96, 1.04); }
-        17% { transform: rotate(-2deg) scale(1.02, 0.98); }
-        19% { transform: rotate(6deg) scale(0.98, 1.02); }
-        21% { transform: rotate(2deg) scale(1, 1); }
-        /* Phase 3: Down-left look toward pointer arrow */
-        23%, 30% { transform: rotate(1deg) scale(0.98, 1.0); }
-        /* Phase 4: Downward reading scan */
-        34%, 43% { transform: rotate(3deg) scale(1.0, 1.0); }
-        /* Phase 5: Up-left deep thought glance */
-        47%, 55% { transform: rotate(-2deg) scale(0.97); }
-        /* Phase 6: Horizon scan right -> curious ear flick! */
-        59% { transform: rotate(8deg) scale(0.96, 1.04); }
-        61% { transform: rotate(-3deg) scale(1.02, 0.98); }
-        63% { transform: rotate(6deg) scale(0.98, 1.02); }
-        66% { transform: rotate(2deg) scale(1, 1); }
-        /* Phase 7: Affectionate tilt down-right -> playful kawaii flick! */
-        70% { transform: rotate(5deg); }
-        72% { transform: rotate(-2deg); }
-        74% { transform: rotate(3deg); }
-        77% { transform: rotate(0deg); }
-        /* Phase 8: High alert upward scan */
-        81%, 87% { transform: rotate(4deg) scale(1.01, 1.02); }
-        /* Phase 9: Micro-check */
-        90%, 94% { transform: rotate(2deg) scale(0.99, 1.0); }
-        98.5%, 100% { transform: rotate(0deg) scale(1, 1); }
+        0%, 100% { transform: rotate(0deg) scale(1, 1); }
+        12.5% { transform: rotate(4deg) scale(1.01, 1.02); }
+        25% { transform: rotate(2deg) scale(0.98, 1.0); }
+        37.5% { transform: rotate(3deg) scale(1.0, 1.0); }
+        50% { transform: rotate(-2deg) scale(0.98, 1.0); }
+        62.5% { transform: rotate(6deg) scale(0.98, 1.02); }
+        75% { transform: rotate(4deg) scale(1.01, 1.02); }
+        87.5% { transform: rotate(2deg) scale(0.99, 1.0); }
       }
 
       @keyframes za-neko-head-float {
         0%, 100% { transform: translateY(0px) rotate(0deg); }
-        18% { transform: translateY(-1.1px) rotate(0.4deg); }
-        36% { transform: translateY(-0.3px) rotate(-0.3deg); }
-        52% { transform: translateY(0.7px) rotate(0deg); }
-        70% { transform: translateY(-1.3px) rotate(0.5deg); }
-        86% { transform: translateY(-0.6px) rotate(-0.3deg); }
+        12.5% { transform: translateY(-1.6px) rotate(0.4deg); }
+        25% { transform: translateY(0px) rotate(0deg); }
+        37.5% { transform: translateY(1.2px) rotate(-0.3deg); }
+        50% { transform: translateY(0px) rotate(0deg); }
+        62.5% { transform: translateY(-1.6px) rotate(0.4deg); }
+        75% { transform: translateY(0px) rotate(0deg); }
+        87.5% { transform: translateY(1.2px) rotate(-0.3deg); }
       }
 
       @keyframes za-neko-bell-jingle {
-        0%, 14%, 22%, 58%, 67%, 100% { transform: rotate(0deg); }
-        16% { transform: rotate(-7deg); }
-        18% { transform: rotate(6deg); }
-        20% { transform: rotate(-3deg); }
-        60% { transform: rotate(7deg); }
-        62% { transform: rotate(-5deg); }
-        64% { transform: rotate(3deg); }
+        0%, 100% { transform: rotate(0deg); }
+        18% { transform: rotate(-6deg); }
+        22% { transform: rotate(5deg); }
+        26% { transform: rotate(0deg); }
+        68% { transform: rotate(6deg); }
+        72% { transform: rotate(-5deg); }
+        76% { transform: rotate(0deg); }
       }
 
       /* 6. Coordinated Shadow Breathing for all floating avatars (18.0s) */
       @keyframes za-avatar-shadow-breathe {
-        0%, 100% { transform: scale(1, 1); opacity: 0.25; }
-        18% { transform: scale(0.94, 0.94); opacity: 0.20; }
-        35% { transform: scale(0.98, 0.98); opacity: 0.24; }
-        52% { transform: scale(1.04, 1.04); opacity: 0.30; }
-        70% { transform: scale(0.93, 0.93); opacity: 0.19; }
-        86% { transform: scale(0.97, 0.97); opacity: 0.23; }
+        0%, 100% { transform: scale(1, 1); opacity: 0.24; }
+        12.5% { transform: scale(0.92, 0.92); opacity: 0.18; }
+        25% { transform: scale(1, 1); opacity: 0.24; }
+        37.5% { transform: scale(1.06, 1.06); opacity: 0.30; }
+        50% { transform: scale(1, 1); opacity: 0.24; }
+        62.5% { transform: scale(0.92, 0.92); opacity: 0.18; }
+        75% { transform: scale(1, 1); opacity: 0.24; }
+        87.5% { transform: scale(1.06, 1.06); opacity: 0.30; }
       }
 
       /* State animations for interactive modes */
@@ -1796,7 +1966,7 @@ export function getCustomCombinedCursorMarkup(
       .za-bot-eyes {
         transform-box: fill-box;
         transform-origin: center;
-        animation: za-bot-blink 18.0s infinite cubic-bezier(0.25, 1, 0.5, 1);
+        animation: za-bot-blink 18.0s ease-in-out infinite;
       }
       .za-avatar-shadow {
         transform-box: fill-box;
@@ -1851,11 +2021,11 @@ export function getCustomCombinedCursorMarkup(
       }
       .za-neko-ear-left {
         transform-origin: 80% 90%;
-        animation: za-neko-ear-left-idle 18.0s infinite cubic-bezier(0.25, 1, 0.5, 1);
+        animation: za-neko-ear-left-idle 18.0s ease-in-out infinite;
       }
       .za-neko-ear-right {
         transform-origin: 20% 90%;
-        animation: za-neko-ear-right-idle 18.0s infinite cubic-bezier(0.25, 1, 0.5, 1);
+        animation: za-neko-ear-right-idle 18.0s ease-in-out infinite;
       }
 
       /* Reaction mood state overrides */
@@ -1867,6 +2037,67 @@ export function getCustomCombinedCursorMarkup(
       }
       .za-success .za-bot-eyes, .za-bot-eyes.za-anim-happy {
         animation: za-eyes-happy 0.8s ease-in-out infinite !important;
+      }
+
+      /* Robotic Left & Right Typing Hands Animation */
+      @keyframes za-hand-type-left {
+        0%, 100% { transform: translateY(1.8px) rotate(-5deg) scale(1.02, 0.96); }
+        20% { transform: translateY(-0.4px) rotate(-1deg) scale(1, 1); }
+        50% { transform: translateY(-2.5px) rotate(3deg) scale(0.98, 1.02); }
+        75% { transform: translateY(-0.8px) rotate(0deg) scale(1, 1); }
+      }
+
+      @keyframes za-hand-type-right {
+        0%, 100% { transform: translateY(-2.5px) rotate(-3deg) scale(0.98, 1.02); }
+        25% { transform: translateY(-0.8px) rotate(0deg) scale(1, 1); }
+        50% { transform: translateY(1.8px) rotate(5deg) scale(1.02, 0.96); }
+        70% { transform: translateY(-0.4px) rotate(1deg) scale(1, 1); }
+      }
+
+      @keyframes za-key-hit-left {
+        0%, 100% { opacity: 0.9; transform: scale(1.2); }
+        50% { opacity: 0.15; transform: scale(0.65); }
+      }
+
+      @keyframes za-key-hit-right {
+        0%, 100% { opacity: 0.15; transform: scale(0.65); }
+        50% { opacity: 0.9; transform: scale(1.2); }
+      }
+
+      .za-typing .za-typing-hands,
+      .za-typing-hands.za-anim-typing,
+      .za-anim-typing .za-typing-hands {
+        display: block !important;
+      }
+
+      .za-typing .za-typing-hand-left,
+      .za-anim-typing .za-typing-hand-left,
+      .za-typing-hand-left.za-anim-typing {
+        transform-box: fill-box !important;
+        transform-origin: 39.5px 49.8px !important;
+        animation: za-hand-type-left 0.32s ease-in-out infinite !important;
+      }
+
+      .za-typing .za-typing-hand-right,
+      .za-anim-typing .za-typing-hand-right,
+      .za-typing-hand-right.za-anim-typing {
+        transform-box: fill-box !important;
+        transform-origin: 50.5px 49.8px !important;
+        animation: za-hand-type-right 0.32s ease-in-out infinite !important;
+      }
+
+      .za-typing .za-key-glow-left,
+      .za-anim-typing .za-key-glow-left {
+        transform-box: fill-box !important;
+        transform-origin: center !important;
+        animation: za-key-hit-left 0.32s ease-in-out infinite !important;
+      }
+
+      .za-typing .za-key-glow-right,
+      .za-anim-typing .za-key-glow-right {
+        transform-box: fill-box !important;
+        transform-origin: center !important;
+        animation: za-key-hit-right 0.32s ease-in-out infinite !important;
       }
 
       @keyframes za-neko-ears-typing-l {
@@ -1918,11 +2149,13 @@ export function getCustomCombinedCursorMarkup(
       /* Kuro Star Breathing & Floating (18.0s Long Cycle) */
       @keyframes za-kuro-float {
         0%, 100% { transform: translateY(0px) rotate(0deg); }
-        18% { transform: translateY(-1.2px) rotate(0.8deg); }
-        35% { transform: translateY(-0.4px) rotate(-0.5deg); }
-        52% { transform: translateY(1.0px) rotate(0.6deg); }
-        70% { transform: translateY(-1.4px) rotate(-0.8deg); }
-        86% { transform: translateY(-0.6px) rotate(0.3deg); }
+        12.5% { transform: translateY(-1.8px) rotate(0.6deg); }
+        25% { transform: translateY(0px) rotate(0deg); }
+        37.5% { transform: translateY(1.3px) rotate(-0.5deg); }
+        50% { transform: translateY(0px) rotate(0deg); }
+        62.5% { transform: translateY(-1.8px) rotate(0.6deg); }
+        75% { transform: translateY(0px) rotate(0deg); }
+        87.5% { transform: translateY(1.3px) rotate(-0.5deg); }
       }
       @keyframes za-kuro-spin {
         0% { transform: rotate(0deg) scale(1); }

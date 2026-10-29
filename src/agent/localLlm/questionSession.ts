@@ -1,6 +1,6 @@
 import type { QuestionFieldTarget, ResolvedAnswer } from './questionResolver';
 
-/** Per-run reuse includes unresolved results, so audits do not repeat identical inference. */
+/** Retry transient failures once before moving on; retain the outcome to bound audit retries. */
 export function createQuestionSession(
   resolve: (field: QuestionFieldTarget) => Promise<ResolvedAnswer>,
 ): (field: QuestionFieldTarget) => Promise<ResolvedAnswer> {
@@ -10,7 +10,12 @@ export function createQuestionSession(
       field.helperText || '', field.contextHint || '', field.validationError || field.errorMessage || '', field.jobContext]);
     const existing = answers.get(key);
     if (existing) return existing;
-    const pending = resolve(field).catch((error: unknown) => { answers.delete(key); throw error; });
+    const pending = resolve(field)
+      .then(async (result): Promise<ResolvedAnswer> => {
+        if (result.answer || !result.retryable) return result;
+        return resolve(field);
+      })
+      .catch((error: unknown) => { answers.delete(key); throw error; });
     answers.set(key, pending);
     return pending;
   };
