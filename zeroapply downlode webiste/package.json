@@ -1,0 +1,13 @@
+{
+  "name": "zeroapply-download-website",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "python3 -m http.server 5180 --bind 127.0.0.1 --directory dist",
+    "build": "node verify.mjs",
+    "deploy": "node deploy-firebase.mjs",
+    "firebase:login": "npx --yes firebase-tools@15.34.2 login",
+    "test:agents": "node --test test/desktop-agents.test.mjs"
+  }
+}

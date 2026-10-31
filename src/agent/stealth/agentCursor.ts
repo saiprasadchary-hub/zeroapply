@@ -417,32 +417,32 @@ const CURSOR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="58" height="5
   <g class="za-typing-hands za-avatar-part" style="display: none;">
     <!-- Subtle Holographic Cyber Keyboard Surface -->
     <g class="za-typing-keyboard" opacity="0.95">
-      <rect x="34.5" y="50.6" width="21" height="2.2" rx="1.1" fill="rgba(15, 23, 42, 0.88)" stroke="#38bdf8" stroke-width="0.5" />
-      <line x1="38.7" y1="51.1" x2="38.7" y2="52.3" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
-      <line x1="42.9" y1="51.1" x2="42.9" y2="52.3" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
-      <line x1="47.1" y1="51.1" x2="47.1" y2="52.3" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
-      <line x1="51.3" y1="51.1" x2="51.3" y2="52.3" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
+      <rect x="34.5" y="53.4" width="21" height="2.4" rx="1.2" fill="rgba(15, 23, 42, 0.88)" stroke="#38bdf8" stroke-width="0.5" />
+      <line x1="38.7" y1="53.9" x2="38.7" y2="55.1" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
+      <line x1="42.9" y1="53.9" x2="42.9" y2="55.1" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
+      <line x1="47.1" y1="53.9" x2="47.1" y2="55.1" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
+      <line x1="51.3" y1="53.9" x2="51.3" y2="55.1" stroke="#e0f2fe" stroke-width="0.6" stroke-linecap="round" opacity="0.75" />
       <!-- Key Impact Glow Under Left & Right Hands -->
-      <circle class="za-key-glow-left" cx="39.5" cy="51.7" r="2.2" fill="#38bdf8" opacity="0.65" />
-      <circle class="za-key-glow-right" cx="50.5" cy="51.7" r="2.2" fill="#38bdf8" opacity="0.65" />
+      <circle class="za-key-glow-left" cx="39.5" cy="54.6" r="2.2" fill="#38bdf8" opacity="0.65" />
+      <circle class="za-key-glow-right" cx="50.5" cy="54.6" r="2.2" fill="#38bdf8" opacity="0.65" />
     </g>
 
     <!-- Left Cyber Typing Hand (Taps Down on Key) -->
-    <g class="za-typing-hand-left" style="transform-box: fill-box; transform-origin: 39.5px 47.0px;">
-      <ellipse cx="39.5" cy="47.2" rx="2.6" ry="3.1" fill="#09090b" stroke="#ffffff" stroke-width="0.7" />
-      <ellipse cx="39.5" cy="46.8" rx="1.8" ry="2.0" fill="#27272a" opacity="0.9" />
-      <circle cx="38.2" cy="49.5" r="0.65" fill="#38bdf8" />
-      <circle cx="39.5" cy="49.9" r="0.65" fill="#ffffff" />
-      <circle cx="40.8" cy="49.5" r="0.65" fill="#38bdf8" />
+    <g class="za-typing-hand-left" style="transform-box: fill-box; transform-origin: 39.5px 49.8px;">
+      <ellipse cx="39.5" cy="50.0" rx="2.6" ry="3.1" fill="#09090b" stroke="#ffffff" stroke-width="0.7" />
+      <ellipse cx="39.5" cy="49.6" rx="1.8" ry="2.0" fill="#27272a" opacity="0.9" />
+      <circle cx="38.2" cy="52.3" r="0.65" fill="#38bdf8" />
+      <circle cx="39.5" cy="52.7" r="0.65" fill="#ffffff" />
+      <circle cx="40.8" cy="52.3" r="0.65" fill="#38bdf8" />
     </g>
 
     <!-- Right Cyber Typing Hand (Taps Down Alternately on Key) -->
-    <g class="za-typing-hand-right" style="transform-box: fill-box; transform-origin: 50.5px 47.0px;">
-      <ellipse cx="50.5" cy="47.2" rx="2.6" ry="3.1" fill="#09090b" stroke="#ffffff" stroke-width="0.7" />
-      <ellipse cx="50.5" cy="46.8" rx="1.8" ry="2.0" fill="#27272a" opacity="0.9" />
-      <circle cx="49.2" cy="49.5" r="0.65" fill="#38bdf8" />
-      <circle cx="50.5" cy="49.9" r="0.65" fill="#ffffff" />
-      <circle cx="51.8" cy="49.5" r="0.65" fill="#38bdf8" />
+    <g class="za-typing-hand-right" style="transform-box: fill-box; transform-origin: 50.5px 49.8px;">
+      <ellipse cx="50.5" cy="50.0" rx="2.6" ry="3.1" fill="#09090b" stroke="#ffffff" stroke-width="0.7" />
+      <ellipse cx="50.5" cy="49.6" rx="1.8" ry="2.0" fill="#27272a" opacity="0.9" />
+      <circle cx="49.2" cy="52.3" r="0.65" fill="#38bdf8" />
+      <circle cx="50.5" cy="52.7" r="0.65" fill="#ffffff" />
+      <circle cx="51.8" cy="52.3" r="0.65" fill="#38bdf8" />
     </g>
   </g>
 
@@ -515,7 +515,7 @@ export function getVisualCursorScript(
   return `
 (() => {
   const existingRoot = document.getElementById('zeroapply-codex-cursor-root');
-  if (window.__zeroapplyCursor && existingRoot?.dataset.layerVersion === '3' && (document.body?.contains(existingRoot) || document.documentElement.contains(existingRoot))) {
+  if (window.__zeroapplyCursor && existingRoot?.dataset.layerVersion === '4' && (document.body?.contains(existingRoot) || document.documentElement.contains(existingRoot))) {
     return;
   }
   window.__zeroapplyCursorLayerObserver?.disconnect();
@@ -1159,7 +1159,7 @@ export function getVisualCursorScript(
     .za-anim-typing .za-typing-hand-left,
     .za-typing-hand-left.za-anim-typing {
       transform-box: fill-box !important;
-      transform-origin: 39.5px 47.0px !important;
+      transform-origin: 39.5px 49.8px !important;
       animation: za-hand-type-left 0.32s ease-in-out infinite !important;
     }
 
@@ -1167,7 +1167,7 @@ export function getVisualCursorScript(
     .za-anim-typing .za-typing-hand-right,
     .za-typing-hand-right.za-anim-typing {
       transform-box: fill-box !important;
-      transform-origin: 50.5px 47.0px !important;
+      transform-origin: 50.5px 49.8px !important;
       animation: za-hand-type-right 0.32s ease-in-out infinite !important;
     }
 
@@ -2432,21 +2432,21 @@ export function getVisualCursorScript(
     });
     const keyboardGroup = createSvgElement('g', { class: 'za-typing-keyboard', opacity: '0.95' });
     keyboardGroup.appendChild(createSvgElement('rect', {
-      x: '34.5', y: '50.6', width: '21', height: '2.2', rx: '1.1',
+      x: '34.5', y: '53.4', width: '21', height: '2.4', rx: '1.2',
       fill: 'rgba(15, 23, 42, 0.88)', stroke: theme.accentColor || '#38bdf8', 'stroke-width': '0.5'
     }));
     [38.7, 42.9, 47.1, 51.3].forEach((x) => {
       keyboardGroup.appendChild(createSvgElement('line', {
-        x1: String(x), y1: '51.1', x2: String(x), y2: '52.3',
+        x1: String(x), y1: '53.9', x2: String(x), y2: '55.1',
         stroke: '#e0f2fe', 'stroke-width': '0.6', 'stroke-linecap': 'round', opacity: '0.75'
       }));
     });
     keyboardGroup.appendChild(createSvgElement('circle', {
-      class: 'za-key-glow-left', cx: '39.5', cy: '51.7', r: '2.2',
+      class: 'za-key-glow-left', cx: '39.5', cy: '54.6', r: '2.2',
       fill: theme.accentColor || '#38bdf8', opacity: '0.65'
     }));
     keyboardGroup.appendChild(createSvgElement('circle', {
-      class: 'za-key-glow-right', cx: '50.5', cy: '51.7', r: '2.2',
+      class: 'za-key-glow-right', cx: '50.5', cy: '54.6', r: '2.2',
       fill: theme.accentColor || '#38bdf8', opacity: '0.65'
     }));
     typingHandsGroup.appendChild(keyboardGroup);
@@ -2454,37 +2454,37 @@ export function getVisualCursorScript(
     // Left Cyber Typing Hand (Taps Down on Key)
     const leftHandG = createSvgElement('g', {
       class: 'za-typing-hand-left',
-      style: 'transform-box: fill-box; transform-origin: 39.5px 47.0px;'
+      style: 'transform-box: fill-box; transform-origin: 39.5px 49.8px;'
     });
     leftHandG.appendChild(createSvgElement('ellipse', {
-      cx: '39.5', cy: '47.2', rx: '2.6', ry: '3.1',
+      cx: '39.5', cy: '50.0', rx: '2.6', ry: '3.1',
       fill: theme.underlayColor || '#09090b', stroke: '#ffffff', 'stroke-width': '0.7'
     }));
     leftHandG.appendChild(createSvgElement('ellipse', {
-      cx: '39.5', cy: '46.8', rx: '1.8', ry: '2.0',
+      cx: '39.5', cy: '49.6', rx: '1.8', ry: '2.0',
       fill: '#27272a', opacity: '0.9'
     }));
-    leftHandG.appendChild(createSvgElement('circle', { cx: '38.2', cy: '49.5', r: '0.65', fill: theme.accentColor || '#38bdf8' }));
-    leftHandG.appendChild(createSvgElement('circle', { cx: '39.5', cy: '49.9', r: '0.65', fill: '#ffffff' }));
-    leftHandG.appendChild(createSvgElement('circle', { cx: '40.8', cy: '49.5', r: '0.65', fill: theme.accentColor || '#38bdf8' }));
+    leftHandG.appendChild(createSvgElement('circle', { cx: '38.2', cy: '52.3', r: '0.65', fill: theme.accentColor || '#38bdf8' }));
+    leftHandG.appendChild(createSvgElement('circle', { cx: '39.5', cy: '52.7', r: '0.65', fill: '#ffffff' }));
+    leftHandG.appendChild(createSvgElement('circle', { cx: '40.8', cy: '52.3', r: '0.65', fill: theme.accentColor || '#38bdf8' }));
     typingHandsGroup.appendChild(leftHandG);
 
     // Right Cyber Typing Hand (Taps Down Alternately on Key)
     const rightHandG = createSvgElement('g', {
       class: 'za-typing-hand-right',
-      style: 'transform-box: fill-box; transform-origin: 50.5px 47.0px;'
+      style: 'transform-box: fill-box; transform-origin: 50.5px 49.8px;'
     });
     rightHandG.appendChild(createSvgElement('ellipse', {
-      cx: '50.5', cy: '47.2', rx: '2.6', ry: '3.1',
+      cx: '50.5', cy: '50.0', rx: '2.6', ry: '3.1',
       fill: theme.underlayColor || '#09090b', stroke: '#ffffff', 'stroke-width': '0.7'
     }));
     rightHandG.appendChild(createSvgElement('ellipse', {
-      cx: '50.5', cy: '46.8', rx: '1.8', ry: '2.0',
+      cx: '50.5', cy: '49.6', rx: '1.8', ry: '2.0',
       fill: '#27272a', opacity: '0.9'
     }));
-    rightHandG.appendChild(createSvgElement('circle', { cx: '49.2', cy: '49.5', r: '0.65', fill: theme.accentColor || '#38bdf8' }));
-    rightHandG.appendChild(createSvgElement('circle', { cx: '50.5', cy: '49.9', r: '0.65', fill: '#ffffff' }));
-    rightHandG.appendChild(createSvgElement('circle', { cx: '51.8', cy: '49.5', r: '0.65', fill: theme.accentColor || '#38bdf8' }));
+    rightHandG.appendChild(createSvgElement('circle', { cx: '49.2', cy: '52.3', r: '0.65', fill: theme.accentColor || '#38bdf8' }));
+    rightHandG.appendChild(createSvgElement('circle', { cx: '50.5', cy: '52.7', r: '0.65', fill: '#ffffff' }));
+    rightHandG.appendChild(createSvgElement('circle', { cx: '51.8', cy: '52.3', r: '0.65', fill: theme.accentColor || '#38bdf8' }));
     typingHandsGroup.appendChild(rightHandG);
 
     svg.appendChild(typingHandsGroup);
@@ -2758,7 +2758,7 @@ export function getVisualCursorScript(
   root.appendChild(container);
   
   safeMountCursor();
-  root.dataset.layerVersion = '3';
+  root.dataset.layerVersion = '4';
   root.setAttribute('popover', 'manual');
   root.style.margin = '0'; root.style.padding = '0'; root.style.border = '0'; root.style.background = 'transparent';
   let lastModal = null;
@@ -2805,8 +2805,15 @@ export function getVisualCursorScript(
 
   function setCursorMode(mode) {
     if (!pointer) return;
+    let typingHands = pointer.querySelector('.za-typing-hands');
+    if (!typingHands && (mode === 'typing' || pointer.querySelector('.za-avatar-group') || pointer.querySelector('svg.za-glass-svg'))) {
+      const oldSvg = pointer.querySelector('svg.za-glass-svg');
+      if (oldSvg) oldSvg.remove();
+      const newSvg = buildDarkGlassSvg(getActiveTheme(), currentPointerId, currentAvatarId, currentAvatarScale);
+      pointer.insertBefore(newSvg, pointer.firstChild);
+      typingHands = pointer.querySelector('.za-typing-hands');
+    }
     const typing = pointer.querySelector('.za-state-typing');
-    const typingHands = pointer.querySelector('.za-typing-hands');
     const sparkles = pointer.querySelector('.za-state-sparkles');
     const success = pointer.querySelector('.za-state-success');
     const error = pointer.querySelector('.za-state-error');
@@ -2814,7 +2821,14 @@ export function getVisualCursorScript(
     const idle = pointer.querySelector('.za-state-idle');
 
     if (typing) typing.style.display = 'none'; // Suppress the old static I-beam overlay
-    if (typingHands) typingHands.style.display = mode === 'typing' ? 'block' : 'none';
+    if (typingHands) {
+      typingHands.style.display = mode === 'typing' ? 'block' : 'none';
+      if (mode === 'typing') {
+        typingHands.classList.add('za-anim-typing');
+      } else {
+        typingHands.classList.remove('za-anim-typing');
+      }
+    }
     if (sparkles) sparkles.style.display = (mode === 'agent' || mode === 'ai') ? 'block' : 'none';
     if (success) success.style.display = mode === 'success' ? 'block' : 'none';
     if (error) error.style.display = mode === 'error' ? 'block' : 'none';
@@ -3035,6 +3049,13 @@ export function getVisualCursorScript(
     if (!sel) return null;
     if (typeof sel === 'object' && sel.nodeType === 1) {
       return resolveVisibleTarget(sel);
+    }
+    if (Array.isArray(sel)) {
+      for (const item of sel) {
+        const found = findCursorTarget(item);
+        if (found) return found;
+      }
+      return null;
     }
 
     // Check active modal first
@@ -3337,11 +3358,12 @@ export function getVisualCursorScript(
         curveGlide(targetX, targetY, badge || 'Typing...', naturalDuration, () => {
           setCursorMode('typing');
           ripple(targetX, targetY);
+          const typingStartTime = Date.now();
           if (!el) {
             setTimeout(() => {
               setCursorMode('default');
               resolve(true);
-            }, 250);
+            }, 850);
             return;
           }
           try { el.focus(); } catch(e) {}
@@ -3349,8 +3371,10 @@ export function getVisualCursorScript(
           // Human typing simulation character-by-character
           const fullText = String(text || '');
           if (!fullText) {
-            setCursorMode('default');
-            resolve(true);
+            setTimeout(() => {
+              setCursorMode('default');
+              resolve(true);
+            }, 600);
             return;
           }
 
@@ -3384,10 +3408,12 @@ export function getVisualCursorScript(
               if (charIdx >= fullText.length) {
                 // Post-typing hesitation pause before continuing (180ms - 300ms)
                 el.dispatchEvent(new Event('change', { bubbles: true }));
+                const elapsed = Date.now() - typingStartTime;
+                const remainingVisTime = Math.max(0, 850 - elapsed);
                 setTimeout(() => {
                   setCursorMode('default');
                   resolve(true);
-                }, 220);
+                }, Math.max(220, remainingVisTime));
                 return;
               }
 
@@ -3987,7 +4013,7 @@ export async function cursorMoveAndClick(
 
 export async function cursorMoveAndType(
   webview: WebviewTarget,
-  selector: string,
+  selector: string | string[],
   text: string,
   badgeOrOptions?: CursorBadgeOrOptions
 ): Promise<boolean> {

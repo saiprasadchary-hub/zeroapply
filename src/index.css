@@ -647,7 +647,7 @@ input:focus {
 .za-anim-typing .za-typing-hand-left,
 .za-typing-hand-left.za-anim-typing {
   transform-box: fill-box !important;
-  transform-origin: 39.5px 47.0px !important;
+  transform-origin: 39.5px 49.8px !important;
   animation: za-hand-type-left 0.32s ease-in-out infinite !important;
 }
 
@@ -655,7 +655,7 @@ input:focus {
 .za-anim-typing .za-typing-hand-right,
 .za-typing-hand-right.za-anim-typing {
   transform-box: fill-box !important;
-  transform-origin: 50.5px 47.0px !important;
+  transform-origin: 50.5px 49.8px !important;
   animation: za-hand-type-right 0.32s ease-in-out infinite !important;
 }
 

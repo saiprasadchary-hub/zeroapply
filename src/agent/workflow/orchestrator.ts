@@ -26,7 +26,7 @@ import { resolveQuestion } from '../localLlm/questionResolver';
 import { getActiveModelName } from '../localLlm/ollamaClient';
 import { analyzeErrorConstraint } from '../localLlm/errorConstraintAnalyzer';
 import { fillFieldWithRecovery as fillField } from '../formFiller/fillRecovery';
-import { auditFormFields, isFieldAlreadySatisfied } from '../formFiller/formAuditor';
+import { auditFormFields } from '../formFiller/formAuditor';
 import { stepNavigator } from '../navigation/wizardStepNavigator';
 import { WorkflowStateMachine } from './stateMachine';
 import { liveTelemetry } from '../telemetry/liveTelemetry';
@@ -448,14 +448,15 @@ export class AutoApplyOrchestrator {
             // Determine answer (Persona mapped value or Local Qwen 2.5 LLM resolution)
             if (!field.required && (field.inputType === 'checkbox' || !field.mappedValue)) continue;
             const screenedFact = resolveFieldScreeningFact({ ...field, jobUrl: checkpoint?.jobUrl }, persona, screeningContext);
-            if (screenedFact === '' && field.required && !needsAvailabilityInterpretation(field.label)) {
+            const isSubjectiveRating = /(?:rate|rating|scale).*\b(?:skills?|yourself|proficien|1\s*[-–]\s*10)|\b(?:skills?|yourself).*\b(?:rate|rating|scale)/i.test(field.label);
+            if (isSubjectiveRating && screenedFact === '' && field.required && !needsAvailabilityInterpretation(field.label)) {
               const error = `Needs a verified profile answer: ${field.label}`;
               liveTelemetry.emit({ type: 'status', title: error, target: field.label, status: 'paused' });
               await webview.executeJavaScript(`window.__zeroapplyHUD?.setQuestion(${JSON.stringify(error)}, 'Needs your answer')`).catch(() => {});
               // Finish other grounded answers; the final audit still blocks advancement.
               continue;
             }
-            let answerVal = needsAvailabilityInterpretation(field.label) ? undefined : screenedFact ?? field.mappedValue;
+            let answerVal = needsAvailabilityInterpretation(field.label) ? undefined : (screenedFact || field.mappedValue);
             let source: 'persona' | 'ollama' | 'rule' = 'persona';
             let resumeContextUsed: string | undefined;
 

@@ -538,7 +538,7 @@ async function fillFieldOnce(
       }
     }
 
-    await cursorMoveAndType(webview, selector, finalValue, { label: `ZeroApply AI: Fill ${cleanLabel}` });
+    await cursorMoveAndType(webview, allSelectors.length > 0 ? allSelectors : selector, finalValue, { label: `ZeroApply AI: Fill ${cleanLabel}` });
     await webview.executeJavaScript(buildSyntheticEventScript(allSelectors, finalValue, inputType, hints)).catch(() => false);
     await new Promise((r) => setTimeout(r, 220 + Math.random() * 200));
     const verified = await webview.executeJavaScript<boolean>(`(() => {

@@ -375,7 +375,8 @@ function classifySingleFieldUnchecked(field: ScannedField, persona?: PersonaData
 
   // 6.5. Company / Page / Social Follow Questions (e.g. "Follow us for more insights https://www.linkedin.com/company/...")
   if (
-    /follow.*(?:insights|page|company|channel|updates|linkedin)|(?:follow|join).*(?:us|page|channel|community|linkedin)/i.test(text)
+    !/whatsapp/i.test(text) &&
+    (/follow.*(?:insights|page|company|channel|updates|linkedin)|(?:follow|join).*(?:us|page|channel|community|linkedin)/i.test(text))
   ) {
     const isCheckbox = inputType === 'checkbox' || inputType === 'switch' || field.inputType === 'checkbox';
     let affirmativeVal = 'Yes';
@@ -980,12 +981,13 @@ function classifySingleFieldUnchecked(field: ScannedField, persona?: PersonaData
     (inputType === 'checkbox' || field.inputType === 'checkbox' || field.tagName === 'input' || field.tagName === 'label' || field.isCustomComponent) &&
     (/terms|privacy|policy|follow.*company|consent|agree|agreement|verify|accurate|confirm|declaration|certify|communications|whatsapp|joined|community|receive|updates/i.test(text))
   ) {
+    const isWhatsAppOrExternalCommunity = /whatsapp|joined.*(?:community|group)/i.test(text);
     return {
       ...field,
       fieldType: 'terms',
       confidence: 0.98,
       standardKey: 'terms_agreement',
-      mappedValue: 'true',
+      mappedValue: isWhatsAppOrExternalCommunity ? '' : 'true',
     };
   }
 

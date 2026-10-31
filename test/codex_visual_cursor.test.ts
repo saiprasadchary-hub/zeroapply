@@ -53,6 +53,10 @@ let mockIsAlive = false;
 const mockWebview: WebviewTarget = {
   executeJavaScript: async <T>(code: string): Promise<T> => {
     executedScripts.push(code);
+    if (code.includes('zeroapply-codex-cursor-root')) {
+      mockIsAlive = true;
+      return undefined as unknown as T;
+    }
     if (code.includes('!!(window.__zeroapplyCursor')) {
       return mockIsAlive as unknown as T;
     }
@@ -73,10 +77,6 @@ const mockWebview: WebviewTarget = {
     }
     if (code.includes('window.__zeroapplyCursor.hide()')) {
       return true as unknown as T;
-    }
-    if (code.includes('zeroapply-codex-cursor-root')) {
-      mockIsAlive = true;
-      return undefined as unknown as T;
     }
     return { success: true } as unknown as T;
   },
